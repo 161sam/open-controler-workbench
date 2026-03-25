@@ -5,6 +5,7 @@ from ocf_freecad.geometry.primitives import (
     CylinderPrimitive,
     ResolvedMechanical,
     ShapePrimitive,
+    SurfacePrimitive,
 )
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "CylinderPrimitive",
     "ResolvedMechanical",
     "ShapePrimitive",
+    "SurfacePrimitive",
     "normalize_mechanical",
 ]

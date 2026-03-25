@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from ocf_freecad.freecad_api import shapes
 from ocf_freecad.generator.component_resolver import ComponentResolver
-from ocf_freecad.geometry.primitives import Cutout, ResolvedMechanical, ShapePrimitive
+from ocf_freecad.geometry.primitives import Cutout, ResolvedMechanical, ShapePrimitive, SurfacePrimitive
 
 
 class ControllerBuilder:
@@ -13,24 +14,67 @@ class ControllerBuilder:
         self.component_resolver = component_resolver or ComponentResolver()
 
     def build_body(self, controller):
-        return shapes.create_box(
+        surface = self.resolve_surface(controller)
+        return shapes.create_surface_prism(
             self.doc,
             "ControllerBody",
-            controller.width,
-            controller.depth,
+            surface,
             controller.height,
         )
 
     def build_top_plate(self, controller):
+        surface = self.resolve_surface(controller)
         z_offset = controller.height - controller.top_thickness
-        return shapes.create_box(
+        return shapes.create_surface_prism(
             self.doc,
             "TopPlate",
-            controller.width,
-            controller.depth,
+            surface,
             controller.top_thickness,
             z=z_offset,
         )
+
+    def resolve_surface(self, controller: Any) -> SurfacePrimitive:
+        controller_data = self._controller_to_dict(controller)
+        width = float(controller_data["width"])
+        depth = float(controller_data["depth"])
+        surface_data = deepcopy(controller_data.get("surface"))
+
+        if surface_data is None:
+            return SurfacePrimitive(shape="rectangle", width=width, height=depth)
+        if not isinstance(surface_data, dict):
+            raise ValueError("Controller surface must be a mapping")
+
+        shape = surface_data.get("shape", "rectangle")
+        if shape == "rectangle":
+            return SurfacePrimitive(
+                shape="rectangle",
+                width=float(surface_data.get("width", width)),
+                height=float(surface_data.get("height", depth)),
+            )
+        if shape == "rounded_rect":
+            corner_radius = float(surface_data.get("corner_radius", 0.0))
+            return SurfacePrimitive(
+                shape="rounded_rect",
+                width=float(surface_data.get("width", width)),
+                height=float(surface_data.get("height", depth)),
+                corner_radius=corner_radius,
+            )
+        if shape == "polygon":
+            points = surface_data.get("points")
+            if not isinstance(points, list) or len(points) < 3:
+                raise ValueError("Polygon controller surface requires at least three points")
+            normalized_points = []
+            for point in points:
+                if not isinstance(point, (list, tuple)) or len(point) != 2:
+                    raise ValueError("Polygon controller surface points must be [x, y] pairs")
+                normalized_points.append((float(point[0]), float(point[1])))
+            return SurfacePrimitive(
+                shape="polygon",
+                width=float(surface_data.get("width", width)),
+                height=float(surface_data.get("height", depth)),
+                points=tuple(normalized_points),
+            )
+        raise ValueError(f"Unsupported controller surface shape: {shape}")
 
     def resolve_components(self, components: list[Any]) -> list[dict[str, Any]]:
         return self.component_resolver.resolve_many(components)
@@ -140,6 +184,13 @@ class ControllerBuilder:
             "y": y,
             **shape.to_dict(),
         }
+
+    def _controller_to_dict(self, controller: Any) -> dict[str, Any]:
+        if isinstance(controller, dict):
+            return deepcopy(controller)
+        if hasattr(controller, "__dict__"):
+            return deepcopy(vars(controller))
+        raise TypeError(f"Unsupported controller representation: {type(controller)!r}")
 
 
 def build_controller(domain_controller):

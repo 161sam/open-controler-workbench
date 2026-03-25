@@ -5,6 +5,27 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class SurfacePrimitive:
+    shape: str
+    width: float
+    height: float
+    corner_radius: float | None = None
+    points: tuple[tuple[float, float], ...] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "shape": self.shape,
+            "width": self.width,
+            "height": self.height,
+        }
+        if self.corner_radius is not None:
+            data["corner_radius"] = self.corner_radius
+        if self.points is not None:
+            data["points"] = [[x, y] for x, y in self.points]
+        return data
+
+
+@dataclass(frozen=True)
 class BoxPrimitive:
     width: float
     depth: float
