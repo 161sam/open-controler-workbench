@@ -12,6 +12,11 @@ DEFAULT_UI_SETTINGS = {
     "grid_mm": 1.0,
     "snap_enabled": True,
     "move_component_id": None,
+    "measurements_enabled": True,
+    "conflict_lines_enabled": True,
+    "constraint_labels_enabled": True,
+    "show_warnings": True,
+    "show_errors": True,
 }
 
 
@@ -40,6 +45,18 @@ class InteractionService:
     def toggle_constraint_overlay(self, doc: Any) -> dict[str, Any]:
         settings = self.get_settings(doc)
         return self.update_settings(doc, {"show_constraints": not settings["show_constraints"]})
+
+    def toggle_measurements(self, doc: Any) -> dict[str, Any]:
+        settings = self.get_settings(doc)
+        return self.update_settings(doc, {"measurements_enabled": not settings["measurements_enabled"]})
+
+    def toggle_conflict_lines(self, doc: Any) -> dict[str, Any]:
+        settings = self.get_settings(doc)
+        return self.update_settings(doc, {"conflict_lines_enabled": not settings["conflict_lines_enabled"]})
+
+    def toggle_constraint_labels(self, doc: Any) -> dict[str, Any]:
+        settings = self.get_settings(doc)
+        return self.update_settings(doc, {"constraint_labels_enabled": not settings["constraint_labels_enabled"]})
 
     def set_grid(self, doc: Any, grid_mm: float) -> dict[str, Any]:
         return self.update_settings(doc, {"grid_mm": float(grid_mm)})

@@ -25,3 +25,17 @@ def issue_label(component_id: str, error_count: int, warning_count: int) -> str:
     if warning_count:
         parts.append(f"W{warning_count}")
     return f"{component_id}: {' / '.join(parts)}"
+
+
+def measurement_label(current_mm: float, required_mm: float | None = None) -> str:
+    current_text = f"{current_mm:.1f}"
+    if required_mm is None:
+        return f"{current_text} mm"
+    return f"{current_text} / {required_mm:.1f} mm"
+
+
+def constraint_detail_label(title: str, current_mm: float | None = None, required_mm: float | None = None) -> str:
+    if current_mm is None:
+        return title
+    suffix = measurement_label(current_mm, required_mm)
+    return f"{title}: {suffix}"

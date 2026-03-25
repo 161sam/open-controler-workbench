@@ -94,6 +94,21 @@ def create_cylinder(doc, name, radius, height, x, y, z=0):
     return obj
 
 
+def create_line(doc, name, start, end, z=0):
+    import FreeCAD as App
+    import Part
+
+    wire = Part.makePolygon(
+        [
+            App.Vector(float(start[0]), float(start[1]), float(z)),
+            App.Vector(float(end[0]), float(end[1]), float(z)),
+        ]
+    )
+    obj = doc.addObject("Part::Feature", name)
+    obj.Shape = wire
+    return obj
+
+
 def cut(base_obj, tool_obj, name=None):
     result = base_obj.Shape.cut(tool_obj.Shape)
     obj = base_obj.Document.addObject(

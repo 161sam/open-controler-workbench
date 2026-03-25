@@ -13,6 +13,7 @@ def rect_item(
     label: str | None = None,
     source_component_id: str | None = None,
     severity: str | None = None,
+    source_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": item_id,
@@ -21,6 +22,7 @@ def rect_item(
         "style": style,
         "label": label,
         "source_component_id": source_component_id,
+        "source_ids": list(source_ids or ([] if source_component_id is None else [source_component_id])),
         "severity": severity,
     }
 
@@ -34,6 +36,7 @@ def circle_item(
     label: str | None = None,
     source_component_id: str | None = None,
     severity: str | None = None,
+    source_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": item_id,
@@ -42,6 +45,7 @@ def circle_item(
         "style": style,
         "label": label,
         "source_component_id": source_component_id,
+        "source_ids": list(source_ids or ([] if source_component_id is None else [source_component_id])),
         "severity": severity,
     }
 
@@ -54,6 +58,7 @@ def text_item(
     style: dict[str, Any],
     source_component_id: str | None = None,
     severity: str | None = None,
+    source_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": item_id,
@@ -62,5 +67,35 @@ def text_item(
         "style": style,
         "label": text,
         "source_component_id": source_component_id,
+        "source_ids": list(source_ids or ([] if source_component_id is None else [source_component_id])),
+        "severity": severity,
+    }
+
+
+def line_item(
+    item_id: str,
+    start_x: float,
+    start_y: float,
+    end_x: float,
+    end_y: float,
+    style: dict[str, Any],
+    label: str | None = None,
+    source_component_id: str | None = None,
+    severity: str | None = None,
+    source_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": item_id,
+        "type": "line",
+        "geometry": {
+            "start_x": float(start_x),
+            "start_y": float(start_y),
+            "end_x": float(end_x),
+            "end_y": float(end_y),
+        },
+        "style": style,
+        "label": label,
+        "source_component_id": source_component_id,
+        "source_ids": list(source_ids or ([] if source_component_id is None else [source_component_id])),
         "severity": severity,
     }

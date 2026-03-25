@@ -39,6 +39,11 @@ DEFAULT_META = {
         "grid_mm": 1.0,
         "snap_enabled": True,
         "move_component_id": None,
+        "measurements_enabled": True,
+        "conflict_lines_enabled": True,
+        "constraint_labels_enabled": True,
+        "show_warnings": True,
+        "show_errors": True,
     },
 }
 

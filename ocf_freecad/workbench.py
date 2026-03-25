@@ -43,6 +43,9 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         from ocf_freecad.commands.select_component import SelectComponentCommand
         from ocf_freecad.commands.show_constraint_overlay import ShowConstraintOverlayCommand
         from ocf_freecad.commands.snap_to_grid import SnapToGridCommand
+        from ocf_freecad.commands.toggle_conflict_lines import ToggleConflictLinesCommand
+        from ocf_freecad.commands.toggle_constraint_labels import ToggleConstraintLabelsCommand
+        from ocf_freecad.commands.toggle_measurements import ToggleMeasurementsCommand
         from ocf_freecad.commands.toggle_overlay import ToggleOverlayCommand
         from ocf_freecad.commands.validate_constraints import ValidateConstraintsCommand
 
@@ -55,6 +58,9 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         Gui.addCommand("OCF_ShowConstraintOverlay", ShowConstraintOverlayCommand())
         Gui.addCommand("OCF_MoveComponentInteractive", MoveComponentInteractiveCommand())
         Gui.addCommand("OCF_SnapToGrid", SnapToGridCommand())
+        Gui.addCommand("OCF_ToggleMeasurements", ToggleMeasurementsCommand())
+        Gui.addCommand("OCF_ToggleConflictLines", ToggleConflictLinesCommand())
+        Gui.addCommand("OCF_ToggleConstraintLabels", ToggleConstraintLabelsCommand())
 
         create_commands = ["OCF_CreateController"]
         edit_commands = [
@@ -66,6 +72,9 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
             "OCF_ShowConstraintOverlay",
             "OCF_MoveComponentInteractive",
             "OCF_SnapToGrid",
+            "OCF_ToggleMeasurements",
+            "OCF_ToggleConflictLines",
+            "OCF_ToggleConstraintLabels",
         ]
         self.appendToolbar("OCF Create", create_commands)
         self.appendToolbar("OCF Edit", edit_commands)
@@ -177,6 +186,26 @@ class ProductWorkbenchPanel:
         self.refresh_all()
         self.set_status(
             f"Constraint overlay {'enabled' if settings['show_constraints'] else 'disabled'}."
+        )
+        return settings
+
+    def toggle_measurements(self) -> dict[str, Any]:
+        settings = self.interaction_service.toggle_measurements(self.doc)
+        self.refresh_all()
+        self.set_status(f"Measurements {'enabled' if settings['measurements_enabled'] else 'disabled'}.")
+        return settings
+
+    def toggle_conflict_lines(self) -> dict[str, Any]:
+        settings = self.interaction_service.toggle_conflict_lines(self.doc)
+        self.refresh_all()
+        self.set_status(f"Conflict lines {'enabled' if settings['conflict_lines_enabled'] else 'disabled'}.")
+        return settings
+
+    def toggle_constraint_labels(self) -> dict[str, Any]:
+        settings = self.interaction_service.toggle_constraint_labels(self.doc)
+        self.refresh_all()
+        self.set_status(
+            f"Constraint labels {'enabled' if settings['constraint_labels_enabled'] else 'disabled'}."
         )
         return settings
 
@@ -303,6 +332,9 @@ class ProductWorkbenchPanel:
         return (
             f"Overlay {'on' if settings['overlay_enabled'] else 'off'}"
             f" | Constraints {'on' if settings['show_constraints'] else 'off'}"
+            f" | Meas {'on' if settings['measurements_enabled'] else 'off'}"
+            f" | Lines {'on' if settings['conflict_lines_enabled'] else 'off'}"
+            f" | Labels {'on' if settings['constraint_labels_enabled'] else 'off'}"
             f" | Grid {settings['grid_mm']} mm"
             f" | Items {summary.get('item_count', 0)}"
         )

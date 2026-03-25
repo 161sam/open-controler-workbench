@@ -44,6 +44,9 @@ class InfoPanel:
                 "Overlay: "
                 f"{'on' if ui.get('overlay_enabled', True) else 'off'}, "
                 f"constraints {'on' if ui.get('show_constraints', True) else 'off'}, "
+                f"measurements {'on' if ui.get('measurements_enabled', True) else 'off'}, "
+                f"lines {'on' if ui.get('conflict_lines_enabled', True) else 'off'}, "
+                f"labels {'on' if ui.get('constraint_labels_enabled', True) else 'off'}, "
                 f"grid {ui.get('grid_mm', 1.0)} mm"
             )
             if ui.get("move_component_id"):

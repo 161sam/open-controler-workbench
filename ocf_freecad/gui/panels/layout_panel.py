@@ -48,6 +48,9 @@ class LayoutPanel:
                 [
                     f"Overlay: {'on' if settings['overlay_enabled'] else 'off'}",
                     f"Constraint Overlay: {'on' if settings['show_constraints'] else 'off'}",
+                    f"Measurements: {'on' if settings['measurements_enabled'] else 'off'}",
+                    f"Conflict Lines: {'on' if settings['conflict_lines_enabled'] else 'off'}",
+                    f"Labels: {'on' if settings['constraint_labels_enabled'] else 'off'}",
                     f"Snap: {'on' if settings['snap_enabled'] else 'off'}",
                     f"Grid: {settings['grid_mm']} mm",
                 ]
@@ -125,6 +128,30 @@ class LayoutPanel:
         self._publish_status(f"Snap {'enabled' if updated['snap_enabled'] else 'disabled'}.")
         return updated
 
+    def toggle_measurements(self) -> dict[str, Any]:
+        settings = self.interaction_service.toggle_measurements(self.doc)
+        self.refresh()
+        self._publish_status(
+            f"Measurements {'enabled' if settings['measurements_enabled'] else 'disabled'}."
+        )
+        return settings
+
+    def toggle_conflict_lines(self) -> dict[str, Any]:
+        settings = self.interaction_service.toggle_conflict_lines(self.doc)
+        self.refresh()
+        self._publish_status(
+            f"Conflict lines {'enabled' if settings['conflict_lines_enabled'] else 'disabled'}."
+        )
+        return settings
+
+    def toggle_constraint_labels(self) -> dict[str, Any]:
+        settings = self.interaction_service.toggle_constraint_labels(self.doc)
+        self.refresh()
+        self._publish_status(
+            f"Constraint labels {'enabled' if settings['constraint_labels_enabled'] else 'disabled'}."
+        )
+        return settings
+
     def handle_apply_clicked(self) -> None:
         try:
             self.apply_auto_layout()
@@ -149,6 +176,24 @@ class LayoutPanel:
         except Exception as exc:
             self._publish_status(str(exc))
 
+    def handle_measurements_clicked(self) -> None:
+        try:
+            self.toggle_measurements()
+        except Exception as exc:
+            self._publish_status(str(exc))
+
+    def handle_conflict_lines_clicked(self) -> None:
+        try:
+            self.toggle_conflict_lines()
+        except Exception as exc:
+            self._publish_status(str(exc))
+
+    def handle_constraint_labels_clicked(self) -> None:
+        try:
+            self.toggle_constraint_labels()
+        except Exception as exc:
+            self._publish_status(str(exc))
+
     def accept(self) -> bool:
         self.apply_auto_layout()
         return True
@@ -164,6 +209,12 @@ class LayoutPanel:
             self.form["constraint_overlay_button"].clicked.connect(self.handle_constraint_overlay_clicked)
         if hasattr(self.form["snap_button"], "clicked"):
             self.form["snap_button"].clicked.connect(self.handle_snap_clicked)
+        if hasattr(self.form["measurements_button"], "clicked"):
+            self.form["measurements_button"].clicked.connect(self.handle_measurements_clicked)
+        if hasattr(self.form["conflict_lines_button"], "clicked"):
+            self.form["conflict_lines_button"].clicked.connect(self.handle_conflict_lines_clicked)
+        if hasattr(self.form["constraint_labels_button"], "clicked"):
+            self.form["constraint_labels_button"].clicked.connect(self.handle_constraint_labels_clicked)
 
     def _publish_status(self, message: str) -> None:
         set_label_text(self.form["status"], message)
@@ -187,6 +238,9 @@ def _build_form() -> dict[str, Any]:
             "overlay_button": FallbackButton("Toggle Overlay"),
             "constraint_overlay_button": FallbackButton("Constraint Overlay"),
             "snap_button": FallbackButton("Toggle Snap"),
+            "measurements_button": FallbackButton("Measurements"),
+            "conflict_lines_button": FallbackButton("Conflict Lines"),
+            "constraint_labels_button": FallbackButton("Constraint Labels"),
             "summary": FallbackText(),
             "overlay_status": FallbackText(),
             "status": FallbackLabel(),
@@ -213,12 +267,18 @@ def _build_form() -> dict[str, Any]:
     overlay_button = qtwidgets.QPushButton("Toggle Overlay")
     constraint_overlay_button = qtwidgets.QPushButton("Constraint Overlay")
     snap_button = qtwidgets.QPushButton("Toggle Snap")
+    measurements_button = qtwidgets.QPushButton("Measurements")
+    conflict_lines_button = qtwidgets.QPushButton("Conflict Lines")
+    constraint_labels_button = qtwidgets.QPushButton("Constraint Labels")
     button_row = qtwidgets.QHBoxLayout()
     button_row.addWidget(apply_button)
     button_row.addWidget(rerun_button)
     button_row.addWidget(overlay_button)
     button_row.addWidget(constraint_overlay_button)
     button_row.addWidget(snap_button)
+    button_row.addWidget(measurements_button)
+    button_row.addWidget(conflict_lines_button)
+    button_row.addWidget(constraint_labels_button)
     summary = qtwidgets.QPlainTextEdit()
     summary.setReadOnly(True)
     overlay_status = qtwidgets.QPlainTextEdit()
@@ -246,6 +306,9 @@ def _build_form() -> dict[str, Any]:
         "overlay_button": overlay_button,
         "constraint_overlay_button": constraint_overlay_button,
         "snap_button": snap_button,
+        "measurements_button": measurements_button,
+        "conflict_lines_button": conflict_lines_button,
+        "constraint_labels_button": constraint_labels_button,
         "overlay_status": overlay_status,
         "summary": summary,
         "status": status,

@@ -48,6 +48,14 @@ class OverlayRenderer:
                     y=float(geometry["y"]),
                     z=z,
                 )
+            elif item["type"] == "line":
+                obj = shapes.create_line(
+                    doc,
+                    name,
+                    start=(float(geometry["start_x"]), float(geometry["start_y"])),
+                    end=(float(geometry["end_x"]), float(geometry["end_y"])),
+                    z=z,
+                )
             else:
                 obj = shapes.create_cylinder(
                     doc,
@@ -82,9 +90,15 @@ class OverlayRenderer:
             view.ShapeColor = rgb
         if line_rgb is not None and hasattr(view, "LineColor"):
             view.LineColor = line_rgb
+        line_width = style.get("line_width")
+        if line_width is not None and hasattr(view, "LineWidth"):
+            view.LineWidth = int(line_width)
         transparency = style.get("transparency")
         if transparency is not None and hasattr(view, "Transparency"):
             view.Transparency = int(transparency)
+        draw_style = style.get("draw_style")
+        if draw_style is not None and hasattr(view, "DrawStyle"):
+            view.DrawStyle = draw_style
 
     def _object_name(self, item_id: str) -> str:
         sanitized = item_id.replace(":", "_").replace("/", "_").replace(" ", "_")

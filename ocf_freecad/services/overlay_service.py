@@ -8,6 +8,7 @@ from ocf_freecad.generator.controller_builder import ControllerBuilder
 from ocf_freecad.gui.overlay.colors import overlay_style
 from ocf_freecad.gui.overlay.labels import component_label, issue_label, zone_label
 from ocf_freecad.gui.overlay.shapes import circle_item, rect_item, text_item
+from ocf_freecad.services.constraint_overlay_service import ConstraintOverlayService
 from ocf_freecad.services.constraint_service import ConstraintService
 from ocf_freecad.services.controller_service import ControllerService
 
@@ -18,10 +19,12 @@ class OverlayService:
         controller_service: ControllerService | None = None,
         constraint_service: ConstraintService | None = None,
         controller_builder: ControllerBuilder | None = None,
+        constraint_overlay_service: ConstraintOverlayService | None = None,
     ) -> None:
         self.controller_service = controller_service or ControllerService()
         self.constraint_service = constraint_service or ConstraintService()
         self.controller_builder = controller_builder or ControllerBuilder(doc=None)
+        self.constraint_overlay_service = constraint_overlay_service or ConstraintOverlayService()
 
     def build_overlay(self, doc: Any) -> dict[str, Any]:
         state = self.controller_service.get_state(doc)
@@ -40,8 +43,9 @@ class OverlayService:
         if not isinstance(validation, dict):
             validation = self.constraint_service.validate(controller_data, components)
 
-        findings_by_component = self._group_findings(validation)
         selected_component_id = context.get("selection")
+        move_component_id = settings.get("move_component_id")
+        findings_by_component = self._group_findings(validation)
         items: list[dict[str, Any]] = []
         items.append(
             rect_item(
@@ -136,7 +140,19 @@ class OverlayService:
             )
 
         if settings.get("show_constraints", True):
-            items.extend(self._constraint_items(resolved_components, findings_by_component))
+            if settings.get("constraint_labels_enabled", True):
+                items.extend(self._constraint_items(resolved_components, findings_by_component))
+            constraint_overlay = self.constraint_overlay_service.build(
+                surface=surface.to_dict(),
+                resolved_components=resolved_components,
+                keepouts=keepouts,
+                mounting_holes=controller_data.get("mounting_holes", []),
+                validation=validation,
+                settings=settings,
+                selected_component_id=selected_component_id,
+                move_component_id=move_component_id,
+            )
+            items.extend(constraint_overlay["items"])
 
         return {
             "enabled": True,
