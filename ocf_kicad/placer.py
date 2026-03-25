@@ -3,7 +3,17 @@ from __future__ import annotations
 from typing import Any
 
 from ocf_kicad.footprint_resolver import resolve_footprint
-from ocf_kicad.utils import deg_to_kicad_angle, get_required_number, get_required_str, make_point, mm_to_iu
+from ocf_kicad.utils import (
+    add_board_item,
+    clear_generated_items,
+    deg_to_kicad_angle,
+    get_required_number,
+    get_required_str,
+    make_point,
+    mark_generated,
+    mm_to_iu,
+    require_positive,
+)
 
 
 def place_footprint(board: Any, footprint_data: dict[str, Any], pcbnew_module: Any) -> Any | None:
@@ -25,9 +35,27 @@ def place_footprint(board: Any, footprint_data: dict[str, Any], pcbnew_module: A
     _set_rotation(footprint, rotation_deg, pcbnew_module)
     _set_side(footprint, position, side, pcbnew_module)
     _set_reference(footprint, footprint_data)
-    board.Add(footprint)
+    add_board_item(board, footprint)
     print(f"Placed footprint {footprint_name} at ({x_mm}, {y_mm})")
     return footprint
+
+
+def place_mounting_holes(board: Any, mounting_holes: list[dict[str, Any]], pcbnew_module: Any) -> int:
+    clear_generated_items(board, "mounting_hole")
+
+    placed = 0
+    for index, hole_data in enumerate(mounting_holes, start=1):
+        if not isinstance(hole_data, dict):
+            raise ValueError(f"Invalid mounting hole entry: {hole_data!r}")
+
+        hole = _create_mounting_hole(hole_data, index, pcbnew_module)
+        if hole is None:
+            continue
+
+        add_board_item(board, mark_generated(hole, "mounting_hole"))
+        placed += 1
+
+    return placed
 
 
 def _set_position(footprint: Any, position: Any) -> None:
@@ -66,3 +94,33 @@ def _set_reference(footprint: Any, footprint_data: dict[str, Any]) -> None:
     if isinstance(reference, str) and reference:
         if hasattr(footprint, "SetReference"):
             footprint.SetReference(reference)
+
+
+def _create_mounting_hole(
+    hole_data: dict[str, Any],
+    index: int,
+    pcbnew_module: Any,
+) -> Any | None:
+    hole_id = hole_data.get("id") or f"mh{index}"
+    x_mm = get_required_number(hole_data, "x_mm")
+    y_mm = get_required_number(hole_data, "y_mm")
+    diameter_mm = require_positive(get_required_number(hole_data, "diameter_mm"), "diameter_mm")
+
+    footprint_name = f"MountingHole:MountingHole_{_format_diameter(diameter_mm)}mm_NPTH"
+    hole = resolve_footprint(pcbnew_module, footprint_name)
+    if hole is None:
+        print(f"Skipping mounting hole {hole_id}: footprint not found")
+        return None
+
+    position = make_point(mm_to_iu(x_mm, pcbnew_module), mm_to_iu(y_mm, pcbnew_module), pcbnew_module)
+    _set_position(hole, position)
+    _set_side(hole, position, "top", pcbnew_module)
+    _set_reference(hole, {"reference": str(hole_id).upper()})
+    print(f"Placed mounting hole {str(hole_id).upper()}")
+    return hole
+
+
+def _format_diameter(diameter_mm: float) -> str:
+    if diameter_mm.is_integer():
+        return str(int(diameter_mm))
+    return f"{diameter_mm:.2f}".rstrip("0").rstrip(".")

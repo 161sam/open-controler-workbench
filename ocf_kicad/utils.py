@@ -39,3 +39,81 @@ def get_required_number(payload: dict[str, Any], field: str) -> float:
     if not isinstance(value, (int, float)):
         raise ValueError(f"Missing or invalid numeric field '{field}'")
     return float(value)
+
+
+def get_optional_number(
+    payload: dict[str, Any],
+    field: str,
+    default: float | None = None,
+) -> float | None:
+    value = payload.get(field, default)
+    if value is None:
+        return None
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"Missing or invalid numeric field '{field}'")
+    return float(value)
+
+
+def require_positive(value: float, field: str) -> float:
+    if value <= 0:
+        raise ValueError(f"Field '{field}' must be positive")
+    return value
+
+
+def require_non_negative(value: float, field: str) -> float:
+    if value < 0:
+        raise ValueError(f"Field '{field}' must be non-negative")
+    return value
+
+
+def mark_generated(item: Any, kind: str) -> Any:
+    setattr(item, "ocf_generated_kind", kind)
+    return item
+
+
+def is_generated(item: Any, kind: str) -> bool:
+    return getattr(item, "ocf_generated_kind", None) == kind
+
+
+def add_board_item(board: Any, item: Any) -> None:
+    if hasattr(board, "Add"):
+        board.Add(item)
+        return
+    raise RuntimeError("Board object does not support Add")
+
+
+def remove_board_item(board: Any, item: Any) -> None:
+    if hasattr(board, "Remove"):
+        board.Remove(item)
+        return
+    items = getattr(board, "items", None)
+    if isinstance(items, list) and item in items:
+        items.remove(item)
+        return
+    raise RuntimeError("Board object does not support Remove")
+
+
+def list_board_items(board: Any) -> list[Any]:
+    if hasattr(board, "GetDrawings"):
+        drawings = list(board.GetDrawings())
+    else:
+        drawings = []
+    if hasattr(board, "GetFootprints"):
+        footprints = list(board.GetFootprints())
+    else:
+        footprints = []
+    if drawings or footprints:
+        return drawings + footprints
+    items = getattr(board, "items", None)
+    if isinstance(items, list):
+        return list(items)
+    return []
+
+
+def clear_generated_items(board: Any, kind: str) -> int:
+    removed = 0
+    for item in list_board_items(board):
+        if is_generated(item, kind):
+            remove_board_item(board, item)
+            removed += 1
+    return removed

@@ -2,6 +2,7 @@ board:
   name: "TestBoard"
   width_mm: 120.0
   height_mm: 80.0
+  corner_radius_mm: 4.0
 coordinate_system:
   unit: "mm"
   origin: "top_left"
@@ -18,6 +19,29 @@ footprints:
     y_mm: 30.0
     rotation_deg: 90.0
     side: "bottom"
-mounting_holes: []
-keepouts: []
+mounting_holes:
+  - id: "mh1"
+    x_mm: 5.0
+    y_mm: 5.0
+    diameter_mm: 3.0
+  - id: "mh2"
+    x_mm: 115.0
+    y_mm: 75.0
+    diameter_mm: 3.0
+keepouts:
+  - id: "enc1_top"
+    component_id: "enc1"
+    type: "circle"
+    x_mm: 40.0
+    y_mm: 30.0
+    diameter_mm: 20.0
+    kind: "mechanical_clearance"
+  - id: "disp1_body"
+    component_id: "disp1"
+    type: "rect"
+    x_mm: 90.0
+    y_mm: 30.0
+    width_mm: 32.0
+    height_mm: 20.0
+    kind: "mechanical_clearance"
 warnings: []

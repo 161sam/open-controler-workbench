@@ -16,4 +16,11 @@ def load_layout(path: str | Path) -> dict[str, Any]:
         raise ValueError(f"Field 'board' must be a mapping in layout: {path}")
     if not isinstance(payload["footprints"], list):
         raise ValueError(f"Field 'footprints' must be a list in layout: {path}")
+
+    for field in ("mounting_holes", "keepouts", "warnings"):
+        if field not in payload:
+            payload[field] = []
+        if not isinstance(payload[field], list):
+            raise ValueError(f"Field '{field}' must be a list in layout: {path}")
+
     return payload
