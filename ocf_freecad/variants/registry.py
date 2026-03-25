@@ -9,27 +9,40 @@ from ocf_freecad.variants.loader import VariantLoader
 
 class VariantRegistry:
     def __init__(self, base_path: str | Path | None = None, loader: VariantLoader | None = None) -> None:
-        if base_path is None:
-            base_path = Path(__file__).resolve().parent / "library"
-        self.base_path = Path(base_path)
+        self.base_path = Path(base_path) if base_path is not None else None
         self.loader = loader or VariantLoader()
         self._variants: dict[str, dict[str, Any]] = {}
         self._loaded = False
 
     def load_all(self) -> None:
-        if not self.base_path.exists():
-            raise FileNotFoundError(f"Variant library path not found: {self.base_path}")
-
         variants: dict[str, dict[str, Any]] = {}
-        for yaml_file in sorted(self.base_path.glob("*.yaml")):
-            variant = self.loader.load(yaml_file).to_dict()
-            variant_id = variant["variant"]["id"]
-            if variant_id in variants:
-                raise ValueError(f"Duplicate variant id detected: {variant_id}")
-            variants[variant_id] = variant
+        for source_path in self._source_paths():
+            for yaml_file in sorted(source_path.glob("*.yaml")):
+                variant = self.loader.load(yaml_file).to_dict()
+                variant_id = variant["variant"]["id"]
+                if variant_id in variants:
+                    raise ValueError(f"Duplicate variant id detected: {variant_id}")
+                variants[variant_id] = variant
 
         self._variants = variants
         self._loaded = True
+
+    def _source_paths(self) -> list[Path]:
+        if self.base_path is not None:
+            if not self.base_path.exists():
+                raise FileNotFoundError(f"Variant library path not found: {self.base_path}")
+            return [self.base_path]
+
+        from ocf_freecad.services.plugin_service import get_plugin_service
+
+        sources = get_plugin_service().variant_sources()
+        if sources:
+            return sources
+
+        fallback = Path(__file__).resolve().parent / "library"
+        if not fallback.exists():
+            raise FileNotFoundError(f"Variant library path not found: {fallback}")
+        return [fallback]
 
     def _ensure_loaded(self) -> None:
         if not self._loaded:

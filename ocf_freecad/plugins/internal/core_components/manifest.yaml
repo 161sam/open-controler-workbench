@@ -1,0 +1,22 @@
+plugin:
+  id: "core_components"
+  name: "Core Components"
+  version: "0.1.0"
+  api_version: "1.0"
+  type: "component_pack"
+  author: "OCF"
+  description: "Built-in component library"
+
+entrypoints:
+  components: "../../../library/components"
+  templates: null
+  variants: null
+  exporters: null
+  layouts: null
+  constraints: null
+  module: null
+
+capabilities:
+  - components
+
+dependencies: []

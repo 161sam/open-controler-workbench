@@ -19,38 +19,51 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 class ComponentLibraryManager:
     def __init__(self, base_path: str | Path | None = None) -> None:
-        if base_path is None:
-            base_path = Path(__file__).resolve().parent / "components"
-        self.base_path = Path(base_path)
+        self.base_path = Path(base_path) if base_path is not None else None
         self._components_by_id: dict[str, dict[str, Any]] = {}
         self._loaded = False
 
     def load_all(self) -> None:
-        if not self.base_path.exists():
-            raise FileNotFoundError(f"Component library path not found: {self.base_path}")
-
         components_by_id: dict[str, dict[str, Any]] = {}
-        for yaml_file in sorted(self.base_path.glob("*.yaml")):
-            payload = load_yaml(yaml_file)
-            components = payload.get("components", [])
-            if not isinstance(components, list):
-                raise ValueError(f"'components' must be a list in {yaml_file}")
+        for source_path in self._source_paths():
+            for yaml_file in sorted(source_path.glob("*.yaml")):
+                payload = load_yaml(yaml_file)
+                components = payload.get("components", [])
+                if not isinstance(components, list):
+                    raise ValueError(f"'components' must be a list in {yaml_file}")
 
-            for component in components:
-                if not isinstance(component, dict):
-                    raise ValueError(f"Invalid component entry in {yaml_file}: {component!r}")
+                for component in components:
+                    if not isinstance(component, dict):
+                        raise ValueError(f"Invalid component entry in {yaml_file}: {component!r}")
 
-                component_id = component.get("id")
-                if not component_id or not isinstance(component_id, str):
-                    raise ValueError(f"Component without valid 'id' in {yaml_file}")
-                if component_id in components_by_id:
-                    raise ValueError(f"Duplicate component id detected: {component_id}")
+                    component_id = component.get("id")
+                    if not component_id or not isinstance(component_id, str):
+                        raise ValueError(f"Component without valid 'id' in {yaml_file}")
+                    if component_id in components_by_id:
+                        raise ValueError(f"Duplicate component id detected: {component_id}")
 
-                self._validate_component_shape(component, yaml_file)
-                components_by_id[component_id] = deepcopy(component)
+                    self._validate_component_shape(component, yaml_file)
+                    components_by_id[component_id] = deepcopy(component)
 
         self._components_by_id = components_by_id
         self._loaded = True
+
+    def _source_paths(self) -> list[Path]:
+        if self.base_path is not None:
+            if not self.base_path.exists():
+                raise FileNotFoundError(f"Component library path not found: {self.base_path}")
+            return [self.base_path]
+
+        from ocf_freecad.services.plugin_service import get_plugin_service
+
+        sources = get_plugin_service().component_sources()
+        if sources:
+            return sources
+
+        fallback = Path(__file__).resolve().parent / "components"
+        if not fallback.exists():
+            raise FileNotFoundError(f"Component library path not found: {fallback}")
+        return [fallback]
 
     def _validate_component_shape(self, component: dict[str, Any], source: Path) -> None:
         required = [
