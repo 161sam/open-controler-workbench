@@ -63,6 +63,9 @@ DEFAULT_META = {
     },
 }
 
+OVERLAY_OBJECT_NAME = "OCF_Overlay"
+OVERLAY_OBJECT_LABEL = "OCF Overlay"
+
 
 def _log_to_console(message: str, level: str = "message") -> None:
     text = f"[OCF] {message}"
@@ -433,9 +436,9 @@ class ControllerService:
         for obj in list(doc.Objects):
             name = getattr(obj, "Name", "")
             label = getattr(obj, "Label", "")
-            if name in {STATE_CONTAINER_NAME, CONTROLLER_OBJECT_NAME, GENERATED_GROUP_NAME}:
+            if name in {STATE_CONTAINER_NAME, CONTROLLER_OBJECT_NAME, GENERATED_GROUP_NAME, OVERLAY_OBJECT_NAME}:
                 continue
-            if label in {STATE_CONTAINER_LABEL, CONTROLLER_OBJECT_LABEL, GENERATED_GROUP_LABEL}:
+            if label in {STATE_CONTAINER_LABEL, CONTROLLER_OBJECT_LABEL, GENERATED_GROUP_LABEL, OVERLAY_OBJECT_LABEL}:
                 continue
             if (
                 str(name).startswith("OCF_")
@@ -753,7 +756,7 @@ class ControllerService:
             label = str(getattr(obj, "Label", getattr(obj, "Name", "")))
             if not label.startswith("OCF_"):
                 continue
-            if label.startswith("OCF_OVERLAY_"):
+            if label.startswith("OCF_OVERLAY_") or label == OVERLAY_OBJECT_LABEL:
                 continue
             view = getattr(obj, "ViewObject", None)
             if view is None:

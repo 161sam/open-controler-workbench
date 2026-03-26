@@ -381,3 +381,72 @@ def test_pad_grid_sync_keeps_only_final_generated_objects(monkeypatch):
     assert labels == ["OCF_ControllerBody", "OCF_TopPlateCut"]
     assert not any(obj.Name.startswith("cutout_") for obj in doc.Objects)
     assert not any(obj.Name.startswith("TopPlate_") for obj in doc.Objects)
+
+
+def test_sync_document_preserves_single_overlay_object(monkeypatch):
+    from ocf_freecad.gui.overlay.renderer import OverlayRenderer
+
+    class FakeBuilder:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def build_body(self, _controller):
+            obj = self.doc.addObject("Part::Feature", "ControllerBody")
+            obj.Shape = "body"
+            return obj
+
+        def build_top_plate(self, _controller):
+            obj = self.doc.addObject("Part::Feature", "TopPlate")
+            obj.Shape = type("Shape", (), {"BoundBox": type("BoundBox", (), {"ZMin": 0.0, "ZLength": 3.0})(), "copy": lambda self: self})()
+            return obj
+
+        def apply_cutouts(self, top, _components):
+            top.Shape = "top-cut"
+            return top
+
+        def build_keepouts(self, _components):
+            return []
+
+    monkeypatch.setattr("ocf_freecad.services.controller_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.freecad_gui.reveal_generated_objects", lambda _doc: 0)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.freecad_gui.activate_document", lambda _doc: True)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.freecad_gui.focus_view", lambda _doc, fit=True: True)
+
+    service = ControllerService()
+    doc = FakeFeatureDocument()
+    renderer = OverlayRenderer()
+
+    service.create_controller(doc, {"id": "demo"})
+    renderer.render(
+        doc,
+        {
+            "enabled": True,
+            "controller_height": 10.0,
+            "items": [
+                {"id": "surface", "type": "rect", "geometry": {"x": 20.0, "y": 20.0, "width": 40.0, "height": 20.0}, "style": {}},
+                {"id": "label", "type": "text_marker", "geometry": {"x": 20.0, "y": 20.0}, "style": {}, "label": "Demo"},
+            ],
+        },
+    )
+
+    overlay = doc.getObject("OCF_Overlay")
+
+    assert overlay is not None
+
+    for _ in range(3):
+        service.sync_document(doc)
+        assert doc.getObject("OCF_Overlay") is overlay
+        renderer.render(
+            doc,
+            {
+                "enabled": True,
+                "controller_height": 10.0,
+                "items": [
+                    {"id": "surface", "type": "rect", "geometry": {"x": 20.0, "y": 20.0, "width": 40.0, "height": 20.0}, "style": {}},
+                    {"id": "line", "type": "line", "geometry": {"start_x": 0.0, "start_y": 0.0, "end_x": 10.0, "end_y": 10.0}, "style": {}},
+                ],
+            },
+        )
+        assert doc.getObject("OCF_Overlay") is overlay
+        assert len([obj for obj in doc.Objects if obj.Name == "OCF_Overlay"]) == 1
+        assert not any(obj.Name.startswith("OCF_OVERLAY_") for obj in doc.Objects)

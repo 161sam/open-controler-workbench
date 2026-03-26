@@ -105,3 +105,19 @@ def test_overlay_service_and_hit_test_respect_rect_rotation():
     component_id = selection.select_from_overlay(doc, overlay["items"], x=22.0, y=25.0)
 
     assert component_id == "btn1"
+
+
+def test_overlay_service_builds_large_overlay_for_pad_grid_variant_without_item_loss():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    state = controller_service.create_from_variant(doc, "pad_grid_4x4_oled")
+
+    overlay = OverlayService(controller_service=controller_service).build_overlay(doc)
+    item_ids = {item["id"] for item in overlay["items"]}
+
+    assert len(state["components"]) == 17
+    assert overlay["summary"]["component_count"] == 17
+    assert overlay["summary"]["item_count"] >= 17
+    assert "component:oled_status" in item_ids
+    assert "cutout:oled_status" in item_ids
+    assert sum(1 for item_id in item_ids if item_id.startswith("component:")) == 17
