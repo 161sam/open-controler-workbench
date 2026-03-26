@@ -10,7 +10,7 @@ VariantDefinition = dict[str, Any]
 
 @runtime_checkable
 class ExporterInterface(Protocol):
-    def __call__(self, data: dict[str, Any], path: str) -> None: ...
+    def __call__(self, data: dict[str, Any], path: str) -> dict[str, Any] | None: ...
 
 
 @runtime_checkable
