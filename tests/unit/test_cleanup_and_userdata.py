@@ -90,7 +90,7 @@ def test_overlay_renderer_materializes_single_overlay_object(monkeypatch):
 
     doc = FakeDoc()
     renderer = OverlayRenderer()
-    renderer.render(
+    payload = renderer.render(
         doc,
         {
             "enabled": True,
@@ -103,8 +103,67 @@ def test_overlay_renderer_materializes_single_overlay_object(monkeypatch):
     )
 
     assert len(created) == 1
+    assert len(doc.Objects) == 1
     assert created[0].Name == "OCF_Overlay"
     assert len(created[0].Shape.parts) == 2
+    assert payload["summary"]["render_path"] == "compound"
+    assert payload["summary"]["render_item_count"] == 2
+    assert payload["summary"]["dropped_item_count"] == 0
+
+
+def test_overlay_renderer_drops_degenerate_and_text_items(monkeypatch):
+    from ocf_freecad.gui.overlay.renderer import OverlayRenderer
+
+    class FakeDoc:
+        def __init__(self) -> None:
+            self.Objects = [SimpleNamespace(Name="OCF_OVERLAY_old", Label="OCF_OVERLAY_old")]
+
+        def addObject(self, _type_name: str, name: str):
+            obj = SimpleNamespace(Name=name, Label=name, Shape=None, ViewObject=SimpleNamespace())
+            self.Objects.append(obj)
+            return obj
+
+        def removeObject(self, name: str) -> None:
+            self.Objects = [obj for obj in self.Objects if obj.Name != name]
+
+        def recompute(self) -> None:
+            return
+
+    monkeypatch.setattr("ocf_freecad.gui.overlay.renderer.shapes.make_rect_prism_shape", lambda width, depth, height: SimpleNamespace(kind="rect", width=width, depth=depth, height=height, copy=lambda: SimpleNamespace(translate=lambda *_args: None)))
+    monkeypatch.setattr("ocf_freecad.gui.overlay.renderer.shapes.make_cylinder_shape", lambda radius, height: SimpleNamespace(kind="cyl", radius=radius, height=height, copy=lambda: SimpleNamespace(translate=lambda *_args: None)))
+    monkeypatch.setattr("ocf_freecad.gui.overlay.renderer.shapes.translate_shape", lambda shape, x=0, y=0, z=0: SimpleNamespace(shape=shape, x=x, y=y, z=z))
+    monkeypatch.setattr("ocf_freecad.gui.overlay.renderer.shapes.make_line_shape", lambda start, end, z=0: SimpleNamespace(kind="line", start=start, end=end, z=z))
+    monkeypatch.setattr("ocf_freecad.gui.overlay.renderer.shapes.make_compound_shape", lambda parts: SimpleNamespace(parts=list(parts)) if parts else None)
+
+    doc = FakeDoc()
+    renderer = OverlayRenderer()
+    payload = renderer.render(
+        doc,
+        {
+            "enabled": True,
+            "controller_height": 8.0,
+            "items": [
+                {"id": "surface", "type": "rect", "geometry": {"x": 10.0, "y": 10.0, "width": 20.0, "height": 10.0}, "style": {}},
+                {"id": "bad-rect", "type": "rect", "geometry": {"x": 0.0, "y": 0.0, "width": 0.0, "height": 10.0}, "style": {}},
+                {"id": "bad-circle", "type": "circle", "geometry": {"x": 0.0, "y": 0.0, "diameter": 0.0}, "style": {}},
+                {"id": "bad-line", "type": "line", "geometry": {"start_x": 1.0, "start_y": 1.0, "end_x": 1.0, "end_y": 1.0}, "style": {}},
+                {"id": "label", "type": "text_marker", "geometry": {"x": 5.0, "y": 5.0}, "style": {}, "label": "Hello"},
+            ],
+        },
+    )
+
+    assert len(doc.Objects) == 1
+    assert doc.Objects[0].Name == "OCF_Overlay"
+    assert len(doc.Objects[0].Shape.parts) == 1
+    assert payload["summary"]["render_item_count"] == 1
+    assert payload["summary"]["dropped_item_count"] == 4
+    assert payload["summary"]["render_path"] == "compound"
+    assert payload["summary"]["dropped_reasons"] == {
+        "degenerate_rect": 1,
+        "degenerate_circle": 1,
+        "degenerate_line": 1,
+        "text_marker": 1,
+    }
 
 
 def test_userdata_base_dir_uses_home_fallback(monkeypatch, tmp_path):
