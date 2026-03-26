@@ -37,6 +37,11 @@
   - `user`
 - Template presets are built into templates and can be applied before fine-tuning.
 - Saved user presets in the Presets box also persist parameter values and the selected template preset id.
+- If you reopen a controller document that was created from a template or variant, the Create panel reloads the saved project parameter values for that document.
+- `Apply Parameters` regenerates the current controller from the saved project-linked template or variant, so existing projects remain re-parameterizable.
+- Older project documents that only stored parameter overrides fall back to a legacy re-parameterization mode.
+- In that legacy mode, the panel explains that values were recovered from overrides and should be reviewed and re-applied once to persist explicit project parameter metadata.
+- If the original template or variant is no longer available in the registry, the panel keeps the document readable but marks re-parameterization as unavailable.
 
 ## Parameterized Template Examples
 

@@ -74,6 +74,18 @@
 - `Apply Parameters` für bestehende Controller aus derselben Template-/Variant-Auswahl verwenden
 - Layout, Komponenten und Constraints danach wie gewohnt weiter bearbeiten
 
+## Workflow 9a – Open Project -> Edit Parameters -> Regenerate
+
+- bestehendes Controller-Dokument öffnen
+- Create-Panel liest `template_id`, `variant_id` und gespeicherte Projektparameter aus dem Project State
+- wenn vorhanden, werden die zuletzt gespeicherten Projektparameter direkt in den Parameter-Editor geladen
+- bei älteren Dokumenten ohne explizite Projektparameter versucht das Panel, Werte aus Legacy-Overrides wiederzuverwenden
+- Parameter anpassen
+- `Apply Parameters` ausführen
+- Resolver erzeugt aus Template oder Variant und den aktuellen Projektwerten erneut einen konsistenten Zielzustand
+- Controller-State und Geometrie werden danach gemeinsam regeneriert
+- wenn die ursprüngliche Template-Quelle fehlt, bleibt das Dokument lesbar, aber die Re-Parameterisierung wird als nicht verfügbar markiert
+
 ## Workflow 10 – Select -> Edit -> Apply -> Validate
 
 - Komponente im 3D-View oder in der Components-Liste auswählen
@@ -133,3 +145,13 @@
   - state services persist the updates
   - sync services choose between full rebuild and state-only refresh
 - The current panel keeps generic placement and metadata fields stable across all component families and adds a type-specific subsection for fader, display, encoder, and pad-like components.
+
+## Project Parameter Roundtrip
+
+- Project parameter persistence is intentionally split:
+  - `meta.template_id` and `meta.variant_id` link the document back to its source schema
+  - `meta.parameters` stores the effective project-scoped parameter values, their source, and the active preset id
+  - `meta.overrides` remains a compatibility and preset payload container
+- Reopening a document prefers `meta.parameters`.
+- If `meta.parameters` is missing but legacy parameter overrides exist, the UI falls back to those values and marks the project as `legacy_fallback`.
+- Regeneration always runs through the normal template or variant resolver path instead of mutating builder inputs directly from UI widgets.

@@ -98,3 +98,30 @@ def test_state_service_updates_component_metadata_and_properties():
     assert component["visible"] is False
     assert component["properties"] == {"orientation": "landscape", "bezel": False}
     assert doc.recompute_count == 0
+
+
+def test_state_service_normalizes_nested_legacy_meta_defaults():
+    service = ControllerStateService()
+    doc = FakeDocument()
+
+    service.save_state(
+        doc,
+        {
+            "controller": {"id": "demo"},
+            "components": [],
+            "meta": {
+                "template_id": "pad_grid_4x4",
+                "parameters": {},
+                "ui": {"snap_enabled": False},
+            },
+        },
+    )
+
+    context = service.get_ui_context(doc)
+
+    assert context["template_id"] == "pad_grid_4x4"
+    assert context["parameters"]["values"] == {}
+    assert context["parameters"]["sources"] == {}
+    assert context["parameters"]["preset_id"] is None
+    assert context["ui"]["snap_enabled"] is False
+    assert context["ui"]["overlay_enabled"] is True

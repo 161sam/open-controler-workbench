@@ -67,6 +67,17 @@ Interactive preview state is not persisted in `ProjectJson`.
 Preview tools store transient payloads in document metadata under `OCWDragPreview`.
 Committed state lives in `ProjectJson`; preview state lives only in metadata and drives overlay-only ghosts.
 
+Parameterized projects persist their roundtrip linkage in project state:
+
+- `meta.template_id` points to the source template
+- `meta.variant_id` points to the source variant when a variant created the project
+- `meta.parameters.values` stores the current project-scoped editable parameter values
+- `meta.parameters.sources` stores where each current value came from
+- `meta.parameters.preset_id` stores the active template preset, if one is selected
+- `meta.overrides` stays as compatibility payload and legacy fallback source, not as the primary editable parameter store
+
+This keeps parameter editing project-scoped while still allowing a reopened document to be re-resolved through the normal template or variant pipeline.
+
 Generated document geometry is owned by the `OCW_Generated` group.
 Regular cleanup and rebuild paths operate on group membership instead of global name scans.
 Keepout helper geometry is overlay-driven by default and is only materialized as document objects in explicit debug mode.
@@ -98,6 +109,16 @@ State → template or variant resolver → resolved template data → layout eng
 
 UI panels only edit staged parameter values or store them in project state.
 They do not push ad-hoc geometry values directly into builder code.
+
+For reopened documents the roundtrip is:
+
+- load `ProjectJson`
+- recover template or variant linkage plus saved project parameters
+- rebuild the parameter UI model from registry-resolved schema
+- apply edited project values back through the resolver
+- regenerate controller state and geometry through the normal sync path
+
+Legacy documents without explicit `meta.parameters` can still fall back to legacy overrides when available, but the UI marks that state clearly instead of silently assuming a fully modern parameter roundtrip.
 
 ## Zielarchitektur
 

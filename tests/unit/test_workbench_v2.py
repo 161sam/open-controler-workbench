@@ -89,6 +89,88 @@ def test_create_panel_shows_active_project_state_after_creation():
     assert "layout grid" in active_project
 
 
+def test_create_panel_reuses_saved_project_parameters_when_reopened():
+    doc = FakeDocument()
+    service = ControllerService()
+    service.create_from_template(
+        doc,
+        "fader_strip",
+        overrides={"parameters": {"fader_length": 45, "case_width": 220.0}},
+    )
+
+    panel = CreatePanel(doc, controller_service=service)
+
+    assert current_text(panel.form["template"]).endswith("(fader_strip)")
+    assert panel.form["parameter_editor"].control_widget("fader_length").currentText() == "45 mm"
+    assert panel.form["parameter_status"].text == "Project parameters loaded from saved project metadata."
+    assert "parameters ready" in panel.form["active_project"].text
+
+
+def test_create_panel_uses_legacy_override_fallback_for_reparameterization():
+    doc = FakeDocument()
+    service = ControllerService()
+    service.save_state(
+        doc,
+        {
+            "controller": {"id": "demo", "width": 180.0, "depth": 100.0},
+            "components": [],
+            "meta": {
+                "template_id": "pad_grid_4x4",
+                "variant_id": None,
+                "overrides": {
+                    "parameters": {"pad_count_x": 8, "pad_count_y": 4},
+                    "parameter_preset_id": "pad_grid_8x2",
+                },
+            },
+        },
+    )
+
+    panel = CreatePanel(doc, controller_service=service)
+
+    assert widget_value(panel.form["parameter_editor"].control_widget("pad_count_x")) == 8
+    assert "legacy project overrides" in panel.form["parameter_status"].text
+    assert "parameters legacy_fallback" in panel.form["active_project"].text
+
+
+def test_create_panel_reparameterizes_existing_project_after_reopen():
+    doc = FakeDocument()
+    service = ControllerService()
+    service.create_from_template(
+        doc,
+        "pad_grid_4x4",
+        overrides={"parameters": {"pad_count_x": 4, "pad_count_y": 4}},
+    )
+
+    panel = CreatePanel(doc, controller_service=service)
+    panel.form["parameter_editor"].control_widget("pad_count_x").setValue(8)
+    panel.form["parameter_editor"].control_widget("pad_count_y").setValue(4)
+    panel.handle_parameter_widget_changed()
+    state = panel.apply_parameters()
+
+    assert len(state["components"]) == 32
+    assert state["meta"]["parameters"]["values"]["pad_count_x"] == 8
+    assert state["meta"]["template_id"] == "pad_grid_4x4"
+
+
+def test_create_panel_reports_missing_project_parameter_source():
+    doc = FakeDocument()
+    service = ControllerService()
+    service.save_state(
+        doc,
+        {
+            "controller": {"id": "demo", "width": 180.0, "depth": 100.0},
+            "components": [{"id": "enc1", "type": "encoder", "library_ref": "alps_ec11e15204a3", "x": 10.0, "y": 10.0, "rotation": 0.0}],
+            "meta": {"template_id": "missing_template", "variant_id": None},
+        },
+    )
+
+    panel = CreatePanel(doc, controller_service=service)
+
+    assert "missing_template" in panel.form["parameter_status"].text
+    assert "parameters missing_source" in panel.form["active_project"].text
+    assert panel.form["apply_parameters_button"].enabled is False
+
+
 def test_layout_components_constraints_and_info_panels_share_document_state():
     doc = FakeDocument()
     service = ControllerService()

@@ -540,7 +540,17 @@ class ControllerStateService:
         normalized["controller"].update(deepcopy(state.get("controller", {})))
         normalized["components"] = deepcopy(state.get("components", []))
         if isinstance(state.get("meta"), dict):
-            normalized["meta"].update(deepcopy(state["meta"]))
+            meta = deepcopy(state["meta"])
+            normalized["meta"].update({key: value for key, value in meta.items() if key not in {"parameters", "ui"}})
+            parameters = meta.get("parameters")
+            if isinstance(parameters, dict):
+                normalized["meta"]["parameters"].update(deepcopy(parameters))
+            overrides = normalized["meta"].get("overrides")
+            if not isinstance(overrides, dict):
+                normalized["meta"]["overrides"] = {}
+            ui = meta.get("ui")
+            if isinstance(ui, dict):
+                normalized["meta"]["ui"].update(deepcopy(ui))
         return normalized
 
     def _positive_float(self, value: Any, field_name: str) -> float:

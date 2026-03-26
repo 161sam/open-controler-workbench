@@ -26,6 +26,7 @@ from ocw_workbench.gui.widgets.favorites_list import FavoritesListWidget
 from ocw_workbench.gui.widgets.preset_list import PresetListWidget
 from ocw_workbench.gui.widgets.recent_list import RecentListWidget
 from ocw_workbench.services.controller_service import ControllerService
+from ocw_workbench.services.project_parameter_service import ProjectParameterService
 from ocw_workbench.services.template_marketplace_service import TemplateMarketplaceService
 from ocw_workbench.services.template_service import TemplateService
 from ocw_workbench.services.userdata_service import UserDataService
@@ -66,10 +67,16 @@ class CreatePanel:
         self._marketplace_entries: list[dict[str, Any]] = []
         self._marketplace_lookup: dict[str, dict[str, Any]] = {}
         self.parameter_resolver = TemplateParameterResolver()
+        self.project_parameter_service = ProjectParameterService(
+            template_service=self.template_service,
+            variant_service=self.variant_service,
+            parameter_resolver=self.parameter_resolver,
+        )
         self._parameter_template: dict[str, Any] | None = None
         self._parameter_values: dict[str, Any] = {}
         self._parameter_sources: dict[str, str] = {}
         self._parameter_preset_id: str | None = None
+        self._project_parameter_status: str = "unlinked"
         self.form = _build_form()
         self.widget = self.form["widget"]
         marketplace_url = self.template_marketplace_service.last_registry_url()
@@ -471,6 +478,10 @@ class CreatePanel:
         self._update_actions()
 
     def refresh_parameters(self) -> None:
+        context = self.controller_service.get_ui_context(self.doc)
+        project_parameter_model = self.project_parameter_service.inspect_project_parameters(context)
+        self._project_parameter_status = project_parameter_model["status"]
+        set_label_text(self.form["parameter_status"], project_parameter_model["message"])
         template_id = self.selected_template_id()
         if template_id is None:
             self._parameter_template = None
@@ -480,21 +491,27 @@ class CreatePanel:
             self.form["parameter_editor"].clear()
             return
         variant_id = self.selected_variant_id()
-        template = self.variant_service.resolve_variant(variant_id) if variant_id else self.template_service.resolve_template(template_id)
-        self._parameter_template = template
-        context = self.controller_service.get_ui_context(self.doc)
-        if context.get("template_id") == template_id and context.get("variant_id") == variant_id:
-            parameter_context = context.get("parameters") or {}
-            seeded_values = deepcopy(parameter_context.get("values", {}))
-            seeded_preset_id = parameter_context.get("preset_id")
+        active_project_matches_selection = (
+            context.get("template_id") == template_id
+            and context.get("variant_id") == variant_id
+        )
+        if active_project_matches_selection and project_parameter_model["reparameterizable"]:
+            self._parameter_template = project_parameter_model["template"]
+            ui_model = project_parameter_model["ui_model"]
+            assert ui_model is not None
         else:
+            template = self.variant_service.resolve_variant(variant_id) if variant_id else self.template_service.resolve_template(template_id)
+            self._parameter_template = template
             seeded_values = deepcopy(self._parameter_values)
             seeded_preset_id = self._parameter_preset_id
+            try:
+                ui_model = self.parameter_resolver.build_ui_model(template, values=seeded_values, preset_id=seeded_preset_id)
+            except KeyError:
+                ui_model = self.parameter_resolver.build_ui_model(template, values=seeded_values, preset_id=None)
         try:
-            ui_model = self.parameter_resolver.build_ui_model(template, values=seeded_values, preset_id=seeded_preset_id)
+            self._parameter_values = deepcopy(ui_model["values"])
         except KeyError:
-            ui_model = self.parameter_resolver.build_ui_model(template, values=seeded_values, preset_id=None)
-        self._parameter_values = deepcopy(ui_model["values"])
+            self._parameter_values = {}
         self._parameter_sources = deepcopy(ui_model["sources"])
         self._parameter_preset_id = ui_model["preset_id"]
         self.form["parameter_editor"].set_schema(
@@ -529,6 +546,7 @@ class CreatePanel:
         )
 
     def _sync_active_project(self, context: dict[str, Any]) -> None:
+        project_parameter_model = self.project_parameter_service.inspect_project_parameters(context)
         layout = context.get("layout") or {}
         validation = context.get("validation") or {}
         validation_summary = validation.get("summary", {}) if isinstance(validation, dict) else {}
@@ -548,7 +566,8 @@ class CreatePanel:
             f"variant {context.get('variant_id') or 'template default'} | "
             f"{context.get('component_count', 0)} components | "
             f"layout {layout_text} | "
-            f"{validation_text}"
+            f"{validation_text} | "
+            f"parameters {project_parameter_model['status']}"
         )
 
     def _set_variant_summary(self) -> None:
@@ -637,8 +656,12 @@ class CreatePanel:
             and context.get("template_id") == self.selected_template_id()
             and context.get("variant_id") == self.selected_variant_id()
         )
+        project_parameter_model = self.project_parameter_service.inspect_project_parameters(context)
         set_enabled(self.form["create_button"], template_selected)
-        set_enabled(self.form["apply_parameters_button"], bool(active_project_matches_selection))
+        set_enabled(
+            self.form["apply_parameters_button"],
+            bool(active_project_matches_selection and project_parameter_model["reparameterizable"]),
+        )
         set_enabled(self.form["favorite_template_button"], template_selected)
         set_enabled(self.form["favorite_variant_button"], variant_selected)
         set_enabled(self.form["presets_widget"].parts["save_button"], template_selected)
@@ -729,6 +752,7 @@ def _build_form() -> dict[str, Any]:
             "variant_summary": FallbackLabel("Template defaults are active."),
             "favorite_variant_status": FallbackLabel(),
             "favorite_variant_button": FallbackButton("Toggle Variant Favorite"),
+            "parameter_status": FallbackLabel("Choose a template to inspect project parameters."),
             "preview": FallbackText(),
             "apply_parameters_button": FallbackButton("Apply Parameters"),
             "create_button": FallbackButton("Create New Controller"),
@@ -784,6 +808,8 @@ def _build_form() -> dict[str, Any]:
     favorite_variant_status = qtwidgets.QLabel()
     favorite_variant_status.setWordWrap(True)
     favorite_variant_button = qtwidgets.QPushButton("Toggle Favorite")
+    parameter_status = qtwidgets.QLabel("Choose a template to inspect project parameters.")
+    parameter_status.setWordWrap(True)
     preview = qtwidgets.QPlainTextEdit()
     configure_text_panel(preview, max_height=140)
     apply_parameters_button = qtwidgets.QPushButton("Apply Parameters")
@@ -826,6 +852,7 @@ def _build_form() -> dict[str, Any]:
     root.addWidget(marketplace_box)
     root.addLayout(form)
     root.addWidget(parameter_editor.widget)
+    root.addWidget(parameter_status)
     root.addWidget(preview)
     root.addWidget(presets_widget.widget)
     root.addWidget(apply_parameters_button)
@@ -857,6 +884,7 @@ def _build_form() -> dict[str, Any]:
         "variant_summary": variant_summary,
         "favorite_variant_status": favorite_variant_status,
         "favorite_variant_button": favorite_variant_button,
+        "parameter_status": parameter_status,
         "preview": preview,
         "apply_parameters_button": apply_parameters_button,
         "create_button": create_button,
