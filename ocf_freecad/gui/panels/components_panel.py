@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from ocf_freecad.gui.feedback import apply_status_message, friendly_ui_error
 from ocf_freecad.gui.panels._common import (
     configure_combo_box,
     configure_text_panel,
@@ -14,9 +15,9 @@ from ocf_freecad.gui.panels._common import (
     current_text,
     load_qt,
     set_combo_items,
-    set_label_text,
     set_size_policy,
     set_text,
+    set_tooltip,
     set_value,
     text_value,
     wrap_widget_in_scroll_area,
@@ -49,6 +50,7 @@ class ComponentsPanel:
         self._add_library_lookup: dict[str, str] = {}
         self.form = _build_form()
         self.widget = self.form["widget"]
+        self._configure_tooltips()
         self._connect_events()
         self.refresh()
 
@@ -76,10 +78,18 @@ class ComponentsPanel:
             self.load_selected_component(notify=False)
             move_mode = self.interaction_service.get_settings(self.doc).get("move_component_id")
             suffix = f" 3D move active for {move_mode}." if move_mode else ""
-            set_label_text(self.form["status"], f"{len(labels)} components ready. Adjust values below and save.{suffix}")
+            apply_status_message(
+                self.form["status"],
+                f"{len(labels)} components ready. Adjust values below and save.{suffix}",
+                level="info",
+            )
         else:
             set_text(self.form["details"], "No components in this controller yet.")
-            set_label_text(self.form["status"], "Add a component from the library to start building the controller.")
+            apply_status_message(
+                self.form["status"],
+                "Add a component from the library to start building the controller.",
+                level="info",
+            )
 
     def refresh_add_library(self) -> None:
         categories = sorted({item["category"] for item in self.library_service.list_by_category()})
@@ -248,7 +258,8 @@ class ComponentsPanel:
                 return
 
     def _publish_status(self, message: str) -> None:
-        set_label_text(self.form["status"], message)
+        level = "error" if message.lower().startswith("could not") else "info"
+        apply_status_message(self.form["status"], message, level=level)
         if self.on_status is not None:
             self.on_status(message)
 
@@ -265,6 +276,22 @@ class ComponentsPanel:
             self.form["snap_button"].clicked.connect(self.handle_snap_clicked)
         if hasattr(self.form["add_button"], "clicked"):
             self.form["add_button"].clicked.connect(self.handle_add_clicked)
+
+    def _configure_tooltips(self) -> None:
+        set_tooltip(self.form["component"], "Select the component you want to inspect or adjust.")
+        set_tooltip(self.form["x"], "Horizontal center position in millimeters.")
+        set_tooltip(self.form["y"], "Vertical center position in millimeters.")
+        set_tooltip(self.form["rotation"], "Rotation around the component center in degrees.")
+        set_tooltip(self.form["library_ref"], "Optional library override for the selected component.")
+        set_tooltip(self.form["update_button"], "Apply the edited position, rotation or library reference.")
+        set_tooltip(self.form["arm_move_button"], "Pick a new location directly in the 3D view.")
+        set_tooltip(self.form["snap_button"], "Move the selected component to the current snap grid.")
+        set_tooltip(self.form["add_category"], "Filter the component library by category.")
+        set_tooltip(self.form["add_component"], "Choose the library part to insert into the controller.")
+        set_tooltip(self.form["add_x"], "Initial X position for the new component.")
+        set_tooltip(self.form["add_y"], "Initial Y position for the new component.")
+        set_tooltip(self.form["add_rotation"], "Initial rotation for the new component.")
+        set_tooltip(self.form["add_button"], "Insert the selected library component into the active controller.")
 
 
 def _build_form() -> dict[str, Any]:
@@ -303,6 +330,14 @@ def _build_form() -> dict[str, Any]:
     update_button = qtwidgets.QPushButton("Apply Changes")
     arm_move_button = qtwidgets.QPushButton("Pick In 3D")
     snap_button = qtwidgets.QPushButton("Snap To Grid")
+    set_tooltip(component, "Select the component you want to inspect or adjust.")
+    set_tooltip(x, "Horizontal center position in millimeters.")
+    set_tooltip(y, "Vertical center position in millimeters.")
+    set_tooltip(rotation, "Rotation around the component center in degrees.")
+    set_tooltip(library_ref, "Optional library override for the selected component.")
+    set_tooltip(update_button, "Apply the edited position, rotation or library reference.")
+    set_tooltip(arm_move_button, "Pick a new location directly in the 3D view.")
+    set_tooltip(snap_button, "Move the selected component to the current snap grid.")
     for spinbox in (x, y, rotation):
         spinbox.setRange(-1000.0, 1000.0)
         spinbox.setDecimals(2)
@@ -327,6 +362,12 @@ def _build_form() -> dict[str, Any]:
     add_y = qtwidgets.QDoubleSpinBox()
     add_rotation = qtwidgets.QDoubleSpinBox()
     add_button = qtwidgets.QPushButton("Add To Controller")
+    set_tooltip(add_category, "Filter the component library by category.")
+    set_tooltip(add_component, "Choose the library part to insert into the controller.")
+    set_tooltip(add_x, "Initial X position for the new component.")
+    set_tooltip(add_y, "Initial Y position for the new component.")
+    set_tooltip(add_rotation, "Initial rotation for the new component.")
+    set_tooltip(add_button, "Insert the selected library component into the active controller.")
     for spinbox in (add_x, add_y, add_rotation):
         spinbox.setRange(-1000.0, 1000.0)
         spinbox.setDecimals(2)
@@ -373,12 +414,7 @@ def _build_form() -> dict[str, Any]:
 
 
 def _friendly_component_error(prefix: str, exc: Exception) -> str:
-    message = str(exc).strip() or exc.__class__.__name__
-    lowered = message.lower()
-    if "no component selected" in lowered:
-        return f"{prefix}. Select a component first."
-    if "unknown component id" in lowered:
+    message = str(exc).strip().lower()
+    if "unknown component id" in message:
         return f"{prefix}. The selected component is no longer available. Refresh the list and try again."
-    if "part::" in lowered or "shape" in lowered or "cutout" in lowered:
-        return f"{prefix}. The component geometry could not be updated. Check its size, rotation and placement."
-    return f"{prefix}. {message}"
+    return friendly_ui_error(prefix, exc)

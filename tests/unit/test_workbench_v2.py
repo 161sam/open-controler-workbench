@@ -152,6 +152,25 @@ def test_workbench_overlay_toggles_do_not_add_recomputes_for_visual_updates():
     assert doc.recompute_count == recomputes_before
 
 
+def test_workbench_uses_clearer_status_text_for_create_and_overlay_actions():
+    doc = FakeDocument()
+    service = ControllerService()
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+
+    _select_combo_by_suffix(workbench.create_panel.form["template"], "(encoder_module)")
+    workbench.create_panel.handle_template_changed()
+    workbench.create_panel.create_controller()
+    created_status = workbench.form["status"].text
+
+    workbench.toggle_overlay()
+    overlay_status = workbench.form["status"].text
+
+    assert "Controller created." in created_status
+    assert "use Components or Auto Place" in created_status
+    assert "Overlay" in overlay_status
+    assert "without changing model geometry" in overlay_status
+
+
 def test_components_panel_saves_position_without_move_step():
     doc = FakeDocument()
     service = ControllerService()
@@ -183,3 +202,20 @@ def test_components_panel_uses_clearer_action_labels_and_details():
     assert panel.form["update_button"].text == "Apply Changes"
     assert panel.form["arm_move_button"].text == "Pick In 3D"
     assert "Normal workflow: adjust X, Y or Rotation here, then apply changes." in details
+
+
+def test_panels_expose_tooltips_for_key_workflows():
+    doc = FakeDocument()
+    service = ControllerService()
+    layout_panel = LayoutPanel(doc, controller_service=service)
+    components_panel = ComponentsPanel(doc, controller_service=service)
+    info_panel = InfoPanel(doc, controller_service=service)
+    constraints_panel = ConstraintsPanel(doc, controller_service=service)
+
+    assert "placement strategy" in layout_panel.form["preset"].tooltip
+    assert layout_panel.form["overlay_button"].text == "Overlay Visibility"
+    assert "helper graphics" in layout_panel.form["overlay_button"].tooltip
+    assert "Horizontal center position" in components_panel.form["x"].tooltip
+    assert "3D view" in components_panel.form["arm_move_button"].tooltip
+    assert "Overall controller width" in info_panel.form["width"].tooltip
+    assert "spacing, overlap and edge-distance" in constraints_panel.form["validate_button"].tooltip

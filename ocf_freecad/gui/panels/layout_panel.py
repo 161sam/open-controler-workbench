@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from ocf_freecad.gui.feedback import apply_status_message, format_layout_message, format_toggle_message, friendly_ui_error
 from ocf_freecad.gui.panels._common import (
     configure_combo_box,
     configure_text_panel,
@@ -15,6 +16,7 @@ from ocf_freecad.gui.panels._common import (
     load_qt,
     set_label_text,
     set_current_text,
+    set_tooltip,
     set_value,
     set_size_policy,
     set_text,
@@ -43,6 +45,7 @@ class LayoutPanel:
         self.on_status = on_status
         self.form = _build_form()
         self.widget = self.form["widget"]
+        self._configure_tooltips()
         self._connect_events()
         self.refresh()
 
@@ -67,7 +70,11 @@ class LayoutPanel:
         self._sync_form_defaults(layout=layout, settings=settings)
         if not layout:
             set_text(self.form["summary"], "No layout has been applied yet.")
-            set_label_text(self.form["status"], "Use Auto Place after creating a template or when components need a fresh starting layout.")
+            apply_status_message(
+                self.form["status"],
+                "Use Auto Place after creating a template or when components need a fresh starting layout.",
+                level="info",
+            )
             return
         summary = layout.get("result_summary", {})
         config = layout.get("config", {})
@@ -105,7 +112,8 @@ class LayoutPanel:
             }
         )
         result = self.controller_service.auto_layout(self.doc, strategy=strategy, config=config)
-        set_label_text(self.form["status"], f"Applied {strategy} placement to the current components.")
+        status_message, status_level = format_layout_message(result, strategy)
+        apply_status_message(self.form["status"], status_message, level=status_level)
         set_text(
             self.form["summary"],
             "\n".join(
@@ -117,7 +125,7 @@ class LayoutPanel:
             ),
         )
         if self.on_status is not None:
-            self.on_status(f"Applied {strategy} placement to the current components.")
+            self.on_status(status_message)
         if self.on_applied is not None:
             self.on_applied(result)
         return result
@@ -125,14 +133,26 @@ class LayoutPanel:
     def toggle_overlay(self) -> dict[str, Any]:
         settings = self.interaction_service.toggle_overlay(self.doc)
         self.refresh()
-        self._publish_status(f"Overlay {'enabled' if settings['overlay_enabled'] else 'disabled'}.")
+        self._publish_status(
+            format_toggle_message(
+                "Overlay",
+                settings["overlay_enabled"],
+                "Use this for cutout, keepout and placement guidance without changing the model.",
+            ),
+            level="info",
+        )
         return settings
 
     def toggle_constraint_overlay(self) -> dict[str, Any]:
         settings = self.interaction_service.toggle_constraint_overlay(self.doc)
         self.refresh()
         self._publish_status(
-            f"Constraint overlay {'enabled' if settings['show_constraints'] else 'disabled'}."
+            format_toggle_message(
+                "Constraint checks",
+                settings["show_constraints"],
+                "Enable this when you want spacing and edge warnings highlighted in the view.",
+            ),
+            level="info",
         )
         return settings
 
@@ -143,14 +163,18 @@ class LayoutPanel:
             {"snap_enabled": not settings["snap_enabled"], "grid_mm": widget_value(self.form["grid_mm"])},
         )
         self.refresh()
-        self._publish_status(f"Snap {'enabled' if updated['snap_enabled'] else 'disabled'}.")
+        self._publish_status(
+            format_toggle_message("Snap to grid", updated["snap_enabled"], "New moves and snaps will follow the current grid value."),
+            level="info",
+        )
         return updated
 
     def toggle_measurements(self) -> dict[str, Any]:
         settings = self.interaction_service.toggle_measurements(self.doc)
         self.refresh()
         self._publish_status(
-            f"Measurements {'enabled' if settings['measurements_enabled'] else 'disabled'}."
+            format_toggle_message("Measurement guides", settings["measurements_enabled"], "Useful when checking center-to-center distances."),
+            level="info",
         )
         return settings
 
@@ -158,7 +182,8 @@ class LayoutPanel:
         settings = self.interaction_service.toggle_conflict_lines(self.doc)
         self.refresh()
         self._publish_status(
-            f"Conflict lines {'enabled' if settings['conflict_lines_enabled'] else 'disabled'}."
+            format_toggle_message("Conflict lines", settings["conflict_lines_enabled"], "These lines help locate spacing conflicts quickly."),
+            level="info",
         )
         return settings
 
@@ -166,7 +191,8 @@ class LayoutPanel:
         settings = self.interaction_service.toggle_constraint_labels(self.doc)
         self.refresh()
         self._publish_status(
-            f"Constraint labels {'enabled' if settings['constraint_labels_enabled'] else 'disabled'}."
+            format_toggle_message("Issue labels", settings["constraint_labels_enabled"], "Turn labels on when you need readable issue names in the view."),
+            level="info",
         )
         return settings
 
@@ -174,43 +200,43 @@ class LayoutPanel:
         try:
             self.apply_auto_layout()
         except Exception as exc:
-            self._publish_status(f"Could not apply layout: {exc}")
+            self._publish_status(friendly_ui_error("Could not apply layout", exc), level="error")
 
     def handle_overlay_clicked(self) -> None:
         try:
             self.toggle_overlay()
         except Exception as exc:
-            self._publish_status(f"Could not update overlay visibility: {exc}")
+            self._publish_status(friendly_ui_error("Could not update overlay visibility", exc), level="error")
 
     def handle_constraint_overlay_clicked(self) -> None:
         try:
             self.toggle_constraint_overlay()
         except Exception as exc:
-            self._publish_status(f"Could not update constraint checks: {exc}")
+            self._publish_status(friendly_ui_error("Could not update constraint checks", exc), level="error")
 
     def handle_snap_clicked(self) -> None:
         try:
             self.toggle_snap()
         except Exception as exc:
-            self._publish_status(f"Could not update snap mode: {exc}")
+            self._publish_status(friendly_ui_error("Could not update snap mode", exc), level="error")
 
     def handle_measurements_clicked(self) -> None:
         try:
             self.toggle_measurements()
         except Exception as exc:
-            self._publish_status(f"Could not update measurements: {exc}")
+            self._publish_status(friendly_ui_error("Could not update measurement guides", exc), level="error")
 
     def handle_conflict_lines_clicked(self) -> None:
         try:
             self.toggle_conflict_lines()
         except Exception as exc:
-            self._publish_status(f"Could not update conflict lines: {exc}")
+            self._publish_status(friendly_ui_error("Could not update conflict lines", exc), level="error")
 
     def handle_constraint_labels_clicked(self) -> None:
         try:
             self.toggle_constraint_labels()
         except Exception as exc:
-            self._publish_status(f"Could not update labels: {exc}")
+            self._publish_status(friendly_ui_error("Could not update issue labels", exc), level="error")
 
     def accept(self) -> bool:
         self.apply_auto_layout()
@@ -234,8 +260,8 @@ class LayoutPanel:
         if hasattr(self.form["constraint_labels_button"], "clicked"):
             self.form["constraint_labels_button"].clicked.connect(self.handle_constraint_labels_clicked)
 
-    def _publish_status(self, message: str) -> None:
-        set_label_text(self.form["status"], message)
+    def _publish_status(self, message: str, level: str = "info") -> None:
+        apply_status_message(self.form["status"], message, level=level)
         if self.on_status is not None:
             self.on_status(message)
         if self.on_overlay_changed is not None:
@@ -252,6 +278,20 @@ class LayoutPanel:
         )
         set_value(self.form["padding_mm"], float(config.get("padding_mm", 8.0)))
 
+    def _configure_tooltips(self) -> None:
+        set_tooltip(self.form["preset"], "Choose the placement strategy used when Auto Place runs.")
+        set_tooltip(self.form["grid_mm"], "Base grid used for snapping and placement rounding.")
+        set_tooltip(self.form["spacing_mm"], "Center-to-center spacing target for grid, row or column placement.")
+        set_tooltip(self.form["padding_mm"], "Padding kept free near the controller edge or placement zone border.")
+        set_tooltip(self.form["apply_button"], "Apply the current placement strategy to all components now.")
+        set_tooltip(self.form["rerun_button"], "Run Auto Place again with the current strategy and spacing values.")
+        set_tooltip(self.form["overlay_button"], "Show or hide helper graphics such as outlines and cutout previews.")
+        set_tooltip(self.form["constraint_overlay_button"], "Show or hide validation highlights for spacing and edge checks.")
+        set_tooltip(self.form["snap_button"], "Toggle whether new moves align to the current grid value.")
+        set_tooltip(self.form["measurements_button"], "Show or hide measurement guides in the overlay.")
+        set_tooltip(self.form["conflict_lines_button"], "Show or hide helper lines that connect conflicting components.")
+        set_tooltip(self.form["constraint_labels_button"], "Show or hide text labels for issues directly in the view.")
+
 
 def _build_form() -> dict[str, Any]:
     _qtcore, _qtgui, qtwidgets = load_qt()
@@ -264,12 +304,12 @@ def _build_form() -> dict[str, Any]:
             "padding_mm": FallbackValue(8.0),
             "apply_button": FallbackButton("Auto Place Components"),
             "rerun_button": FallbackButton("Re-run Placement"),
-            "overlay_button": FallbackButton("Show / Hide Overlay"),
-            "constraint_overlay_button": FallbackButton("Show Constraint Checks"),
+            "overlay_button": FallbackButton("Overlay Visibility"),
+            "constraint_overlay_button": FallbackButton("Constraint Checks"),
             "snap_button": FallbackButton("Snap"),
-            "measurements_button": FallbackButton("Measurements"),
+            "measurements_button": FallbackButton("Measurement Guides"),
             "conflict_lines_button": FallbackButton("Conflict Lines"),
-            "constraint_labels_button": FallbackButton("Constraint Labels"),
+            "constraint_labels_button": FallbackButton("Issue Labels"),
             "summary": FallbackText(),
             "overlay_status": FallbackText(),
             "status": FallbackLabel(),
@@ -295,12 +335,24 @@ def _build_form() -> dict[str, Any]:
     padding_mm.setValue(8.0)
     apply_button = qtwidgets.QPushButton("Auto Place Components")
     rerun_button = qtwidgets.QPushButton("Re-run Placement")
-    overlay_button = qtwidgets.QPushButton("Show / Hide Overlay")
-    constraint_overlay_button = qtwidgets.QPushButton("Show Constraint Checks")
+    overlay_button = qtwidgets.QPushButton("Overlay Visibility")
+    constraint_overlay_button = qtwidgets.QPushButton("Constraint Checks")
     snap_button = qtwidgets.QPushButton("Snap")
-    measurements_button = qtwidgets.QPushButton("Measurements")
+    measurements_button = qtwidgets.QPushButton("Measurement Guides")
     conflict_lines_button = qtwidgets.QPushButton("Conflict Lines")
-    constraint_labels_button = qtwidgets.QPushButton("Constraint Labels")
+    constraint_labels_button = qtwidgets.QPushButton("Issue Labels")
+    set_tooltip(preset, "Choose the placement strategy used when Auto Place runs.")
+    set_tooltip(grid_mm, "Base grid used for snapping and placement rounding.")
+    set_tooltip(spacing_mm, "Center-to-center spacing target for grid, row or column placement.")
+    set_tooltip(padding_mm, "Padding kept free near the controller edge or placement zone border.")
+    set_tooltip(apply_button, "Apply the current placement strategy to all components now.")
+    set_tooltip(rerun_button, "Run Auto Place again with the current strategy and spacing values.")
+    set_tooltip(overlay_button, "Show or hide helper graphics such as outlines and cutout previews.")
+    set_tooltip(constraint_overlay_button, "Show or hide validation highlights for spacing and edge checks.")
+    set_tooltip(snap_button, "Toggle whether new moves align to the current grid value.")
+    set_tooltip(measurements_button, "Show or hide measurement guides in the overlay.")
+    set_tooltip(conflict_lines_button, "Show or hide helper lines that connect conflicting components.")
+    set_tooltip(constraint_labels_button, "Show or hide text labels for issues directly in the view.")
     button_row = qtwidgets.QGridLayout()
     actions = [
         apply_button,

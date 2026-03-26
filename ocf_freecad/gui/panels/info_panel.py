@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ocf_freecad.gui.feedback import apply_status_message, friendly_ui_error
 from ocf_freecad.gui.panels._common import (
     FallbackButton,
     FallbackCombo,
@@ -16,6 +17,7 @@ from ocf_freecad.gui.panels._common import (
     set_label_text,
     set_size_policy,
     set_text,
+    set_tooltip,
     set_value,
     wrap_widget_in_scroll_area,
     widget_value,
@@ -37,6 +39,7 @@ class InfoPanel:
         self.on_status = on_status
         self.form = _build_form()
         self.widget = self.form["widget"]
+        self._configure_tooltips()
         self._connect_events()
         self.refresh()
 
@@ -88,9 +91,10 @@ class InfoPanel:
             ]
         )
         set_text(self.form["info"], summary_text)
-        set_label_text(
+        apply_status_message(
             self.form["status"],
             "Review controller size and shell settings here, then place components in the Components tab.",
+            level="info",
         )
         self._sync_surface_fields()
         return summary_text
@@ -110,7 +114,7 @@ class InfoPanel:
         }
         state = self.controller_service.update_controller(self.doc, updates)
         self.refresh()
-        self._publish_status("Updated controller geometry and refreshed the model.")
+        self._publish_status("Updated controller geometry. Review the 3D result and re-run validation if clearances changed.", level="success")
         if self.on_updated is not None:
             self.on_updated(state)
         return state
@@ -119,7 +123,7 @@ class InfoPanel:
         try:
             self.apply_controller_updates()
         except Exception as exc:
-            self._publish_status(f"Could not update controller settings: {exc}")
+            self._publish_status(friendly_ui_error("Could not update controller settings", exc), level="error")
 
     def handle_surface_changed(self, *_args: Any) -> None:
         self._sync_surface_fields()
@@ -134,8 +138,8 @@ class InfoPanel:
         if hasattr(self.form["corner_radius"], "setEnabled"):
             self.form["corner_radius"].setEnabled(corner_enabled)
 
-    def _publish_status(self, message: str) -> None:
-        set_label_text(self.form["status"], message)
+    def _publish_status(self, message: str, level: str = "info") -> None:
+        apply_status_message(self.form["status"], message, level=level)
         if self.on_status is not None:
             self.on_status(message)
 
@@ -144,6 +148,19 @@ class InfoPanel:
             self.form["surface_shape"].currentIndexChanged.connect(self.handle_surface_changed)
         if hasattr(self.form["apply_button"], "clicked"):
             self.form["apply_button"].clicked.connect(self.handle_apply_clicked)
+
+    def _configure_tooltips(self) -> None:
+        set_tooltip(self.form["width"], "Overall controller width in millimeters.")
+        set_tooltip(self.form["depth"], "Overall controller depth in millimeters.")
+        set_tooltip(self.form["height"], "Overall controller height in millimeters.")
+        set_tooltip(self.form["wall_thickness"], "Wall thickness for the enclosure shell.")
+        set_tooltip(self.form["bottom_thickness"], "Bottom panel thickness inside the enclosure.")
+        set_tooltip(self.form["top_thickness"], "Top plate thickness used for cutouts and lid geometry.")
+        set_tooltip(self.form["lid_inset"], "Inset depth for the lid or top plate seating feature.")
+        set_tooltip(self.form["inner_clearance"], "Extra clearance between outer shell and inner cavity.")
+        set_tooltip(self.form["surface_shape"], "Surface outline shape for the top side of the controller.")
+        set_tooltip(self.form["corner_radius"], "Corner radius used when the surface shape is rounded rectangle.")
+        set_tooltip(self.form["apply_button"], "Apply the edited controller dimensions and rebuild the model.")
 
 
 def _build_form() -> dict[str, Any]:
@@ -212,6 +229,17 @@ def _build_form() -> dict[str, Any]:
     configure_combo_box(surface_shape)
     surface_shape.addItems(["rectangle", "rounded_rect"])
     apply_button = qtwidgets.QPushButton("Apply Controller Settings")
+    set_tooltip(width, "Overall controller width in millimeters.")
+    set_tooltip(depth, "Overall controller depth in millimeters.")
+    set_tooltip(height, "Overall controller height in millimeters.")
+    set_tooltip(wall_thickness, "Wall thickness for the enclosure shell.")
+    set_tooltip(bottom_thickness, "Bottom panel thickness inside the enclosure.")
+    set_tooltip(top_thickness, "Top plate thickness used for cutouts and lid geometry.")
+    set_tooltip(lid_inset, "Inset depth for the lid or top plate seating feature.")
+    set_tooltip(inner_clearance, "Extra clearance between outer shell and inner cavity.")
+    set_tooltip(surface_shape, "Surface outline shape for the top side of the controller.")
+    set_tooltip(corner_radius, "Corner radius used when the surface shape is rounded rectangle.")
+    set_tooltip(apply_button, "Apply the edited controller dimensions and rebuild the model.")
     settings_layout.addRow("Width (mm)", width)
     settings_layout.addRow("Depth (mm)", depth)
     settings_layout.addRow("Height (mm)", height)

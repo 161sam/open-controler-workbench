@@ -9,8 +9,8 @@ class ToggleMeasurementsCommand(BaseCommand):
 
     def GetResources(self):
         return self.resources(
-            "Measurements",
-            "Show or hide measurement markers in the overlay.",
+            "Measurement Guides",
+            "Show or hide measurement guides in the overlay.",
         )
 
     def Activated(self):

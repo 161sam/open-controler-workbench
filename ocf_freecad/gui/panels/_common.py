@@ -190,6 +190,13 @@ def set_label_text(widget: Any, value: str) -> None:
     widget.text = value
 
 
+def set_tooltip(widget: Any, value: str) -> None:
+    if hasattr(widget, "setToolTip"):
+        widget.setToolTip(value)
+        return
+    widget.tooltip = value
+
+
 def wrap_widget_in_scroll_area(widget: Any) -> Any:
     qtcore, _qtgui, qtwidgets = load_qt()
     if qtwidgets is None:

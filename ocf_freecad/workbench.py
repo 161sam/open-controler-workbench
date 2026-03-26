@@ -14,6 +14,7 @@ except ImportError:
 
 from ocf_freecad.gui.interaction.move_tool import MoveTool
 from ocf_freecad.gui.docking import create_or_reuse_dock, focus_dock, remove_dock
+from ocf_freecad.gui.feedback import apply_status_message, format_toggle_message, format_validation_message
 from ocf_freecad.gui.overlay.renderer import OverlayRenderer
 from ocf_freecad.gui.panels._common import FallbackLabel, load_qt, log_exception, log_to_console, set_label_text, set_size_policy
 from ocf_freecad.gui.panels.components_panel import ComponentsPanel
@@ -254,7 +255,12 @@ class ProductWorkbenchPanel:
         self.set_status(f"{titles.get(panel_name, 'Workbench')} panel active.")
 
     def set_status(self, message: str) -> None:
-        set_label_text(self.form["status"], message)
+        level = "error" if message.lower().startswith("could not") or message.lower().startswith("validation found") else "info"
+        if "created" in message.lower() or "updated controller geometry" in message.lower() or "validation passed" in message.lower():
+            level = "success"
+        if "warning" in message.lower():
+            level = "warning"
+        apply_status_message(self.form["status"], message, level=level)
         set_label_text(self.form["overlay_status"], self._overlay_status_text())
 
     def refresh_overlay(self) -> dict[str, Any]:
@@ -274,7 +280,13 @@ class ProductWorkbenchPanel:
         self.refresh_overlay()
         self.layout_panel.refresh()
         self.constraints_panel.refresh()
-        self.set_status(f"Overlay {'enabled' if settings['overlay_enabled'] else 'disabled'}.")
+        self.set_status(
+            format_toggle_message(
+                "Overlay",
+                settings["overlay_enabled"],
+                "Use it to inspect helpers without changing model geometry.",
+            )
+        )
         return settings
 
     def toggle_constraint_overlay(self) -> dict[str, Any]:
@@ -283,7 +295,11 @@ class ProductWorkbenchPanel:
         self.layout_panel.refresh()
         self.constraints_panel.refresh()
         self.set_status(
-            f"Constraint overlay {'enabled' if settings['show_constraints'] else 'disabled'}."
+            format_toggle_message(
+                "Constraint checks",
+                settings["show_constraints"],
+                "Switch this on when you want issues highlighted directly in the 3D view.",
+            )
         )
         return settings
 
@@ -292,7 +308,13 @@ class ProductWorkbenchPanel:
         self.refresh_overlay()
         self.layout_panel.refresh()
         self.constraints_panel.refresh()
-        self.set_status(f"Measurements {'enabled' if settings['measurements_enabled'] else 'disabled'}.")
+        self.set_status(
+            format_toggle_message(
+                "Measurement guides",
+                settings["measurements_enabled"],
+                "Helpful for checking spacing during placement refinement.",
+            )
+        )
         return settings
 
     def toggle_conflict_lines(self) -> dict[str, Any]:
@@ -300,7 +322,13 @@ class ProductWorkbenchPanel:
         self.refresh_overlay()
         self.layout_panel.refresh()
         self.constraints_panel.refresh()
-        self.set_status(f"Conflict lines {'enabled' if settings['conflict_lines_enabled'] else 'disabled'}.")
+        self.set_status(
+            format_toggle_message(
+                "Conflict lines",
+                settings["conflict_lines_enabled"],
+                "These guides only visualize conflicts and do not change the model.",
+            )
+        )
         return settings
 
     def toggle_constraint_labels(self) -> dict[str, Any]:
@@ -309,7 +337,11 @@ class ProductWorkbenchPanel:
         self.layout_panel.refresh()
         self.constraints_panel.refresh()
         self.set_status(
-            f"Constraint labels {'enabled' if settings['constraint_labels_enabled'] else 'disabled'}."
+            format_toggle_message(
+                "Issue labels",
+                settings["constraint_labels_enabled"],
+                "Enable labels when you need readable issue names next to the overlay markers.",
+            )
         )
         return settings
 
@@ -319,7 +351,9 @@ class ProductWorkbenchPanel:
         self.info_panel.refresh()
         self.refresh_overlay()
         self.focus_panel("components")
-        self.set_status(f"Move mode armed for '{settings['move_component_id']}'.")
+        self.set_status(
+            f"Pick In 3D is ready for '{settings['move_component_id']}'. Click in the view or return to the Components tab to edit X/Y directly."
+        )
         return settings
 
     def move_to(self, x: float, y: float) -> dict[str, Any]:
@@ -327,7 +361,9 @@ class ProductWorkbenchPanel:
         self.refresh_context_panels(refresh_components=True)
         self.refresh_overlay()
         self.focus_panel("components")
-        self.set_status(f"Moved '{result['component_id']}' to {result['x']:.2f}, {result['y']:.2f} mm.")
+        self.set_status(
+            f"Moved '{result['component_id']}' to {result['x']:.2f}, {result['y']:.2f} mm. Validation and overlay were refreshed."
+        )
         return result
 
     def snap_selection_to_grid(self) -> dict[str, Any]:
@@ -335,7 +371,7 @@ class ProductWorkbenchPanel:
         self.refresh_context_panels(refresh_components=True)
         self.refresh_overlay()
         self.focus_panel("components")
-        self.set_status(f"Snapped '{result['component_id']}' to grid.")
+        self.set_status(f"Snapped '{result['component_id']}' to the current grid. Review the overlay for the updated placement.")
         return result
 
     def enable_selected_plugin(self) -> dict[str, Any]:
@@ -433,24 +469,29 @@ class ProductWorkbenchPanel:
         self.refresh_context_panels(refresh_components=True)
         self.refresh_overlay()
         self.focus_panel("create")
-        self.set_status("Controller created. Review size and shell settings, then add or place components.")
+        self.set_status("Controller created. Review size and shell settings, then use Components or Auto Place to refine the layout.")
 
     def _handle_layout_applied(self, _result: dict[str, Any]) -> None:
         self.refresh_context_panels(refresh_components=True)
-        self.constraints_panel.validate()
+        report = self.constraints_panel.validate()
         self.refresh_overlay()
         self.focus_panel("constraints")
+        message, _level = format_validation_message(report)
+        self.set_status(message)
 
     def _handle_components_changed(self, _state: dict[str, Any]) -> None:
         self.refresh_context_panels(refresh_components=False)
-        self.constraints_panel.validate()
+        report = self.constraints_panel.validate()
         self.refresh_overlay()
         self.focus_panel("components")
+        message, _level = format_validation_message(report)
+        self.set_status(f"Component update applied. {message}")
 
     def _handle_controller_updated(self, _state: dict[str, Any]) -> None:
         self.refresh_context_panels(refresh_components=True)
         self.refresh_overlay()
         self.focus_panel("create")
+        self.set_status("Controller settings updated. Check the model preview and re-run validation if dimensions changed.")
 
     def _handle_selection_changed(self, _component_id: str | None) -> None:
         self.info_panel.refresh()
@@ -459,6 +500,8 @@ class ProductWorkbenchPanel:
     def _handle_validated(self, _report: dict[str, Any]) -> None:
         self.info_panel.refresh()
         self.refresh_overlay()
+        message, _level = format_validation_message(_report)
+        self.set_status(message)
 
     def _handle_plugins_changed(self) -> None:
         self.create_panel.refresh()

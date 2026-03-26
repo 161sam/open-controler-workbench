@@ -9,8 +9,8 @@ class ShowConstraintOverlayCommand(BaseCommand):
 
     def GetResources(self):
         return self.resources(
-            "Constraint Overlay",
-            "Show or hide validation warnings and errors in the overlay.",
+            "Constraint Checks",
+            "Show or hide validation warnings and spacing checks in the overlay.",
         )
 
     def Activated(self):

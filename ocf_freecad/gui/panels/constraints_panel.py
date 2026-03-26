@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from ocf_freecad.gui.feedback import apply_status_message, format_validation_message, friendly_ui_error
 from ocf_freecad.gui.panels._common import (
     configure_text_panel,
     FallbackButton,
     FallbackLabel,
     FallbackText,
     load_qt,
-    set_label_text,
+    set_tooltip,
     set_text,
     wrap_widget_in_scroll_area,
 )
@@ -31,6 +32,7 @@ class ConstraintsPanel:
         self.on_status = on_status
         self.form = _build_form()
         self.widget = self.form["widget"]
+        self._configure_tooltips()
         self._messages: list[dict[str, Any]] = []
         self._connect_events()
         self.refresh()
@@ -42,12 +44,13 @@ class ConstraintsPanel:
             self._render_report(validation)
         else:
             set_text(self.form["results"], "Run validation to check spacing, edge distance, and placement issues.")
-            set_label_text(self.form["status"], "No validation results yet.")
+            apply_status_message(self.form["status"], "No validation results yet.", level="info")
 
     def validate(self) -> dict[str, Any]:
         report = self.controller_service.validate_layout(self.doc)
         self._render_report(report)
-        self._publish_status("Validation complete.")
+        message, level = format_validation_message(report)
+        self._publish_status(message, level=level)
         if self.on_validated is not None:
             self.on_validated(report)
         return report
@@ -67,7 +70,7 @@ class ConstraintsPanel:
         try:
             self.validate()
         except Exception as exc:
-            self._publish_status(str(exc))
+            self._publish_status(friendly_ui_error("Could not validate the controller", exc), level="error")
 
     def accept(self) -> bool:
         self.validate()
@@ -86,13 +89,11 @@ class ConstraintsPanel:
         for item in report["warnings"]:
             lines.append(_format_message("WARN", item))
         set_text(self.form["results"], "\n".join(lines))
-        set_label_text(
-            self.form["status"],
-            f"{summary['error_count']} errors, {summary['warning_count']} warnings.",
-        )
+        message, level = format_validation_message(report)
+        apply_status_message(self.form["status"], message, level=level)
 
-    def _publish_status(self, message: str) -> None:
-        set_label_text(self.form["status"], message)
+    def _publish_status(self, message: str, level: str = "info") -> None:
+        apply_status_message(self.form["status"], message, level=level)
         if self.on_status is not None:
             self.on_status(message)
 
@@ -100,6 +101,9 @@ class ConstraintsPanel:
         button = self.form["validate_button"]
         if hasattr(button, "clicked"):
             button.clicked.connect(self.handle_validate_clicked)
+
+    def _configure_tooltips(self) -> None:
+        set_tooltip(self.form["validate_button"], "Run spacing, overlap and edge-distance checks for the current controller.")
 
 
 def _build_form() -> dict[str, Any]:
@@ -117,6 +121,7 @@ def _build_form() -> dict[str, Any]:
     intro = qtwidgets.QLabel("Review spacing, edge distance, and placement issues before the next iteration.")
     intro.setWordWrap(True)
     validate_button = qtwidgets.QPushButton("Validate Layout")
+    set_tooltip(validate_button, "Run spacing, overlap and edge-distance checks for the current controller.")
     results = qtwidgets.QPlainTextEdit()
     configure_text_panel(results, max_height=180)
     status = qtwidgets.QLabel()
