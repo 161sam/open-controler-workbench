@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 import logging
 from typing import Any
 
@@ -11,6 +12,42 @@ from ocf_freecad.geometry.primitives import Cutout, ResolvedMechanical, ShapePri
 LOGGER = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class BodyBuildPlan:
+    surface: SurfacePrimitive
+    body_height: float
+    cavity_surface: SurfacePrimitive | None
+    cavity_offset: tuple[float, float, float] | None
+    cavity_height: float | None
+
+
+@dataclass(frozen=True)
+class TopPlateBuildPlan:
+    surface: SurfacePrimitive
+    z_offset: float
+    top_thickness: float
+    tongue_surface: SurfacePrimitive | None
+    tongue_offset: tuple[float, float, float] | None
+    tongue_height: float | None
+
+
+@dataclass(frozen=True)
+class CutoutToolPlan:
+    component_id: str
+    x: float
+    y: float
+    rotation: float
+    cutout: ShapePrimitive
+    cut_height: float
+    z_start: float
+
+
+@dataclass(frozen=True)
+class CutoutBooleanPlan:
+    tools: list[CutoutToolPlan]
+    diagnostics: list[str]
+
+
 class ControllerBuilder:
     MIN_FEATURE_SIZE = 0.5
 
@@ -19,29 +56,66 @@ class ControllerBuilder:
         self.component_resolver = component_resolver or ComponentResolver()
 
     def build_body(self, controller):
-        surface = self.resolve_surface(controller)
-        body_height = self._body_height(controller)
-        outer_shape = shapes.make_surface_prism_shape(surface, body_height)
-        body_shape = outer_shape
-        if self._supports_shell_geometry(surface):
-            cavity_shape = self._body_cavity_shape(controller, surface, body_height)
-            if cavity_shape is not None:
-                body_shape = outer_shape.cut(cavity_shape)
+        plan = self.plan_body_build(controller)
+        body_shape = self._build_body_shape(plan)
         return shapes.create_feature(self.doc, "ControllerBody", body_shape)
 
     def build_top_plate(self, controller):
+        plan = self.plan_top_plate_build(controller)
+        top_shape = self._build_top_plate_shape(plan)
+        return shapes.create_feature(self.doc, "TopPlate", top_shape)
+
+    def plan_body_build(self, controller: Any) -> BodyBuildPlan:
+        surface = self.resolve_surface(controller)
+        body_height = self._body_height(controller)
+        cavity_surface = None
+        cavity_offset = None
+        cavity_height = None
+        if self._supports_shell_geometry(surface):
+            wall = max(float(getattr(controller, "wall_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
+            bottom = max(float(getattr(controller, "bottom_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
+            cavity_height = body_height - bottom
+            if cavity_height > self.MIN_FEATURE_SIZE:
+                cavity_surface = self._offset_surface(surface, inset=wall)
+                if cavity_surface is not None:
+                    cavity_offset = (wall, wall, bottom)
+        return BodyBuildPlan(
+            surface=surface,
+            body_height=body_height,
+            cavity_surface=cavity_surface,
+            cavity_offset=cavity_offset,
+            cavity_height=cavity_height if cavity_surface is not None else None,
+        )
+
+    def plan_top_plate_build(self, controller: Any) -> TopPlateBuildPlan:
         surface = self.resolve_surface(controller)
         z_offset = self._body_height(controller)
-        top_shape = shapes.translate_shape(
-            shapes.make_surface_prism_shape(surface, controller.top_thickness),
-            z=z_offset,
+        tongue_surface = None
+        tongue_offset = None
+        tongue_height = None
+        if self._supports_shell_geometry(surface):
+            wall = max(float(getattr(controller, "wall_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
+            clearance = max(float(getattr(controller, "inner_clearance", 0.0) or 0.0), 0.0)
+            inset = max(float(getattr(controller, "lid_inset", 0.0) or 0.0), 0.0)
+            bottom = max(float(getattr(controller, "bottom_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
+            body_height = self._body_height(controller)
+            tongue_height = min(inset, max(body_height - bottom, 0.0))
+            if tongue_height > self.MIN_FEATURE_SIZE:
+                tongue_surface = self._offset_surface(surface, inset=wall + clearance)
+                if tongue_surface is not None:
+                    tongue_offset = (
+                        wall + clearance,
+                        wall + clearance,
+                        max(z_offset - tongue_height, bottom),
+                    )
+        return TopPlateBuildPlan(
+            surface=surface,
+            z_offset=z_offset,
+            top_thickness=float(controller.top_thickness),
+            tongue_surface=tongue_surface,
+            tongue_offset=tongue_offset,
+            tongue_height=tongue_height if tongue_surface is not None else None,
         )
-        lid_tongue = self._lid_tongue_shape(controller, surface, z_offset)
-        if lid_tongue is not None:
-            fused = shapes.fuse_shapes([top_shape, lid_tongue])
-            if fused is not None:
-                top_shape = fused
-        return shapes.create_feature(self.doc, "TopPlate", top_shape)
 
     def resolve_surface(self, controller: Any) -> SurfacePrimitive:
         controller_data = self._controller_to_dict(controller)
@@ -116,30 +190,33 @@ class ControllerBuilder:
         return keepouts
 
     def apply_cutouts(self, base_obj, components):
+        plan = self.plan_cutout_boolean(base_obj, components)
+        for diagnostic in plan.diagnostics:
+            LOGGER.warning(diagnostic)
         result_shape = base_obj.Shape.copy() if hasattr(base_obj.Shape, "copy") else base_obj.Shape
-        z_start = base_obj.Shape.BoundBox.ZMin
-        cut_height = base_obj.Shape.BoundBox.ZLength
+        tool_shapes = [self._build_cutout_tool_shape(tool) for tool in plan.tools]
+        base_obj.Shape = shapes.cut_shape(result_shape, tool_shapes)
+        return base_obj
+
+    def plan_cutout_boolean(self, base_obj: Any, components: list[Any]) -> CutoutBooleanPlan:
         resolved_components = self.resolve_components(components)
         cutout_primitives = self.build_cutout_primitives(components)
         diagnostics = self._cutout_diagnostics(cutout_primitives)
-        for diagnostic in diagnostics:
-            LOGGER.warning(diagnostic)
-        tool_shapes = []
-
-        for component in resolved_components:
-            tool_shapes.append(
-                self._create_cutout_shape(
-                    x=component["x"],
-                    y=component["y"],
-                    rotation=float(component.get("rotation", 0.0) or 0.0),
-                    cutout=component["resolved_mechanical"].cutout,
-                    cut_height=cut_height,
-                    z_start=z_start,
-                )
+        z_start = base_obj.Shape.BoundBox.ZMin
+        cut_height = base_obj.Shape.BoundBox.ZLength
+        tools = [
+            CutoutToolPlan(
+                component_id=str(component["id"]),
+                x=float(component["x"]),
+                y=float(component["y"]),
+                rotation=float(component.get("rotation", 0.0) or 0.0),
+                cutout=component["resolved_mechanical"].cutout,
+                cut_height=float(cut_height),
+                z_start=float(z_start),
             )
-
-        base_obj.Shape = shapes.cut_shape(result_shape, tool_shapes)
-        return base_obj
+            for component in resolved_components
+        ]
+        return CutoutBooleanPlan(tools=tools, diagnostics=diagnostics)
 
     def build_cutout_primitives(self, components: list[Any]) -> list[dict[str, Any]]:
         cutouts: list[dict[str, Any]] = []
@@ -158,6 +235,44 @@ class ControllerBuilder:
                 }
             )
         return cutouts
+
+    def _build_body_shape(self, plan: BodyBuildPlan):
+        outer_shape = shapes.make_surface_prism_shape(plan.surface, plan.body_height)
+        if plan.cavity_surface is None or plan.cavity_offset is None or plan.cavity_height is None:
+            return outer_shape
+        cavity_shape = shapes.translate_shape(
+            shapes.make_surface_prism_shape(plan.cavity_surface, plan.cavity_height),
+            x=plan.cavity_offset[0],
+            y=plan.cavity_offset[1],
+            z=plan.cavity_offset[2],
+        )
+        return outer_shape.cut(cavity_shape)
+
+    def _build_top_plate_shape(self, plan: TopPlateBuildPlan):
+        top_shape = shapes.translate_shape(
+            shapes.make_surface_prism_shape(plan.surface, plan.top_thickness),
+            z=plan.z_offset,
+        )
+        if plan.tongue_surface is None or plan.tongue_offset is None or plan.tongue_height is None:
+            return top_shape
+        lid_tongue = shapes.translate_shape(
+            shapes.make_surface_prism_shape(plan.tongue_surface, plan.tongue_height),
+            x=plan.tongue_offset[0],
+            y=plan.tongue_offset[1],
+            z=plan.tongue_offset[2],
+        )
+        fused = shapes.fuse_shapes([top_shape, lid_tongue])
+        return fused if fused is not None else top_shape
+
+    def _build_cutout_tool_shape(self, plan: CutoutToolPlan):
+        return self._create_cutout_shape(
+            x=plan.x,
+            y=plan.y,
+            rotation=plan.rotation,
+            cutout=plan.cutout,
+            cut_height=plan.cut_height,
+            z_start=plan.z_start,
+        )
 
     def _create_cutout_shape(
         self,
@@ -180,7 +295,7 @@ class ControllerBuilder:
             )
         if cutout.shape in {"rect", "slot"}:
             shape_factory = shapes.make_rect_prism_shape if cutout.shape == "rect" else shapes.make_slot_prism_shape
-            rect_shape = shapes.translate_shape(
+            prism_shape = shapes.translate_shape(
                 shape_factory(
                     width=cutout.width,
                     depth=cutout.height,
@@ -197,8 +312,8 @@ class ControllerBuilder:
                     float(x),
                     float(y),
                 )
-                return shapes.rotate_shape(rect_shape, rotation, center=(x, y, z_start))
-            return rect_shape
+                return shapes.rotate_shape(prism_shape, rotation, center=(x, y, z_start))
+            return prism_shape
         LOGGER.warning("Unsupported cutout shape '%s'; rotation fallback not applied.", cutout.shape)
         raise ValueError(f"Unsupported cutout shape: {cutout.shape}")
 
@@ -282,49 +397,6 @@ class ControllerBuilder:
         top_thickness = max(float(getattr(controller, "top_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
         total_height = max(float(getattr(controller, "height", 0.0) or 0.0), top_thickness + self.MIN_FEATURE_SIZE)
         return max(total_height - top_thickness, self.MIN_FEATURE_SIZE)
-
-    def _body_cavity_shape(self, controller: Any, surface: SurfacePrimitive, body_height: float):
-        wall = max(float(getattr(controller, "wall_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
-        bottom = max(float(getattr(controller, "bottom_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
-        inner_width = float(surface.width) - (2.0 * wall)
-        inner_height = float(surface.height) - (2.0 * wall)
-        cavity_height = body_height - bottom
-        if (
-            inner_width <= self.MIN_FEATURE_SIZE
-            or inner_height <= self.MIN_FEATURE_SIZE
-            or cavity_height <= self.MIN_FEATURE_SIZE
-        ):
-            return None
-        inner_surface = self._offset_surface(surface, inset=wall)
-        if inner_surface is None:
-            return None
-        return shapes.translate_shape(
-            shapes.make_surface_prism_shape(inner_surface, cavity_height),
-            x=wall,
-            y=wall,
-            z=bottom,
-        )
-
-    def _lid_tongue_shape(self, controller: Any, surface: SurfacePrimitive, z_offset: float):
-        if not self._supports_shell_geometry(surface):
-            return None
-        wall = max(float(getattr(controller, "wall_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
-        clearance = max(float(getattr(controller, "inner_clearance", 0.0) or 0.0), 0.0)
-        inset = max(float(getattr(controller, "lid_inset", 0.0) or 0.0), 0.0)
-        bottom = max(float(getattr(controller, "bottom_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
-        body_height = self._body_height(controller)
-        tongue_height = min(inset, max(body_height - bottom, 0.0))
-        if tongue_height <= self.MIN_FEATURE_SIZE:
-            return None
-        tongue_surface = self._offset_surface(surface, inset=wall + clearance)
-        if tongue_surface is None:
-            return None
-        return shapes.translate_shape(
-            shapes.make_surface_prism_shape(tongue_surface, tongue_height),
-            x=wall + clearance,
-            y=wall + clearance,
-            z=max(z_offset - tongue_height, bottom),
-        )
 
     def _offset_surface(self, surface: SurfacePrimitive, inset: float) -> SurfacePrimitive | None:
         if inset <= 0.0:

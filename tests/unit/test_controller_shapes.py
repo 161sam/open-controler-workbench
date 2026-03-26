@@ -79,6 +79,29 @@ def test_body_uses_hollow_shell_geometry(monkeypatch):
     assert cavity.translations == [(3, 3, 4)]
 
 
+def test_body_build_plan_exposes_outer_and_cavity_stages():
+    builder = ControllerBuilder(doc=None)
+    controller = Controller(
+        "rect",
+        120,
+        80,
+        30,
+        3,
+        wall_thickness=3,
+        bottom_thickness=4,
+    )
+
+    plan = builder.plan_body_build(controller)
+
+    assert plan.surface.shape == "rectangle"
+    assert plan.body_height == 27
+    assert plan.cavity_surface is not None
+    assert plan.cavity_surface.width == 114
+    assert plan.cavity_surface.height == 74
+    assert plan.cavity_offset == (3, 3, 4)
+    assert plan.cavity_height == 23
+
+
 def test_top_plate_adds_inner_lid_tongue(monkeypatch):
     monkeypatch.setitem(__import__("sys").modules, "FreeCAD", SimpleNamespace(Vector=FakeVector))
     monkeypatch.setattr("ocf_freecad.generator.controller_builder.shapes.make_surface_prism_shape", _fake_make_surface_prism_shape)
@@ -106,6 +129,32 @@ def test_top_plate_adds_inner_lid_tongue(monkeypatch):
     assert lid_tongue.data["height"] == 73.0
     assert lid_tongue.data["prism_height"] == 2
     assert lid_tongue.translations == [(3.5, 3.5, 25)]
+
+
+def test_top_plate_build_plan_exposes_lid_tongue_stage():
+    builder = ControllerBuilder(doc=None)
+    controller = Controller(
+        "rect",
+        120,
+        80,
+        30,
+        3,
+        wall_thickness=3,
+        bottom_thickness=3,
+        lid_inset=2,
+        inner_clearance=0.5,
+    )
+
+    plan = builder.plan_top_plate_build(controller)
+
+    assert plan.surface.shape == "rectangle"
+    assert plan.z_offset == 27
+    assert plan.top_thickness == 3.0
+    assert plan.tongue_surface is not None
+    assert plan.tongue_surface.width == 113.0
+    assert plan.tongue_surface.height == 73.0
+    assert plan.tongue_offset == (3.5, 3.5, 25.0)
+    assert plan.tongue_height == 2
 
 
 def test_rounded_rect_surface_is_used_for_shell(monkeypatch):

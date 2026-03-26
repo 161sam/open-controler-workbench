@@ -34,6 +34,10 @@ Keine Runtime. Kein OCF-Core.
 
 ### 5. Geometry
 - primitives.py
+- freecad_api/shapes.py
+
+The geometry pipeline is staged through `ControllerBuilder` plans:
+surface resolution, body plan, top plate plan, cutout primitive collection, and boolean planning.
 
 ### 6. Layout
 - grid.py

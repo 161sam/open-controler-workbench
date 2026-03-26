@@ -188,6 +188,64 @@ def test_apply_cutouts_warns_when_rect_cutouts_overlap(monkeypatch):
     assert any("overlap" in warning for warning in warnings)
 
 
+def test_cutout_boolean_plan_collects_tools_and_diagnostics(monkeypatch):
+    builder = ControllerBuilder(doc="doc")
+    base = FakeBaseObject()
+    monkeypatch.setattr(
+        builder,
+        "build_cutout_primitives",
+        lambda _components: [
+            {
+                "component_id": "pad1",
+                "feature": "cutout",
+                "shape": "rect",
+                "x": 20.0,
+                "y": 20.0,
+                "width": 30.0,
+                "height": 30.0,
+                "rotation": 0.0,
+            },
+            {
+                "component_id": "pad2",
+                "feature": "cutout",
+                "shape": "rect",
+                "x": 35.0,
+                "y": 20.0,
+                "width": 30.0,
+                "height": 30.0,
+                "rotation": 0.0,
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        builder,
+        "resolve_components",
+        lambda _components: [
+            {
+                "id": "pad1",
+                "x": 20.0,
+                "y": 20.0,
+                "rotation": 0.0,
+                "resolved_mechanical": SimpleNamespace(cutout=SimpleNamespace(shape="rect", width=30.0, height=30.0)),
+            },
+            {
+                "id": "pad2",
+                "x": 35.0,
+                "y": 20.0,
+                "rotation": 0.0,
+                "resolved_mechanical": SimpleNamespace(cutout=SimpleNamespace(shape="rect", width=30.0, height=30.0)),
+            },
+        ],
+    )
+
+    plan = builder.plan_cutout_boolean(base, components=["ignored"])
+
+    assert [tool.component_id for tool in plan.tools] == ["pad1", "pad2"]
+    assert plan.tools[0].cut_height == 3.0
+    assert plan.tools[0].z_start == 0.0
+    assert any("overlap" in diagnostic for diagnostic in plan.diagnostics)
+
+
 def test_overlay_renderer_materializes_single_overlay_object(monkeypatch):
     from ocf_freecad.gui.overlay.renderer import OverlayRenderer
 
