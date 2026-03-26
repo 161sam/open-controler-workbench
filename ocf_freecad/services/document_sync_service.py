@@ -6,19 +6,14 @@ from typing import Any, Callable
 from ocf_freecad.freecad_api import gui as freecad_gui
 from ocf_freecad.freecad_api.metadata import get_document_data, set_document_data, update_document_data
 from ocf_freecad.freecad_api.model import (
-    CONTROLLER_OBJECT_LABEL,
     CONTROLLER_OBJECT_NAME,
-    GENERATED_GROUP_LABEL,
     GENERATED_GROUP_NAME,
-    OVERLAY_OBJECT_LABEL,
-    OVERLAY_OBJECT_NAME,
     clear_generated_group,
     get_controller_object,
     get_generated_group,
     group_generated_object,
     iter_generated_objects,
 )
-from ocf_freecad.freecad_api.state import STATE_CONTAINER_LABEL, STATE_CONTAINER_NAME
 from ocf_freecad.generator.controller_builder import ControllerBuilder
 from ocf_freecad.services._logging import log_to_console
 
@@ -162,24 +157,7 @@ class DocumentSyncService:
                 group_generated_object(doc, marker)
 
     def _clear_generated_objects(self, doc: Any) -> None:
-        if not hasattr(doc, "Objects") or not hasattr(doc, "removeObject"):
-            return
         clear_generated_group(doc)
-        for obj in list(doc.Objects):
-            name = getattr(obj, "Name", "")
-            label = getattr(obj, "Label", "")
-            if name in {STATE_CONTAINER_NAME, CONTROLLER_OBJECT_NAME, GENERATED_GROUP_NAME, OVERLAY_OBJECT_NAME}:
-                continue
-            if label in {STATE_CONTAINER_LABEL, CONTROLLER_OBJECT_LABEL, GENERATED_GROUP_LABEL, OVERLAY_OBJECT_LABEL}:
-                continue
-            if (
-                str(name).startswith("OCF_")
-                or str(label).startswith("OCF_")
-                or name in {"ControllerBody", "TopPlate"}
-                or str(name).startswith("TopPlate_")
-                or str(name).startswith("cutout_")
-            ):
-                doc.removeObject(name)
 
     def _set_generated_label(self, obj: Any, label: str) -> None:
         if hasattr(obj, "Label"):
@@ -194,14 +172,8 @@ class DocumentSyncService:
         return False
 
     def _apply_selection_highlight(self, doc: Any, selected_component_id: str | None) -> None:
-        if not hasattr(doc, "Objects"):
-            return
-        for obj in getattr(doc, "Objects", []):
+        for obj in iter_generated_objects(doc):
             label = str(getattr(obj, "Label", getattr(obj, "Name", "")))
-            if not label.startswith("OCF_"):
-                continue
-            if label.startswith("OCF_OVERLAY_") or label == OVERLAY_OBJECT_LABEL:
-                continue
             view = getattr(obj, "ViewObject", None)
             if view is None:
                 continue

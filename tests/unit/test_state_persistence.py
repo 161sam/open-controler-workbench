@@ -6,8 +6,11 @@ from ocf_freecad.freecad_api.model import (
     CONTROLLER_OBJECT_NAME,
     GENERATED_GROUP_NAME,
     OVERLAY_OBJECT_NAME,
+    clear_generated_group,
     get_controller_object,
     get_generated_group,
+    group_generated_object,
+    iter_generated_objects,
 )
 from ocf_freecad.freecad_api.state import (
     LEGACY_STATE_JSON_KEY,
@@ -59,6 +62,7 @@ class FakeDocumentObject:
 class FakeDocument:
     def __init__(self) -> None:
         self.Objects: list[FakeDocumentObject] = []
+        self.removed: list[str] = []
 
     def addObject(self, type_name: str, name: str) -> FakeDocumentObject:
         obj = FakeDocumentObject(self, type_name, name)
@@ -70,6 +74,10 @@ class FakeDocument:
             if obj.Name == name:
                 return obj
         return None
+
+    def removeObject(self, name: str) -> None:
+        self.removed.append(name)
+        self.Objects = [obj for obj in self.Objects if obj.Name != name]
 
 
 def test_write_state_creates_controller_object_with_persistent_properties():
@@ -209,3 +217,44 @@ def test_write_state_uses_controller_as_primary_store_and_runtime_cache():
     assert not hasattr(doc, STATE_CACHE_JSON_KEY)
     assert not hasattr(doc, LEGACY_STATE_KEY)
     assert not hasattr(doc, LEGACY_STATE_JSON_KEY)
+
+
+def test_iter_generated_objects_uses_group_membership_only():
+    doc = FakeDocument()
+    group = get_generated_group(doc, create=True)
+    generated = doc.addObject("Part::Feature", "ControllerBody")
+    foreign = doc.addObject("Part::Feature", "OCF_Stray")
+    overlay = doc.addObject("App::FeaturePython", OVERLAY_OBJECT_NAME)
+    overlay.Label = "OCF Overlay"
+
+    group_generated_object(doc, generated)
+    members = iter_generated_objects(doc)
+
+    assert group is not None
+    assert members == [generated]
+    assert foreign not in members
+    assert overlay not in members
+
+
+def test_clear_generated_group_removes_only_group_members():
+    doc = FakeDocument()
+    get_controller_object(doc, create=True)
+    group = get_generated_group(doc, create=True)
+    generated_one = doc.addObject("Part::Feature", "ControllerBody")
+    generated_two = doc.addObject("Part::Feature", "TopPlate")
+    foreign = doc.addObject("Part::Feature", "UserSketch")
+    overlay = doc.addObject("App::FeaturePython", OVERLAY_OBJECT_NAME)
+    overlay.Label = "OCF Overlay"
+
+    group_generated_object(doc, generated_one)
+    group_generated_object(doc, generated_two)
+    clear_generated_group(doc)
+
+    assert group is not None
+    assert doc.getObject(CONTROLLER_OBJECT_NAME) is not None
+    assert doc.getObject(OVERLAY_OBJECT_NAME) is overlay
+    assert doc.getObject("UserSketch") is foreign
+    assert doc.getObject("ControllerBody") is None
+    assert doc.getObject("TopPlate") is None
+    assert group.Group == []
+    assert doc.removed == ["ControllerBody", "TopPlate"]

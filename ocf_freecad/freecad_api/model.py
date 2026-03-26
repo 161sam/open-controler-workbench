@@ -122,31 +122,31 @@ def group_generated_object(doc: Any, obj: Any) -> None:
 
 def iter_generated_objects(doc: Any) -> list[Any]:
     group = get_generated_group(doc, create=False)
-    if group is not None:
-        members = list(getattr(group, "Group", []))
-        if members:
-            return members
+    if group is None:
+        return []
     objects = []
-    for obj in getattr(doc, "Objects", []):
-        name = str(getattr(obj, "Name", ""))
-        label = str(getattr(obj, "Label", ""))
-        if name in {CONTROLLER_OBJECT_NAME, GENERATED_GROUP_NAME}:
+    seen: set[int] = set()
+    live_objects = set(getattr(doc, "Objects", []))
+    for obj in list(getattr(group, "Group", [])):
+        if obj is None or obj not in live_objects:
             continue
-        if label in {CONTROLLER_OBJECT_LABEL, GENERATED_GROUP_LABEL}:
+        marker = id(obj)
+        if marker in seen:
             continue
-        if name.startswith("OCF_") or label.startswith("OCF_") or name in {"ControllerBody", "TopPlate"}:
-            objects.append(obj)
+        seen.add(marker)
+        objects.append(obj)
     return objects
 
 
 def clear_generated_group(doc: Any) -> None:
     if not hasattr(doc, "removeObject"):
         return
-    for obj in list(iter_generated_objects(doc)):
+    group = get_generated_group(doc, create=False)
+    members = list(iter_generated_objects(doc))
+    for obj in members:
         name = getattr(obj, "Name", "")
         if isinstance(name, str) and name:
             doc.removeObject(name)
-    group = get_generated_group(doc, create=False)
     if group is not None:
         try:
             group.Group = []

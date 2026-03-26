@@ -60,6 +60,9 @@ Project state is persisted on the `OCF_Controller` document object.
 `ProjectJson` is the primary source of truth for controller projects.
 Legacy document metadata and `OCF_State` containers are migration inputs only.
 
+Generated document geometry is owned by the `OCF_Generated` group.
+Regular cleanup and rebuild paths operate on group membership instead of global name scans.
+
 ### 8. Export
 - exporters/
 - ocf_kicad/

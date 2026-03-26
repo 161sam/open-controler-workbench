@@ -315,6 +315,46 @@ def test_sync_document_uses_central_controller_object_and_generated_group(monkey
     assert doc.OCFLastSync["generated_group"] == "OCF_Generated"
 
 
+def test_sync_document_clears_only_group_managed_objects(monkeypatch):
+    class FakeBuilder:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def build_body(self, _controller):
+            return self.doc.addObject("Part::Feature", "ControllerBody")
+
+        def build_top_plate(self, _controller):
+            return self.doc.addObject("Part::Feature", "TopPlate")
+
+        def apply_cutouts(self, top, _components):
+            top.Shape = "cut"
+            return top
+
+        def build_keepouts(self, _components):
+            return []
+
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.freecad_gui.reveal_generated_objects", lambda _doc: 0)
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.freecad_gui.activate_document", lambda _doc: True)
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.freecad_gui.focus_view", lambda _doc, fit=True: True)
+
+    service = ControllerService()
+    doc = FakeFeatureDocument()
+    user_obj = doc.addObject("Part::Feature", "UserSolid")
+
+    service.create_controller(doc, {"id": "demo"})
+    first_generated_names = sorted(obj.Name for obj in doc.getObject("OCF_Generated").Group)
+
+    assert user_obj in doc.Objects
+
+    service.sync_document(doc)
+
+    second_generated_names = sorted(obj.Name for obj in doc.getObject("OCF_Generated").Group)
+    assert first_generated_names == second_generated_names
+    assert doc.getObject("UserSolid") is user_obj
+
+
 def test_repeated_sync_document_keeps_document_object_count_bounded(monkeypatch):
     class FakeBuilder:
         def __init__(self, doc):
