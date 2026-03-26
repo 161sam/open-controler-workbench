@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
 from ocw_workbench.gui.overlay.renderer import OverlayRenderer
 from ocw_workbench.gui.interaction.view_place_preview import (
     clear_preview_state,
     load_preview_state,
-    serialize_preview_state,
     store_preview_state,
 )
 from ocw_workbench.gui.panels._common import log_to_console
@@ -113,7 +111,7 @@ class ViewPlaceController:
             snap_enabled=bool(settings.get("snap_enabled", True)),
             grid_mm=float(settings.get("grid_mm", 1.0)),
         )
-        payload = store_preview_state(self.doc, self.active_template_id, x=x, y=y)
+        payload = store_preview_state(self.doc, template_id=self.active_template_id, x=x, y=y, mode="place")
         self.overlay_renderer.refresh(self.doc)
         return payload
 

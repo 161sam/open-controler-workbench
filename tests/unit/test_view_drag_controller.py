@@ -1,0 +1,150 @@
+from ocw_workbench.gui.interaction.view_drag_controller import ViewDragController
+from ocw_workbench.gui.interaction.view_place_preview import load_preview_state
+from ocw_workbench.services.controller_service import ControllerService
+from ocw_workbench.services.interaction_service import InteractionService
+
+
+class FakeDocument:
+    def __init__(self) -> None:
+        self.Objects = []
+        self.recompute_count = 0
+
+    def recompute(self) -> None:
+        self.recompute_count += 1
+
+
+class FakeView:
+    def __init__(self) -> None:
+        self.callbacks = []
+
+    def addEventCallback(self, event_type, callback):
+        handle = (event_type, callback, len(self.callbacks))
+        self.callbacks.append(handle)
+        return handle
+
+    def removeEventCallback(self, event_type, handle):
+        self.callbacks = [item for item in self.callbacks if item != handle]
+
+    def getPoint(self, x, y):
+        return (float(x), float(y), 0.0)
+
+
+class RecordingOverlayRenderer:
+    def __init__(self, items=None) -> None:
+        self.calls = []
+        self.items = items or []
+
+    def refresh(self, doc):
+        self.calls.append(doc)
+        payload = {"items": list(self.items), "summary": {"visual_only": True}}
+        doc.OCWOverlayState = payload
+        return payload
+
+
+def test_view_drag_controller_preview_is_visual_only_until_commit():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=20.0, y=20.0)
+    overlay = RecordingOverlayRenderer(
+        items=[
+            {
+                "id": "component:btn1",
+                "type": "rect",
+                "geometry": {"x": 20.0, "y": 20.0, "width": 14.0, "height": 14.0, "rotation": 0.0},
+                "source_component_id": "btn1",
+            }
+        ]
+    )
+    controller = ViewDragController(
+        controller_service=controller_service,
+        interaction_service=interaction_service,
+        overlay_renderer=overlay,
+    )
+    controller.doc = doc
+    controller.view = FakeView()
+    controller.armed = True
+
+    before_state = controller_service.get_state(doc)
+    controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "DOWN", "Button": "BUTTON1", "Position": (20, 20)})
+    controller.handle_view_event({"Type": "SoLocation2Event", "Position": (31, 29)})
+    preview = load_preview_state(doc)
+    during_state = controller_service.get_state(doc)
+    controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "UP", "Button": "BUTTON1", "Position": (31, 29)})
+    moved = controller_service.get_component(doc, "btn1")
+
+    assert preview == {"component_id": "btn1", "x": 31.0, "y": 29.0, "rotation": 0.0, "mode": "move"}
+    assert during_state == before_state
+    assert moved["x"] == 31.0
+    assert moved["y"] == 29.0
+    assert len(overlay.calls) >= 3
+
+
+def test_view_drag_controller_escape_cancels_without_side_effects():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=20.0, y=20.0)
+    overlay = RecordingOverlayRenderer(
+        items=[
+            {
+                "id": "component:btn1",
+                "type": "rect",
+                "geometry": {"x": 20.0, "y": 20.0, "width": 14.0, "height": 14.0, "rotation": 0.0},
+                "source_component_id": "btn1",
+            }
+        ]
+    )
+    controller = ViewDragController(
+        controller_service=controller_service,
+        interaction_service=interaction_service,
+        overlay_renderer=overlay,
+    )
+    controller.doc = doc
+    controller.view = FakeView()
+    controller.armed = True
+
+    before = controller_service.get_component(doc, "btn1")
+    controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "DOWN", "Button": "BUTTON1", "Position": (20, 20)})
+    controller.handle_view_event({"Type": "SoLocation2Event", "Position": (40, 35)})
+    controller.handle_view_event({"Type": "SoKeyboardEvent", "State": "DOWN", "Key": "ESCAPE"})
+    after = controller_service.get_component(doc, "btn1")
+
+    assert load_preview_state(doc) is None
+    assert before["x"] == after["x"] == 20.0
+    assert before["y"] == after["y"] == 20.0
+    assert controller.session is None
+
+
+def test_view_drag_controller_clamps_and_snaps_to_bounds():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=20.0, y=20.0)
+    interaction_service.update_settings(doc, {"grid_mm": 5.0, "snap_enabled": True})
+    overlay = RecordingOverlayRenderer(
+        items=[
+            {
+                "id": "component:btn1",
+                "type": "rect",
+                "geometry": {"x": 20.0, "y": 20.0, "width": 14.0, "height": 14.0, "rotation": 0.0},
+                "source_component_id": "btn1",
+            }
+        ]
+    )
+    controller = ViewDragController(
+        controller_service=controller_service,
+        interaction_service=interaction_service,
+        overlay_renderer=overlay,
+    )
+    controller.doc = doc
+    controller.view = FakeView()
+    controller.armed = True
+    controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "DOWN", "Button": "BUTTON1", "Position": (20, 20)})
+
+    preview = controller.update_preview_from_screen(102.2, 81.1)
+
+    assert preview == {"component_id": "btn1", "x": 100.0, "y": 80.0, "rotation": 0.0, "mode": "move"}

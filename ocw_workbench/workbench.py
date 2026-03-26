@@ -13,6 +13,7 @@ except ImportError:
     Gui = None
 
 from ocw_workbench.gui.interaction.move_tool import MoveTool
+from ocw_workbench.gui.interaction.view_drag_controller import ViewDragController
 from ocw_workbench.gui.interaction.view_place_controller import ViewPlaceController
 from ocw_workbench.gui.docking import create_or_reuse_dock, focus_dock, remove_dock
 from ocw_workbench.gui.feedback import apply_status_message, format_toggle_message, format_validation_message
@@ -38,6 +39,7 @@ _ACTIVE_DOCK: Any | None = None
 _ACTIVE_COMPONENT_PALETTE: ComponentPalettePanel | None = None
 _ACTIVE_COMPONENT_PALETTE_DOCK: Any | None = None
 _ACTIVE_PLACE_CONTROLLER: ViewPlaceController | None = None
+_ACTIVE_DRAG_CONTROLLER: ViewDragController | None = None
 _FAVORITE_COMMAND_IDS = [f"OCW_FavoriteComponent_{index + 1}" for index in range(MAX_FAVORITE_COMPONENTS)]
 _FAVORITE_MORE_COMMAND_ID = "OCW_OpenComponentPaletteMore"
 
@@ -131,6 +133,7 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         from ocw_workbench.commands.apply_layout import ApplyLayoutCommand
         from ocw_workbench.commands.create_from_template import CreateFromTemplateCommand
         from ocw_workbench.commands.disable_plugin import DisablePluginCommand
+        from ocw_workbench.commands.drag_move_component import DragMoveComponentCommand
         from ocw_workbench.commands.enable_plugin import EnablePluginCommand
         from ocw_workbench.commands.move_component_interactive import MoveComponentInteractiveCommand
         from ocw_workbench.commands.open_plugin_manager import OpenPluginManagerCommand
@@ -153,6 +156,7 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         Gui.addCommand("OCW_ToggleOverlay", _LoggedCommand("OCW_ToggleOverlay", ToggleOverlayCommand()))
         Gui.addCommand("OCW_ShowConstraintOverlay", _LoggedCommand("OCW_ShowConstraintOverlay", ShowConstraintOverlayCommand()))
         Gui.addCommand("OCW_MoveComponentInteractive", _LoggedCommand("OCW_MoveComponentInteractive", MoveComponentInteractiveCommand()))
+        Gui.addCommand("OCW_DragMoveComponent", _LoggedCommand("OCW_DragMoveComponent", DragMoveComponentCommand()))
         Gui.addCommand("OCW_SnapToGrid", _LoggedCommand("OCW_SnapToGrid", SnapToGridCommand()))
         Gui.addCommand("OCW_ToggleMeasurements", _LoggedCommand("OCW_ToggleMeasurements", ToggleMeasurementsCommand()))
         Gui.addCommand("OCW_ToggleConflictLines", _LoggedCommand("OCW_ToggleConflictLines", ToggleConflictLinesCommand()))
@@ -177,6 +181,7 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         layout_commands = [
             "OCW_ApplyLayout",
             "OCW_MoveComponentInteractive",
+            "OCW_DragMoveComponent",
             "OCW_SnapToGrid",
         ]
         validate_commands = [
@@ -240,6 +245,12 @@ class ProductWorkbenchPanel:
             controller_service=self.controller_service,
         )
         self.place_controller = ViewPlaceController(
+            controller_service=self.controller_service,
+            interaction_service=self.interaction_service,
+            overlay_renderer=self.overlay_renderer,
+            on_status=self.set_status,
+        )
+        self.drag_controller = ViewDragController(
             controller_service=self.controller_service,
             interaction_service=self.interaction_service,
             overlay_renderer=self.overlay_renderer,
@@ -474,6 +485,7 @@ class ProductWorkbenchPanel:
         return True
 
     def reject(self) -> bool:
+        self.drag_controller.cancel()
         self.place_controller.cancel()
         return True
 
@@ -758,3 +770,15 @@ def start_component_place_mode(doc: Any | None, template_id: str) -> bool:
     workbench = ensure_workbench_ui(doc, focus="components")
     _ACTIVE_PLACE_CONTROLLER = workbench.place_controller
     return _ACTIVE_PLACE_CONTROLLER.start(doc, template_id)
+
+
+def start_component_drag_mode(doc: Any | None) -> bool:
+    global _ACTIVE_DRAG_CONTROLLER
+
+    if doc is None and App is not None:
+        doc = App.ActiveDocument or App.newDocument("Controller")
+    if doc is None:
+        return False
+    workbench = ensure_workbench_ui(doc, focus="components")
+    _ACTIVE_DRAG_CONTROLLER = workbench.drag_controller
+    return _ACTIVE_DRAG_CONTROLLER.start(doc)

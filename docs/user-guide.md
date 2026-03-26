@@ -32,6 +32,9 @@
 - `Place In 3D` startet den interaktiven Platzierungsmodus im 3D-View
 - Die Ghost-Vorschau folgt der Maus nur über Overlay-Preview
 - Klick platziert die Komponente, `ESC` bricht den Modus ohne Modelländerung ab
+- `OCW_DragMoveComponent` startet den Drag-Modus für bestehende Komponenten
+- Klicke eine vorhandene Komponente im 3D-View an, ziehe sie und lasse los zum Commit
+- Während des Ziehens bleibt das Modell unverändert; nur das Overlay-Ghost wird aktualisiert
 
 ## Begriffe
 

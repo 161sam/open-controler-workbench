@@ -58,6 +58,7 @@ def test_preview_metadata_roundtrip():
         "x": 12.5,
         "y": 18.0,
         "rotation": 0.0,
+        "mode": "place",
     }
     assert getattr(doc, PREVIEW_METADATA_KEY, None) is None
 
@@ -81,7 +82,7 @@ def test_view_place_controller_preview_updates_metadata_only():
     payload = controller.update_preview_from_screen(12.2, 18.7)
     after_state = controller_service.get_state(doc)
 
-    assert payload == {"template_id": "omron_b3f_1000", "x": 12.0, "y": 19.0, "rotation": 0.0}
+    assert payload == {"template_id": "omron_b3f_1000", "x": 12.0, "y": 19.0, "rotation": 0.0, "mode": "place"}
     assert load_preview_state(doc) == payload
     assert after_state == before_state
 

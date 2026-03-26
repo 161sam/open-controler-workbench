@@ -181,16 +181,8 @@ class OverlayService:
         preview = load_preview_state(doc)
         if preview is None:
             return []
-        template_id = str(preview["template_id"])
-        component = self.controller_service.library_service.get(template_id)
-        preview_component = {
-            "id": "__preview__",
-            "type": str(component.get("category") or "component"),
-            "library_ref": template_id,
-            "x": float(preview["x"]),
-            "y": float(preview["y"]),
-            "rotation": float(preview.get("rotation", 0.0) or 0.0),
-        }
+        mode = str(preview.get("mode") or "place")
+        preview_component, template_id, label = self._preview_component_payload(doc, preview, mode)
         resolved = self.controller_builder.resolve_components([preview_component])[0]
         keepouts = self.controller_builder.build_keepouts([preview_component])
         cutouts = self.controller_builder.build_cutout_primitives([preview_component])
@@ -205,8 +197,8 @@ class OverlayService:
                 rotation=float(preview_component["rotation"]),
                 shape=shape.to_dict(),
                 style=overlay_style("component_preview"),
-                label=f"Place {component.get('ui', {}).get('label') or template_id}",
-                source_component_id=template_id,
+                label=label,
+                source_component_id=str(preview_component.get("id") or template_id),
             )
         )
         for feature in keepouts:
@@ -221,7 +213,7 @@ class OverlayService:
                     rotation=float(feature.get("rotation", 0.0) or 0.0),
                     shape=feature,
                     style=overlay_style("keepout_preview"),
-                    source_component_id=template_id,
+                    source_component_id=str(preview_component.get("id") or template_id),
                 )
             )
         for feature in cutouts:
@@ -234,7 +226,7 @@ class OverlayService:
                     rotation=float(feature.get("rotation", 0.0) or 0.0),
                     shape=feature,
                     style=overlay_style("cutout_preview"),
-                    source_component_id=template_id,
+                    source_component_id=str(preview_component.get("id") or template_id),
                 )
             )
         items.append(
@@ -242,12 +234,45 @@ class OverlayService:
                 item_id=f"preview_label:{template_id}",
                 x=float(preview_component["x"]),
                 y=float(preview_component["y"]),
-                text=f"{component.get('ui', {}).get('label') or template_id}",
+                text=label,
                 style=overlay_style("preview_label"),
-                source_component_id=template_id,
+                source_component_id=str(preview_component.get("id") or template_id),
             )
         )
         return items
+
+    def _preview_component_payload(self, doc: Any, preview: dict[str, Any], mode: str) -> tuple[dict[str, Any], str, str]:
+        if mode == "move":
+            component_id = str(preview["component_id"])
+            component = self.controller_service.get_component(doc, component_id)
+            library_ref = str(component.get("library_ref") or component_id)
+            library_component = self.controller_service.library_service.get(library_ref)
+            return (
+                {
+                    "id": component_id,
+                    "type": str(component.get("type") or library_component.get("category") or "component"),
+                    "library_ref": library_ref,
+                    "x": float(preview["x"]),
+                    "y": float(preview["y"]),
+                    "rotation": float(preview.get("rotation", component.get("rotation", 0.0)) or 0.0),
+                },
+                component_id,
+                f"Move {library_component.get('ui', {}).get('label') or component_id}",
+            )
+        template_id = str(preview["template_id"])
+        component = self.controller_service.library_service.get(template_id)
+        return (
+            {
+                "id": "__preview__",
+                "type": str(component.get("category") or "component"),
+                "library_ref": template_id,
+                "x": float(preview["x"]),
+                "y": float(preview["y"]),
+                "rotation": float(preview.get("rotation", 0.0) or 0.0),
+            },
+            template_id,
+            f"Place {component.get('ui', {}).get('label') or template_id}",
+        )
 
     def _constraint_items(
         self,
