@@ -3,7 +3,7 @@ from pathlib import Path
 from ocw_workbench.gui.panels.create_panel import CreatePanel
 from ocw_workbench.services.controller_service import ControllerService
 from ocw_workbench.services.template_service import TemplateService
-from ocw_workbench.services.userdata_service import MAX_RECENTS, UserDataService
+from ocw_workbench.services.userdata_service import MAX_FAVORITE_COMPONENTS, MAX_RECENTS, UserDataService
 from ocw_workbench.services.variant_service import VariantService
 from ocw_workbench.userdata.persistence import UserDataPersistence
 
@@ -127,3 +127,44 @@ def test_create_panel_uses_recents_favorites_and_presets(tmp_path: Path):
     assert service.list_favorites()
     assert service.list_recents()
     assert service.list_presets()
+
+
+def test_component_favorites_migrate_and_persist(tmp_path: Path):
+    persistence = UserDataPersistence(base_dir=str(tmp_path))
+    persistence.path.parent.mkdir(parents=True, exist_ok=True)
+    persistence.path.write_text(
+        """
+{
+  "favorite_component_template_ids": ["omron_b3f_1000", "alps_ec11e15204a3"],
+  "component_favorites": ["omron_b3f_1000"]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    service = _service(tmp_path)
+
+    assert service.list_favorite_component_ids() == ["omron_b3f_1000", "alps_ec11e15204a3"]
+
+
+def test_component_favorites_limit_is_enforced(tmp_path: Path):
+    service = _service(tmp_path)
+    for component_id in [
+        "omron_b3f_1000",
+        "alps_ec11e15204a3",
+        "generic_ec11_encoder_with_push",
+        "generic_45mm_linear_fader",
+        "generic_60mm_linear_fader",
+        "adafruit_oled_096_i2c_ssd1306",
+        "generic_mpc_pad_30mm",
+        "generic_rgb_arcade_button_24mm",
+    ]:
+        service.toggle_favorite_component(component_id)
+
+    assert len(service.list_favorite_component_ids()) == MAX_FAVORITE_COMPONENTS
+
+    try:
+        service.toggle_favorite_component("basic_components_pack.oled_128x64_small")
+        assert False, "Expected favorites limit error"
+    except ValueError as exc:
+        assert str(MAX_FAVORITE_COMPONENTS) in str(exc)

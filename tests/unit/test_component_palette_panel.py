@@ -1,6 +1,8 @@
 from ocw_workbench.gui.panels.component_palette_panel import ComponentPaletteModel
 from ocw_workbench.services.controller_service import ControllerService
 from ocw_workbench.services.interaction_service import InteractionService
+from ocw_workbench.services.userdata_service import UserDataService
+from ocw_workbench.userdata.persistence import UserDataPersistence
 
 
 class FakeDocument:
@@ -59,9 +61,22 @@ def test_interaction_service_sets_active_component_template_without_document_syn
     recomputes_before = doc.recompute_count
 
     settings = interaction_service.set_active_component_template(doc, "omron_b3f_1000")
-    favorite_settings = interaction_service.toggle_favorite_component_template(doc, "omron_b3f_1000")
-
     assert settings["active_component_template_id"] == "omron_b3f_1000"
-    assert "omron_b3f_1000" in favorite_settings["favorite_component_template_ids"]
     assert controller_service.get_state(doc)["meta"]["ui"]["active_component_template_id"] == "omron_b3f_1000"
     assert doc.recompute_count == recomputes_before
+
+
+def test_component_favorites_persist_in_userdata(tmp_path):
+    service = UserDataService(
+        persistence=UserDataPersistence(base_dir=str(tmp_path)),
+        controller_service=ControllerService(),
+    )
+
+    favorites = service.toggle_favorite_component("omron_b3f_1000")
+    reloaded = UserDataService(
+        persistence=UserDataPersistence(base_dir=str(tmp_path)),
+        controller_service=ControllerService(),
+    )
+
+    assert favorites == ["omron_b3f_1000"]
+    assert reloaded.list_favorite_component_ids() == ["omron_b3f_1000"]

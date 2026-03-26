@@ -9,12 +9,14 @@ from ocw_workbench.userdata.models import FavoriteEntry, PresetEntry, RecentEntr
 @dataclass
 class UserDataStore:
     favorites: list[FavoriteEntry] = field(default_factory=list)
+    favorite_component_ids: list[str] = field(default_factory=list)
     recents: list[RecentEntry] = field(default_factory=list)
     presets: list[PresetEntry] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "favorites": [entry.to_dict() for entry in self.favorites],
+            "favorite_component_ids": list(self.favorite_component_ids),
             "recents": [entry.to_dict() for entry in self.recents],
             "presets": [entry.to_dict() for entry in self.presets],
         }
@@ -22,8 +24,10 @@ class UserDataStore:
     @classmethod
     def from_dict(cls, payload: dict[str, Any] | None) -> "UserDataStore":
         data = payload if isinstance(payload, dict) else {}
+        migrated_component_ids = _favorite_component_ids_from_dict(data)
         return cls(
             favorites=[_favorite_from_dict(item) for item in _as_list(data.get("favorites"))],
+            favorite_component_ids=migrated_component_ids,
             recents=[_recent_from_dict(item) for item in _as_list(data.get("recents"))],
             presets=[_preset_from_dict(item) for item in _as_list(data.get("presets"))],
         )
@@ -80,3 +84,30 @@ def _as_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _favorite_component_ids_from_dict(payload: dict[str, Any]) -> list[str]:
+    candidates = []
+    for key in (
+        "favorite_component_ids",
+        "favorite_components",
+        "component_favorites",
+        "favorite_component_template_ids",
+    ):
+        value = payload.get(key)
+        if isinstance(value, list):
+            candidates.extend(str(item) for item in value if isinstance(item, str) and item.strip())
+    favorites = payload.get("favorites")
+    if isinstance(favorites, list):
+        for item in favorites:
+            if not isinstance(item, dict):
+                continue
+            entry_type = str(item.get("type") or "")
+            reference_id = item.get("reference_id")
+            if entry_type in {"component", "component_template"} and isinstance(reference_id, str) and reference_id.strip():
+                candidates.append(reference_id)
+    deduped: list[str] = []
+    for item in candidates:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped

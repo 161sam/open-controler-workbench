@@ -12,6 +12,7 @@ from ocw_workbench.userdata.persistence import UserDataPersistence
 from ocw_workbench.userdata.store import UserDataStore
 
 MAX_RECENTS = 10
+MAX_FAVORITE_COMPONENTS = 8
 
 
 class UserDataService:
@@ -33,6 +34,40 @@ class UserDataService:
     def list_favorites(self) -> list[FavoriteEntry]:
         store = self.load_store()
         return [entry for entry in store.favorites if self._is_resolvable_favorite(entry)]
+
+    def list_favorite_component_ids(self) -> list[str]:
+        store = self.load_store()
+        component_ids: list[str] = []
+        for component_id in store.favorite_component_ids:
+            if len(component_ids) >= MAX_FAVORITE_COMPONENTS:
+                break
+            try:
+                self.controller_service.library_service.get(component_id)
+            except Exception:
+                continue
+            component_ids.append(component_id)
+        if component_ids != list(store.favorite_component_ids):
+            store.favorite_component_ids = component_ids
+            self.persistence.save(store)
+        return component_ids
+
+    def is_favorite_component(self, component_id: str) -> bool:
+        return component_id in self.list_favorite_component_ids()
+
+    def toggle_favorite_component(self, component_id: str) -> list[str]:
+        self.controller_service.library_service.get(component_id)
+        store = self.load_store()
+        favorites = [item for item in store.favorite_component_ids if item]
+        if component_id in favorites:
+            favorites = [item for item in favorites if item != component_id]
+        else:
+            favorites = favorites[:MAX_FAVORITE_COMPONENTS]
+            if len(favorites) >= MAX_FAVORITE_COMPONENTS:
+                raise ValueError(f"Favorite components are limited to {MAX_FAVORITE_COMPONENTS}")
+            favorites.append(component_id)
+        store.favorite_component_ids = favorites
+        self.persistence.save(store)
+        return self.list_favorite_component_ids()
 
     def is_favorite(self, entry_type: str, reference_id: str) -> bool:
         return any(entry.type == entry_type and entry.reference_id == reference_id for entry in self.list_favorites())

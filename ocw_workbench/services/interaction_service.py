@@ -18,7 +18,6 @@ DEFAULT_UI_SETTINGS = {
     "show_warnings": True,
     "show_errors": True,
     "active_component_template_id": None,
-    "favorite_component_template_ids": [],
 }
 
 
@@ -68,16 +67,6 @@ class InteractionService:
             self.controller_service.library_service.get(template_id)
         return self.update_settings(doc, {"active_component_template_id": template_id})
 
-    def toggle_favorite_component_template(self, doc: Any, template_id: str) -> dict[str, Any]:
-        self.controller_service.library_service.get(template_id)
-        settings = self.get_settings(doc)
-        favorites = [str(item) for item in settings.get("favorite_component_template_ids", []) if item]
-        if template_id in favorites:
-            favorites = [item for item in favorites if item != template_id]
-        else:
-            favorites.append(template_id)
-        favorites.sort()
-        return self.update_settings(doc, {"favorite_component_template_ids": favorites})
 
     def arm_move(self, doc: Any, component_id: str | None = None) -> dict[str, Any]:
         selection = component_id or self.controller_service.get_ui_context(doc).get("selection")

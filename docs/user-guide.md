@@ -26,7 +26,9 @@
 - Suche live über Name, ID, Part Number und Tags
 - Filtere nach UI-Kategorie oder nur nach Favoriten
 - Ein Klick wählt ein Component Template für den nächsten Add/Place-Schritt vor
-- Favoriten bleiben im UI-State des Dokuments gespeichert
+- Favoriten können direkt in der Palette per Stern markiert werden
+- Bis zu 8 Favoriten erscheinen als Icon-Buttons in der Toolbar `OCW Favorites`
+- Favoriten werden in UserData gespeichert und bleiben über Neustarts erhalten
 
 ## Begriffe
 

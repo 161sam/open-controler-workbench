@@ -48,7 +48,6 @@ DEFAULT_META = {
         "show_warnings": True,
         "show_errors": True,
         "active_component_template_id": None,
-        "favorite_component_template_ids": [],
     },
 }
 

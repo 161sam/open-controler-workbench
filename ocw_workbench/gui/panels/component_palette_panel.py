@@ -19,6 +19,7 @@ from ocw_workbench.gui.runtime import component_icon_path
 from ocw_workbench.services.controller_service import ControllerService
 from ocw_workbench.services.interaction_service import InteractionService
 from ocw_workbench.services.library_service import LibraryService
+from ocw_workbench.services.userdata_service import MAX_FAVORITE_COMPONENTS, UserDataService
 
 
 class ComponentPaletteModel:
@@ -75,12 +76,14 @@ class ComponentPalettePanel:
         controller_service: ControllerService | None = None,
         library_service: LibraryService | None = None,
         interaction_service: InteractionService | None = None,
+        userdata_service: UserDataService | None = None,
         on_status: Any | None = None,
     ) -> None:
         self.doc = doc
         self.controller_service = controller_service or ControllerService()
         self.library_service = library_service or LibraryService()
         self.interaction_service = interaction_service or InteractionService(self.controller_service)
+        self.userdata_service = userdata_service or UserDataService(controller_service=self.controller_service)
         self.on_status = on_status
         self.model = ComponentPaletteModel()
         self._visible_components: list[dict[str, Any]] = []
@@ -99,7 +102,7 @@ class ComponentPalettePanel:
     def _refresh_visible_components(self, preserve_selection: bool = False) -> None:
         settings = self.interaction_service.get_settings(self.doc)
         active_template_id = settings.get("active_component_template_id")
-        favorite_ids = {str(item) for item in settings.get("favorite_component_template_ids", []) if item}
+        favorite_ids = set(self.userdata_service.list_favorite_component_ids())
         category = self._current_category()
         search_text = self._search_text()
         favorites_only = self._favorites_only()
@@ -123,7 +126,7 @@ class ComponentPalettePanel:
 
     def select_component_template(self, template_id: str) -> dict[str, Any]:
         settings = self.interaction_service.set_active_component_template(self.doc, template_id)
-        favorite_ids = {str(item) for item in settings.get("favorite_component_template_ids", []) if item}
+        favorite_ids = set(self.userdata_service.list_favorite_component_ids())
         self._select_component_item(template_id)
         self._update_details(template_id)
         self._update_favorite_button(template_id, favorite_ids)
@@ -134,17 +137,22 @@ class ComponentPalettePanel:
         template_id = self.selected_component_template_id()
         if template_id is None:
             raise ValueError("No component template selected")
-        settings = self.interaction_service.toggle_favorite_component_template(self.doc, template_id)
-        favorite_ids = {str(item) for item in settings.get("favorite_component_template_ids", []) if item}
+        favorite_ids = set(self.userdata_service.toggle_favorite_component(template_id))
         if self._favorites_only():
             self._refresh_visible_components(preserve_selection=True)
         else:
             self._update_favorite_button(template_id, favorite_ids)
             self._populate_grid(favorite_ids)
             self._select_component_item(template_id)
+        try:
+            from ocw_workbench.workbench import refresh_favorite_component_commands
+
+            refresh_favorite_component_commands()
+        except Exception:
+            pass
         state = "added to" if template_id in favorite_ids else "removed from"
         self._publish_status(f"'{template_id}' {state} favorites.")
-        return settings
+        return self.interaction_service.get_settings(self.doc)
 
     def selected_component_template_id(self) -> str | None:
         grid = self.form["grid"]
@@ -312,7 +320,10 @@ class ComponentPalettePanel:
         set_tooltip(self.form["category"], "Filter by palette category from the component UI metadata.")
         set_tooltip(self.form["favorites_only"], "Show only templates marked as favorites.")
         set_tooltip(self.form["grid"], "Select a component template to prepare it for Add/Place.")
-        set_tooltip(self.form["favorite_button"], "Add or remove the selected component template from favorites.")
+        set_tooltip(
+            self.form["favorite_button"],
+            f"Add or remove the selected component template from favorites. Limit: {MAX_FAVORITE_COMPONENTS}.",
+        )
 
 
 def _build_form() -> dict[str, Any]:

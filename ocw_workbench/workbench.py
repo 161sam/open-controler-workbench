@@ -24,17 +24,20 @@ from ocw_workbench.gui.panels.create_panel import CreatePanel
 from ocw_workbench.gui.panels.info_panel import InfoPanel
 from ocw_workbench.gui.panels.layout_panel import LayoutPanel
 from ocw_workbench.gui.panels.plugin_manager_panel import PluginManagerPanel
-from ocw_workbench.gui.runtime import icon_path
+from ocw_workbench.gui.runtime import component_icon_path, icon_path
 from ocw_workbench.freecad_api.metadata import get_document_data
 from ocw_workbench.freecad_api.state import has_persisted_state
 from ocw_workbench.services.controller_service import ControllerService
 from ocw_workbench.services.interaction_service import InteractionService
 from ocw_workbench.services.overlay_service import OverlayService
+from ocw_workbench.services.userdata_service import MAX_FAVORITE_COMPONENTS, UserDataService
 
 _ACTIVE_WORKBENCH: ProductWorkbenchPanel | None = None
 _ACTIVE_DOCK: Any | None = None
 _ACTIVE_COMPONENT_PALETTE: ComponentPalettePanel | None = None
 _ACTIVE_COMPONENT_PALETTE_DOCK: Any | None = None
+_FAVORITE_COMMAND_IDS = [f"OCW_FavoriteComponent_{index + 1}" for index in range(MAX_FAVORITE_COMPONENTS)]
+_FAVORITE_MORE_COMMAND_ID = "OCW_OpenComponentPaletteMore"
 
 
 class _LoggedCommand:
@@ -55,6 +58,59 @@ class _LoggedCommand:
         if hasattr(self.command, "IsActive"):
             return self.command.IsActive()
         return True
+
+
+class _FavoriteComponentCommand:
+    def __init__(self, slot_index: int, userdata_service: UserDataService | None = None) -> None:
+        self.slot_index = slot_index
+        self.userdata_service = userdata_service or UserDataService()
+
+    def GetResources(self) -> dict[str, str]:
+        component = self._favorite_component()
+        if component is None:
+            return {
+                "MenuText": f"Favorite {self.slot_index + 1}",
+                "ToolTip": "Favorite component slot is empty.",
+                "Pixmap": icon_path("default"),
+            }
+        ui = component.get("ui", {})
+        label = str(ui.get("label") or component["id"])
+        return {
+            "MenuText": label,
+            "ToolTip": f"Prepare '{component['id']}' for placement.",
+            "Pixmap": component_icon_path(ui.get("icon")),
+        }
+
+    def IsActive(self) -> bool:
+        return self._favorite_component() is not None
+
+    def Activated(self) -> None:
+        component = self._favorite_component()
+        if component is None:
+            ensure_component_palette_ui()
+            return
+        try:
+            import FreeCAD as App
+
+            doc = App.ActiveDocument or App.newDocument("Controller")
+            palette = ensure_component_palette_ui(doc)
+            palette.select_component_template(component["id"])
+            focus_dock(_ACTIVE_COMPONENT_PALETTE_DOCK)
+            log_to_console(f"Favorite component '{component['id']}' prepared for placement.")
+        except Exception as exc:
+            from ocw_workbench.gui.runtime import show_error
+
+            show_error("Favorite Component", exc)
+
+    def _favorite_component(self) -> dict[str, Any] | None:
+        favorite_ids = self.userdata_service.list_favorite_component_ids()
+        if self.slot_index >= len(favorite_ids):
+            return None
+        component_id = favorite_ids[self.slot_index]
+        try:
+            return ControllerService().library_service.get(component_id)
+        except Exception:
+            return None
 
 
 class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
@@ -103,6 +159,11 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         Gui.addCommand("OCW_EnablePlugin", _LoggedCommand("OCW_EnablePlugin", EnablePluginCommand()))
         Gui.addCommand("OCW_DisablePlugin", _LoggedCommand("OCW_DisablePlugin", DisablePluginCommand()))
         Gui.addCommand("OCW_ReloadPlugins", _LoggedCommand("OCW_ReloadPlugins", ReloadPluginsCommand()))
+        refresh_favorite_component_commands()
+        Gui.addCommand(
+            _FAVORITE_MORE_COMMAND_ID,
+            _LoggedCommand(_FAVORITE_MORE_COMMAND_ID, OpenComponentPaletteCommand()),
+        )
 
         project_commands = ["OCW_CreateController"]
         component_commands = [
@@ -133,6 +194,7 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         ]
         self.appendToolbar("OCW Project", project_commands)
         self.appendToolbar("OCW Components", component_commands)
+        self.appendToolbar("OCW Favorites", _FAVORITE_COMMAND_IDS + [_FAVORITE_MORE_COMMAND_ID])
         self.appendToolbar("OCW Layout", layout_commands)
         self.appendToolbar("OCW Validate", validate_commands[:3])
         self.appendToolbar("OCW Tools", plugin_commands)
@@ -664,3 +726,13 @@ def ensure_component_palette_ui(doc: Any | None = None) -> ComponentPalettePanel
         f"Component palette ready for document '{getattr(doc, 'Name', '<unnamed>')}'."
     )
     return _ACTIVE_COMPONENT_PALETTE
+
+
+def refresh_favorite_component_commands() -> None:
+    if Gui is None:
+        return
+    for slot_index, command_id in enumerate(_FAVORITE_COMMAND_IDS):
+        Gui.addCommand(
+            command_id,
+            _LoggedCommand(command_id, _FavoriteComponentCommand(slot_index)),
+        )
