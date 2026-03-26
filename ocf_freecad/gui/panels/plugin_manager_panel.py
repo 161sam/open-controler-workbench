@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ocf_freecad.gui.panels._common import load_qt, text_value
+from ocf_freecad.gui.panels._common import load_qt, set_text, text_value
 from ocf_freecad.gui.widgets.plugin_details import PluginDetailsWidget
 from ocf_freecad.gui.widgets.plugin_list import PluginListWidget
 from ocf_freecad.services.plugin_manager_service import PluginManagerService
 from ocf_freecad.services.plugin_pack_service import PluginPackService
+from ocf_freecad.services.plugin_registry_service import PluginRegistryService
 
 
 class PluginManagerPanel:
@@ -14,6 +15,7 @@ class PluginManagerPanel:
         self,
         plugin_manager_service: PluginManagerService | None = None,
         plugin_pack_service: PluginPackService | None = None,
+        plugin_registry_service: PluginRegistryService | None = None,
         on_status: Any | None = None,
         on_plugins_changed: Any | None = None,
     ) -> None:
@@ -21,10 +23,14 @@ class PluginManagerPanel:
         self.plugin_pack_service = plugin_pack_service or PluginPackService(
             plugin_manager_service=self.plugin_manager_service
         )
+        self.plugin_registry_service = plugin_registry_service or PluginRegistryService()
         self.on_status = on_status
         self.on_plugins_changed = on_plugins_changed
         self.form = _build_form()
         self.widget = self.form["widget"]
+        cached_url = self.plugin_registry_service.last_registry_url()
+        if cached_url:
+            set_text(self.form["plugin_list"].parts["remote_url"], cached_url)
         self._connect_events()
         self.refresh()
 
@@ -32,6 +38,7 @@ class PluginManagerPanel:
         entries = self.plugin_manager_service.list_plugins(filter_by=self.form["plugin_list"].selected_filter())
         self.form["plugin_list"].set_entries(entries)
         self.form["plugin_details"].set_plugin(self.form["plugin_list"].selected())
+        self.load_cached_remote_registry()
         return entries
 
     def selected_plugin_id(self) -> str | None:
@@ -86,6 +93,35 @@ class PluginManagerPanel:
         self._notify_plugins_changed()
         return result
 
+    def load_cached_remote_registry(self) -> dict[str, Any]:
+        url = text_value(self.form["plugin_list"].parts["remote_url"]).strip()
+        result = self.plugin_registry_service.load_cached_registry(url)
+        if result["url"] and result["url"] != url:
+            set_text(self.form["plugin_list"].parts["remote_url"], result["url"])
+        self.form["plugin_list"].set_remote_entries(result["entries"])
+        return result
+
+    def refresh_remote_registry(self) -> dict[str, Any]:
+        url = text_value(self.form["plugin_list"].parts["remote_url"]).strip()
+        result = self.plugin_registry_service.refresh_registry(url)
+        self.form["plugin_list"].set_remote_entries(result["entries"])
+        source = result["source"]
+        suffix = f" ({source})" if source else ""
+        self._publish_status(f"Loaded remote plugin registry from {result['url']}{suffix}.")
+        return result
+
+    def download_selected_remote_plugin(self) -> dict[str, Any]:
+        selected = self.form["plugin_list"].selected_remote()
+        if selected is None:
+            raise ValueError("No remote plugin selected")
+        url = text_value(self.form["plugin_list"].parts["remote_url"]).strip()
+        output_path = text_value(self.form["plugin_list"].parts["download_path"]).strip()
+        if not output_path:
+            raise ValueError("Download path is required")
+        result = self.plugin_registry_service.download_plugin(url, str(selected["id"]), output_path)
+        self._publish_status(f"Downloaded remote plugin '{selected['id']}' to {result['output_path']}.")
+        return result
+
     def handle_selection_changed(self, *_args: Any) -> None:
         self.form["plugin_list"].sync_selection_state()
         self.form["plugin_details"].set_plugin(self.form["plugin_list"].selected())
@@ -123,6 +159,21 @@ class PluginManagerPanel:
         except Exception as exc:
             self._publish_status(str(exc))
 
+    def handle_remote_selection_changed(self, *_args: Any) -> None:
+        self.form["plugin_list"].sync_remote_selection_state()
+
+    def handle_remote_refresh_clicked(self) -> None:
+        try:
+            self.refresh_remote_registry()
+        except Exception as exc:
+            self._publish_status(str(exc))
+
+    def handle_download_clicked(self) -> None:
+        try:
+            self.download_selected_remote_plugin()
+        except Exception as exc:
+            self._publish_status(str(exc))
+
     def _connect_events(self) -> None:
         parts = self.form["plugin_list"].parts
         parts["plugin_combo"].currentIndexChanged.connect(self.handle_selection_changed)
@@ -132,6 +183,9 @@ class PluginManagerPanel:
         parts["refresh_button"].clicked.connect(self.handle_refresh_clicked)
         parts["export_button"].clicked.connect(self.handle_export_clicked)
         parts["import_button"].clicked.connect(self.handle_import_clicked)
+        parts["remote_plugin_combo"].currentIndexChanged.connect(self.handle_remote_selection_changed)
+        parts["remote_refresh_button"].clicked.connect(self.handle_remote_refresh_clicked)
+        parts["download_button"].clicked.connect(self.handle_download_clicked)
 
     def _publish_status(self, message: str) -> None:
         if self.on_status is not None:

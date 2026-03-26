@@ -12,6 +12,7 @@ from ocf_freecad.gui.panels._common import (
     set_combo_items,
     set_enabled,
     set_label_text,
+    set_text,
 )
 from ocf_freecad.gui.widgets.plugin_status_badge import PluginStatusBadgeWidget
 
@@ -19,6 +20,7 @@ from ocf_freecad.gui.widgets.plugin_status_badge import PluginStatusBadgeWidget
 class PluginListWidget:
     def __init__(self) -> None:
         self._lookup: dict[str, dict[str, Any]] = {}
+        self._remote_lookup: dict[str, dict[str, Any]] = {}
         self.parts = _build_widget()
         self.widget = self.parts["widget"]
 
@@ -33,6 +35,26 @@ class PluginListWidget:
 
     def selected_filter(self) -> str:
         return current_text(self.parts["filter_combo"]) or "all"
+
+    def set_remote_entries(self, entries: list[dict[str, Any]]) -> None:
+        labels = [_remote_entry_label(entry) for entry in entries]
+        self._remote_lookup = {label: entry for label, entry in zip(labels, entries)}
+        set_combo_items(self.parts["remote_plugin_combo"], labels)
+        self.sync_remote_selection_state()
+
+    def selected_remote(self) -> dict[str, Any] | None:
+        return self._remote_lookup.get(current_text(self.parts["remote_plugin_combo"]))
+
+    def sync_remote_selection_state(self) -> None:
+        selected = self.selected_remote()
+        if selected is None:
+            set_label_text(self.parts["remote_summary"], "No remote plugin selected.")
+            set_text(self.parts["remote_details"], "Load a remote registry to inspect available plugin packs.")
+            set_enabled(self.parts["download_button"], False)
+            return
+        set_label_text(self.parts["remote_summary"], _remote_summary(selected))
+        set_text(self.parts["remote_details"], _format_remote_details(selected))
+        set_enabled(self.parts["download_button"], bool(selected.get("download_url")))
 
     def sync_selection_state(self) -> None:
         selected = self.selected()
@@ -66,6 +88,31 @@ def _summary(entry: dict[str, Any]) -> str:
     return f"{entry['type']} | {origin} | {locked}"
 
 
+def _remote_entry_label(entry: dict[str, Any]) -> str:
+    name = str(entry.get("name") or entry["id"])
+    return f"{name} ({entry['id']})"
+
+
+def _remote_summary(entry: dict[str, Any]) -> str:
+    plugin_type = str(entry.get("type") or "plugin_pack")
+    version = str(entry.get("version") or "-")
+    return f"{plugin_type} | v{version}"
+
+
+def _format_remote_details(entry: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            f"ID: {entry['id']}",
+            f"Name: {entry.get('name') or entry['id']}",
+            f"Version: {entry.get('version') or '-'}",
+            f"Type: {entry.get('type') or '-'}",
+            f"Author: {entry.get('author') or '-'}",
+            f"Description: {entry.get('description') or '-'}",
+            f"Download: {entry.get('download_url') or '-'}",
+        ]
+    )
+
+
 def _build_widget() -> dict[str, Any]:
     _qtcore, _qtgui, qtwidgets = load_qt()
     badge = PluginStatusBadgeWidget()
@@ -83,6 +130,13 @@ def _build_widget() -> dict[str, Any]:
             "import_button": FallbackButton("Import ZIP"),
             "summary": FallbackLabel(""),
             "status_badge": badge,
+            "remote_url": FallbackText(""),
+            "remote_refresh_button": FallbackButton("Load Registry"),
+            "remote_plugin_combo": FallbackCombo(),
+            "remote_summary": FallbackLabel("No remote plugin selected."),
+            "remote_details": FallbackText("Load a remote registry to inspect available plugin packs."),
+            "download_path": FallbackText(".plugin_downloads"),
+            "download_button": FallbackButton("Download ZIP"),
         }
 
     widget = qtwidgets.QGroupBox("Plugin List")
@@ -99,6 +153,16 @@ def _build_widget() -> dict[str, Any]:
     import_button = qtwidgets.QPushButton("Import ZIP")
     summary = qtwidgets.QLabel("")
     summary.setWordWrap(True)
+    remote_url = qtwidgets.QLineEdit()
+    remote_refresh_button = qtwidgets.QPushButton("Load Registry")
+    remote_plugin_combo = qtwidgets.QComboBox()
+    remote_summary = qtwidgets.QLabel("No remote plugin selected.")
+    remote_summary.setWordWrap(True)
+    remote_details = qtwidgets.QPlainTextEdit()
+    remote_details.setReadOnly(True)
+    remote_details.setMaximumHeight(120)
+    download_path = qtwidgets.QLineEdit(".plugin_downloads")
+    download_button = qtwidgets.QPushButton("Download ZIP")
     row = qtwidgets.QHBoxLayout()
     row.addWidget(enable_button)
     row.addWidget(disable_button)
@@ -111,6 +175,14 @@ def _build_widget() -> dict[str, Any]:
     import_row.addWidget(qtwidgets.QLabel("Import"))
     import_row.addWidget(import_path, 1)
     import_row.addWidget(import_button)
+    remote_url_row = qtwidgets.QHBoxLayout()
+    remote_url_row.addWidget(qtwidgets.QLabel("Registry"))
+    remote_url_row.addWidget(remote_url, 1)
+    remote_url_row.addWidget(remote_refresh_button)
+    remote_download_row = qtwidgets.QHBoxLayout()
+    remote_download_row.addWidget(qtwidgets.QLabel("Download"))
+    remote_download_row.addWidget(download_path, 1)
+    remote_download_row.addWidget(download_button)
     layout.addWidget(filter_combo)
     layout.addWidget(plugin_combo)
     layout.addWidget(badge.widget)
@@ -118,6 +190,13 @@ def _build_widget() -> dict[str, Any]:
     layout.addLayout(row)
     layout.addLayout(export_row)
     layout.addLayout(import_row)
+    layout.addSpacing(8)
+    layout.addWidget(qtwidgets.QLabel("Remote Registry"))
+    layout.addLayout(remote_url_row)
+    layout.addWidget(remote_plugin_combo)
+    layout.addWidget(remote_summary)
+    layout.addWidget(remote_details)
+    layout.addLayout(remote_download_row)
     return {
         "widget": widget,
         "filter_combo": filter_combo,
@@ -131,4 +210,11 @@ def _build_widget() -> dict[str, Any]:
         "import_button": import_button,
         "summary": summary,
         "status_badge": badge,
+        "remote_url": remote_url,
+        "remote_refresh_button": remote_refresh_button,
+        "remote_plugin_combo": remote_plugin_combo,
+        "remote_summary": remote_summary,
+        "remote_details": remote_details,
+        "download_path": download_path,
+        "download_button": download_button,
     }
