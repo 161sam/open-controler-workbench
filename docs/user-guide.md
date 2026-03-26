@@ -47,6 +47,14 @@
 - A committed click or drag release applies the model change and then clears preview state and view callbacks.
 - If an interaction update or commit raises an exception, the session is cleaned up and the workbench reports `Interaction error`.
 
+## Undo And Redo
+
+- Overlay previews do not open FreeCAD document transactions and do not create undo entries.
+- Each completed place action creates exactly one undoable document transaction.
+- Each completed drag-move action creates exactly one undoable document transaction.
+- `ESC` cancel only clears transient preview state and does not add an undo step.
+- Template Import Stage A writes a YAML template file and refreshes template discovery, but it does not mutate the active controller project document, so there is no project undo entry for the import itself.
+
 ## Import Template From FCStd
 
 - Starte `OCW_ImportTemplateFromFCStd`

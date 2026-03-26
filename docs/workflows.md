@@ -60,3 +60,11 @@
 - `ESC`, document close, active document change, unavailable view, and tool switching all flow through the same cancellation path.
 - Successful commits clear transient preview state after the model mutation finishes.
 - Failed preview updates or failed commits clear transient state and leave no active callbacks behind.
+
+## Preview, Commit, And Undo
+
+- Preview updates stay in metadata and overlay state only and never open a FreeCAD transaction.
+- Place and drag commits use one document transaction around state mutation and full sync.
+- The transaction boundary is: open transaction, mutate committed project state, run full sync, close transaction.
+- If the commit path raises an exception, the transaction is aborted and the previous project state is restored before control returns to the UI.
+- Template Import Stage A is an external template-generation workflow: it produces a YAML file and reloads the template registry, but it does not mutate the active project document and therefore does not create a FreeCAD undo step.

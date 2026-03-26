@@ -7,9 +7,19 @@ class FakeDocument:
         self.Objects = []
         self.removed = []
         self.recompute_count = 0
+        self.transactions: list[tuple[str, str | None]] = []
 
     def recompute(self) -> None:
         self.recompute_count += 1
+
+    def openTransaction(self, label: str) -> None:
+        self.transactions.append(("open", label))
+
+    def commitTransaction(self) -> None:
+        self.transactions.append(("commit", None))
+
+    def abortTransaction(self) -> None:
+        self.transactions.append(("abort", None))
 
 
 class FakeFeatureDocument(FakeDocument):
@@ -103,6 +113,43 @@ def test_move_component_updates_state():
     assert state["components"][0]["x"] == 55.0
     assert state["components"][0]["y"] == 35.0
     assert state["components"][0]["rotation"] == 15.0
+    assert doc.transactions[-2:] == [("open", "OCW Drag Move Component"), ("commit", None)]
+
+
+def test_add_component_uses_single_document_transaction():
+    service = ControllerService()
+    doc = FakeDocument()
+
+    service.create_controller(doc, {"id": "demo"})
+    before_recomputes = doc.recompute_count
+    service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=10.0, y=10.0)
+
+    assert doc.transactions[-2:] == [("open", "OCW Place Component"), ("commit", None)]
+    assert doc.recompute_count > before_recomputes
+
+
+def test_move_component_aborts_transaction_and_restores_previous_state_when_sync_fails():
+    service = ControllerService()
+    doc = FakeDocument()
+
+    service.create_controller(doc, {"id": "demo"})
+    service.add_component(doc, "alps_ec11e15204a3", component_id="enc1", x=10.0, y=10.0)
+    previous_state = service.get_state(doc)
+
+    def fail_update_document(*_args, **_kwargs):
+        raise RuntimeError("sync failed")
+
+    service.update_document = fail_update_document  # type: ignore[method-assign]
+
+    try:
+        service.move_component(doc, "enc1", x=55.0, y=35.0, rotation=15.0)
+    except RuntimeError as exc:
+        assert str(exc) == "sync failed"
+    else:
+        raise AssertionError("Expected sync failure")
+
+    assert service.get_state(doc) == previous_state
+    assert doc.transactions[-2:] == [("open", "OCW Drag Move Component"), ("abort", None)]
 
 
 def test_select_component_uses_visual_refresh_without_recompute():

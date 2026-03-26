@@ -13,9 +13,19 @@ class FakeDocument:
     def __init__(self) -> None:
         self.Objects = []
         self.recompute_count = 0
+        self.transactions = []
 
     def recompute(self) -> None:
         self.recompute_count += 1
+
+    def openTransaction(self, label: str) -> None:
+        self.transactions.append(("open", label))
+
+    def commitTransaction(self) -> None:
+        self.transactions.append(("commit", None))
+
+    def abortTransaction(self) -> None:
+        self.transactions.append(("abort", None))
 
 
 class FakeView:
@@ -97,6 +107,29 @@ def test_view_place_controller_preview_updates_metadata_only():
     }
     assert load_preview_state(doc) == payload
     assert after_state == before_state
+    assert doc.transactions == []
+
+
+def test_view_place_controller_commit_creates_single_transaction_after_multiple_previews():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+
+    controller = ViewPlaceController(
+        controller_service=controller_service,
+        interaction_service=interaction_service,
+    )
+    controller.doc = doc
+    controller.view = FakeView()
+    controller.active_template_id = "omron_b3f_1000"
+    controller.preview_active = True
+
+    controller.update_preview_from_screen(12.2, 18.7)
+    controller.update_preview_from_screen(25.1, 40.4)
+    controller.commit()
+
+    assert doc.transactions == [("open", "OCW Place Component"), ("commit", None)]
 
 
 def test_overlay_service_includes_drag_preview_ghost():

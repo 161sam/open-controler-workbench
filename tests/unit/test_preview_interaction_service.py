@@ -8,9 +8,19 @@ class FakeDocument:
     def __init__(self) -> None:
         self.Objects = []
         self.recompute_count = 0
+        self.transactions = []
 
     def recompute(self) -> None:
         self.recompute_count += 1
+
+    def openTransaction(self, label: str) -> None:
+        self.transactions.append(("open", label))
+
+    def commitTransaction(self) -> None:
+        self.transactions.append(("commit", None))
+
+    def abortTransaction(self) -> None:
+        self.transactions.append(("abort", None))
 
 
 def test_add_component_preview_uses_visual_only_sync_and_metadata():
@@ -34,6 +44,7 @@ def test_add_component_preview_uses_visual_only_sync_and_metadata():
     assert controller_service.get_state(doc) == before_state
     assert calls == [{"mode": SyncMode.VISUAL_ONLY, "recompute": False}]
     assert doc.recompute_count == before_recomputes
+    assert doc.transactions == []
 
 
 def test_move_component_preview_uses_visual_only_sync_and_metadata():
@@ -43,6 +54,7 @@ def test_move_component_preview_uses_visual_only_sync_and_metadata():
     controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0})
     controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=20.0, y=20.0)
     calls = []
+    before_transactions = list(doc.transactions)
 
     def record_update_document(*_args, **kwargs):
         calls.append(kwargs)
@@ -59,3 +71,4 @@ def test_move_component_preview_uses_visual_only_sync_and_metadata():
     assert controller_service.get_state(doc) == before_state
     assert calls == [{"mode": SyncMode.VISUAL_ONLY, "recompute": False}]
     assert doc.recompute_count == before_recomputes
+    assert doc.transactions == before_transactions

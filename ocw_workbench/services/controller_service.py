@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from ocw_workbench.freecad_api import gui as freecad_gui
+from ocw_workbench.freecad_api.document import document_transaction
 from ocw_workbench.generator.controller_builder import ControllerBuilder
 from ocw_workbench.layout.engine import LayoutEngine
 from ocw_workbench.services.constraint_service import ConstraintService
@@ -104,18 +106,20 @@ class ControllerService:
         rotation: float = 0.0,
         zone_id: str | None = None,
         ) -> dict[str, Any]:
-        state = self.state_service.add_component(
+        return self._mutate_with_full_sync(
             doc,
-            library_ref=library_ref,
-            component_id=component_id,
-            component_type=component_type,
-            x=x,
-            y=y,
-            rotation=rotation,
-            zone_id=zone_id,
+            transaction_name="OCW Place Component",
+            mutator=lambda: self.state_service.add_component(
+                doc,
+                library_ref=library_ref,
+                component_id=component_id,
+                component_type=component_type,
+                x=x,
+                y=y,
+                rotation=rotation,
+                zone_id=zone_id,
+            ),
         )
-        self.update_document(doc, mode=SyncMode.FULL, state=state)
-        return state
 
     def move_component(
         self,
@@ -125,9 +129,11 @@ class ControllerService:
         y: float,
         rotation: float | None = None,
     ) -> dict[str, Any]:
-        state = self.state_service.move_component(doc, component_id, x=x, y=y, rotation=rotation)
-        self.update_document(doc, mode=SyncMode.FULL, state=state)
-        return state
+        return self._mutate_with_full_sync(
+            doc,
+            transaction_name="OCW Drag Move Component",
+            mutator=lambda: self.state_service.move_component(doc, component_id, x=x, y=y, rotation=rotation),
+        )
 
     def update_controller(self, doc: Any, updates: dict[str, Any]) -> dict[str, Any]:
         state = self.state_service.update_controller(doc, updates)
@@ -192,3 +198,19 @@ class ControllerService:
             selection=resolved_selection,
             recompute=recompute,
         )
+
+    def _mutate_with_full_sync(
+        self,
+        doc: Any,
+        transaction_name: str,
+        mutator: Any,
+    ) -> dict[str, Any]:
+        previous_state = deepcopy(self.state_service.get_state(doc))
+        try:
+            with document_transaction(doc, transaction_name):
+                state = mutator()
+                self.update_document(doc, mode=SyncMode.FULL, state=state)
+                return state
+        except Exception:
+            self.state_service.save_state(doc, previous_state)
+            raise

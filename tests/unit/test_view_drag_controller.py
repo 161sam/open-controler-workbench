@@ -8,9 +8,19 @@ class FakeDocument:
     def __init__(self) -> None:
         self.Objects = []
         self.recompute_count = 0
+        self.transactions = []
 
     def recompute(self) -> None:
         self.recompute_count += 1
+
+    def openTransaction(self, label: str) -> None:
+        self.transactions.append(("open", label))
+
+    def commitTransaction(self) -> None:
+        self.transactions.append(("commit", None))
+
+    def abortTransaction(self) -> None:
+        self.transactions.append(("abort", None))
 
 
 class FakeView:
@@ -65,6 +75,7 @@ def test_view_drag_controller_preview_is_visual_only_until_commit():
     controller.doc = doc
     controller.view = FakeView()
     controller.armed = True
+    before_transactions = list(doc.transactions)
 
     before_state = controller_service.get_state(doc)
     controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "DOWN", "Button": "BUTTON1", "Position": (20, 20)})
@@ -88,6 +99,7 @@ def test_view_drag_controller_preview_is_visual_only_until_commit():
     assert moved["x"] == 31.0
     assert moved["y"] == 29.0
     assert len(overlay.calls) >= 3
+    assert doc.transactions[len(before_transactions):] == [("open", "OCW Drag Move Component"), ("commit", None)]
 
 
 def test_view_drag_controller_escape_cancels_without_side_effects():
