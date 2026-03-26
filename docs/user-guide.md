@@ -36,6 +36,17 @@
 - Klicke eine vorhandene Komponente im 3D-View an, ziehe sie und lasse los zum Commit
 - Während des Ziehens bleibt das Modell unverändert; nur das Overlay-Ghost wird aktualisiert
 
+## Interactive Placement And Drag
+
+- `Place In 3D` starts a single active placement session for the current document.
+- `OCW_DragMoveComponent` starts a single active drag session for existing components.
+- Starting a second interactive tool automatically cancels the previous one and clears its preview ghost.
+- `ESC` always cancels the active interaction and removes transient preview metadata.
+- Placement and drag previews are overlay-only and are never written into `ProjectJson`.
+- If the active document changes, the document closes, or the 3D view becomes unavailable, the current interaction is cancelled and callbacks are removed before another tool can start.
+- A committed click or drag release applies the model change and then clears preview state and view callbacks.
+- If an interaction update or commit raises an exception, the session is cleaned up and the workbench reports `Interaction error`.
+
 ## Import Template From FCStd
 
 - Starte `OCW_ImportTemplateFromFCStd`

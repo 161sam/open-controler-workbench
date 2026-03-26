@@ -51,3 +51,12 @@
 - YAML Template importieren
 - Template im Create Panel auswählen
 - Controller weiter verfeinern und speichern
+
+## Interactive Tool Lifecycle
+
+- Only one view-interactive tool session may be active at a time.
+- Tool start follows the same lifecycle: resolve view, register callbacks once, create or update overlay preview metadata, then wait for commit or cancel.
+- Tool cleanup is idempotent: callback deregistration, preview metadata removal, overlay refresh, and session reset can run more than once without crashing.
+- `ESC`, document close, active document change, unavailable view, and tool switching all flow through the same cancellation path.
+- Successful commits clear transient preview state after the model mutation finishes.
+- Failed preview updates or failed commits clear transient state and leave no active callbacks behind.

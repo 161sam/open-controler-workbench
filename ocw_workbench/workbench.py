@@ -13,6 +13,7 @@ except ImportError:
     Gui = None
 
 from ocw_workbench.gui.interaction.move_tool import MoveTool
+from ocw_workbench.gui.interaction.lifecycle import InteractionSessionManager
 from ocw_workbench.gui.interaction.view_drag_controller import ViewDragController
 from ocw_workbench.gui.interaction.view_place_controller import ViewPlaceController
 from ocw_workbench.gui.docking import create_or_reuse_dock, focus_dock, remove_dock
@@ -38,8 +39,6 @@ _ACTIVE_WORKBENCH: ProductWorkbenchPanel | None = None
 _ACTIVE_DOCK: Any | None = None
 _ACTIVE_COMPONENT_PALETTE: ComponentPalettePanel | None = None
 _ACTIVE_COMPONENT_PALETTE_DOCK: Any | None = None
-_ACTIVE_PLACE_CONTROLLER: ViewPlaceController | None = None
-_ACTIVE_DRAG_CONTROLLER: ViewDragController | None = None
 _FAVORITE_COMMAND_IDS = [f"OCW_FavoriteComponent_{index + 1}" for index in range(MAX_FAVORITE_COMPONENTS)]
 _FAVORITE_MORE_COMMAND_ID = "OCW_OpenComponentPaletteMore"
 
@@ -242,6 +241,7 @@ class ProductWorkbenchPanel:
         self.interaction_service = InteractionService(self.controller_service)
         self.overlay_service = OverlayService(self.controller_service)
         self.overlay_renderer = OverlayRenderer(self.overlay_service)
+        self.interaction_manager = InteractionSessionManager()
         self.move_tool = MoveTool(
             interaction_service=self.interaction_service,
             controller_service=self.controller_service,
@@ -251,12 +251,14 @@ class ProductWorkbenchPanel:
             interaction_service=self.interaction_service,
             overlay_renderer=self.overlay_renderer,
             on_status=self.set_status,
+            on_finished=self._handle_interaction_finished,
         )
         self.drag_controller = ViewDragController(
             controller_service=self.controller_service,
             interaction_service=self.interaction_service,
             overlay_renderer=self.overlay_renderer,
             on_status=self.set_status,
+            on_finished=self._handle_interaction_finished,
         )
         self.form = self._build_shell()
         self.widget = self.form["widget"]
@@ -487,9 +489,28 @@ class ProductWorkbenchPanel:
         return True
 
     def reject(self) -> bool:
-        self.drag_controller.cancel()
-        self.place_controller.cancel()
+        self.interaction_manager.cancel_active(reason="cancel", publish_status=False)
         return True
+
+    def start_place_mode(self, template_id: str) -> bool:
+        self.interaction_manager.cancel_active(reason="switch", publish_status=False)
+        started = self.place_controller.start(self.doc, template_id)
+        if started:
+            self.interaction_manager.activate("place", self.doc, self.place_controller.cancel)
+        return started
+
+    def start_drag_mode(self) -> bool:
+        self.interaction_manager.cancel_active(reason="switch", publish_status=False)
+        started = self.drag_controller.start(self.doc)
+        if started:
+            self.interaction_manager.activate("drag", self.doc, self.drag_controller.cancel)
+        return started
+
+    def handle_document_context_changed(self, doc: Any | None) -> None:
+        self.interaction_manager.handle_document_changed(doc)
+
+    def handle_document_closed(self) -> None:
+        self.interaction_manager.handle_document_closed(self.doc)
 
     def _build_shell(self) -> dict[str, Any]:
         _qtcore, _qtgui, qtwidgets = load_qt()
@@ -602,6 +623,9 @@ class ProductWorkbenchPanel:
         self.constraints_panel.refresh()
         self.info_panel.refresh()
 
+    def _handle_interaction_finished(self, controller: Any) -> None:
+        self.interaction_manager.clear(controller.cancel)
+
     def _overlay_status_text(self, payload: dict[str, Any] | None = None) -> str:
         current = payload or get_document_data(self.doc, "OCWOverlayState", {})
         settings = self.interaction_service.get_settings(self.doc)
@@ -627,6 +651,8 @@ def ensure_workbench_ui(doc: Any | None = None, focus: str = "create") -> Produc
         raise RuntimeError("No active FreeCAD document")
     _bootstrap_document_if_needed(doc)
     try:
+        if _ACTIVE_WORKBENCH is not None:
+            _ACTIVE_WORKBENCH.handle_document_context_changed(doc)
         if _ACTIVE_WORKBENCH is None or _ACTIVE_WORKBENCH.doc is not doc:
             _ACTIVE_WORKBENCH = ProductWorkbenchPanel(doc)
             _ACTIVE_DOCK = _show_in_dock(_ACTIVE_WORKBENCH)
@@ -717,6 +743,8 @@ def reset_workbench_dock() -> bool:
     global _ACTIVE_DOCK
     global _ACTIVE_WORKBENCH
 
+    if _ACTIVE_WORKBENCH is not None:
+        _ACTIVE_WORKBENCH.handle_document_closed()
     _ACTIVE_WORKBENCH = None
     removed = remove_dock()
     _ACTIVE_DOCK = None
@@ -763,24 +791,18 @@ def refresh_favorite_component_commands() -> None:
 
 
 def start_component_place_mode(doc: Any | None, template_id: str) -> bool:
-    global _ACTIVE_PLACE_CONTROLLER
-
     if doc is None and App is not None:
         doc = App.ActiveDocument or App.newDocument("Controller")
     if doc is None:
         return False
     workbench = ensure_workbench_ui(doc, focus="components")
-    _ACTIVE_PLACE_CONTROLLER = workbench.place_controller
-    return _ACTIVE_PLACE_CONTROLLER.start(doc, template_id)
+    return workbench.start_place_mode(template_id)
 
 
 def start_component_drag_mode(doc: Any | None) -> bool:
-    global _ACTIVE_DRAG_CONTROLLER
-
     if doc is None and App is not None:
         doc = App.ActiveDocument or App.newDocument("Controller")
     if doc is None:
         return False
     workbench = ensure_workbench_ui(doc, focus="components")
-    _ACTIVE_DRAG_CONTROLLER = workbench.drag_controller
-    return _ACTIVE_DRAG_CONTROLLER.start(doc)
+    return workbench.start_drag_mode()

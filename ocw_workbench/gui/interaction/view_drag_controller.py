@@ -4,10 +4,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from ocw_workbench.gui.interaction.hit_test import hit_test_components
+from ocw_workbench.gui.interaction.lifecycle import ViewEventCallbackRegistry
 from ocw_workbench.gui.interaction.view_place_controller import map_view_point_to_controller_xy
 from ocw_workbench.gui.interaction.view_place_preview import load_preview_state
 from ocw_workbench.gui.overlay.renderer import OverlayRenderer
-from ocw_workbench.gui.panels._common import log_to_console
+from ocw_workbench.gui.panels._common import log_exception, log_to_console
 from ocw_workbench.services.controller_service import ControllerService
 from ocw_workbench.services.interaction_service import InteractionService
 
@@ -29,67 +30,89 @@ class ViewDragController:
         interaction_service: InteractionService | None = None,
         overlay_renderer: OverlayRenderer | None = None,
         on_status: Any | None = None,
+        on_finished: Any | None = None,
+        view_callbacks: ViewEventCallbackRegistry | None = None,
     ) -> None:
         self.controller_service = controller_service or ControllerService()
         self.interaction_service = interaction_service or InteractionService(self.controller_service)
         self.overlay_renderer = overlay_renderer or OverlayRenderer()
         self.on_status = on_status
+        self.on_finished = on_finished
         self.doc: Any | None = None
         self.view: Any | None = None
         self.armed = False
         self.session: DragMoveSession | None = None
-        self._callback_handles: list[tuple[str, Any]] = []
+        self._view_callbacks = view_callbacks or ViewEventCallbackRegistry()
 
     def start(self, doc: Any) -> bool:
         view = self._active_view(doc)
         if view is None:
             self._publish_status("Could not start drag mode because no active 3D view is available.")
             return False
-        self.cancel()
+        self.cancel(reason="switch", publish_status=False)
         self.doc = doc
         self.view = view
         self.armed = True
-        self._register_callbacks(view)
-        self._publish_status("Drag: click component and drag, ESC cancel.")
-        return True
+        if not self._view_callbacks.attach(view, self.handle_view_event):
+            self.cancel(reason="error", publish_status=False)
+            self._publish_status("Interaction error")
+            return False
+        self._publish_status("Dragging ...")
+        return self._view_callbacks.is_registered
 
-    def cancel(self) -> None:
+    def cancel(self, reason: str = "cancel", publish_status: bool = True) -> None:
         doc = self.doc
         session = self.session
+        self._view_callbacks.detach()
         if doc is not None:
-            self.interaction_service.clear_component_preview(doc)
+            try:
+                self.interaction_service.clear_component_preview(doc)
+            except Exception as exc:
+                log_exception("Failed to clear drag preview state", exc)
             if session is not None:
-                self.controller_service.select_component(doc, session.previous_selection)
-            self.overlay_renderer.refresh(doc)
-        self._remove_callbacks()
+                try:
+                    self.controller_service.select_component(doc, session.previous_selection)
+                except Exception as exc:
+                    log_exception("Failed to restore selection during drag cleanup", exc)
+            try:
+                self.overlay_renderer.refresh(doc)
+            except Exception as exc:
+                log_exception("Failed to refresh overlay during drag cleanup", exc)
         self.doc = None
         self.view = None
         self.armed = False
         self.session = None
+        self._notify_finished()
+        if publish_status:
+            self._publish_status(self._status_for_reason(reason))
 
     def handle_view_event(self, info: Any) -> None:
         if self.doc is None:
             return
-        payload = info if isinstance(info, dict) else {}
-        event_type = str(payload.get("Type") or payload.get("type") or "")
-        if self._is_escape_event(event_type, payload):
-            self.cancel()
-            self._publish_status("Drag cancelled.")
-            return
-        position = self._extract_position(payload)
-        if position is None:
-            return
-        screen_x = float(position[0])
-        screen_y = float(position[1])
-        if self._is_left_click_down(event_type, payload):
-            self._begin_drag(screen_x, screen_y)
-            return
-        if self.session is not None and self.session.dragging and self._is_mouse_move(event_type, payload):
-            self.update_preview_from_screen(screen_x, screen_y)
-            return
-        if self.session is not None and self.session.dragging and self._is_left_click_up(event_type, payload):
-            self.update_preview_from_screen(screen_x, screen_y)
-            self.commit()
+        try:
+            if not self._ensure_view_binding():
+                return
+            payload = info if isinstance(info, dict) else {}
+            event_type = str(payload.get("Type") or payload.get("type") or "")
+            if self._is_escape_event(event_type, payload):
+                self.cancel()
+                return
+            position = self._extract_position(payload)
+            if position is None:
+                return
+            screen_x = float(position[0])
+            screen_y = float(position[1])
+            if self._is_left_click_down(event_type, payload):
+                self._begin_drag(screen_x, screen_y)
+                return
+            if self.session is not None and self.session.dragging and self._is_mouse_move(event_type, payload):
+                self.update_preview_from_screen(screen_x, screen_y)
+                return
+            if self.session is not None and self.session.dragging and self._is_left_click_up(event_type, payload):
+                self.update_preview_from_screen(screen_x, screen_y)
+                self.commit()
+        except Exception as exc:
+            self._handle_interaction_error(exc)
 
     def _begin_drag(self, screen_x: float, screen_y: float) -> bool:
         if self.doc is None or self.view is None:
@@ -124,11 +147,13 @@ class ViewDragController:
             snap_enabled=bool(self.interaction_service.get_settings(self.doc).get("snap_enabled", True)),
         )
         self.overlay_renderer.refresh(self.doc)
-        self._publish_status(f"Dragging {component_id}... release to commit, ESC to cancel.")
+        self._publish_status("Dragging ...")
         return True
 
     def update_preview_from_screen(self, screen_x: float, screen_y: float) -> dict[str, Any] | None:
-        if self.doc is None or self.view is None or self.session is None:
+        if self.doc is None or self.session is None:
+            return None
+        if not self._ensure_view_binding():
             return None
         point = self._view_point(self.view, screen_x, screen_y)
         if point is None:
@@ -161,15 +186,20 @@ class ViewDragController:
         if preview is None:
             raise ValueError("No drag preview position available")
         component_id = self.session.component_id
-        state = self.controller_service.move_component(
-            self.doc,
-            component_id=component_id,
-            x=float(preview["x"]),
-            y=float(preview["y"]),
-            rotation=self.session.original_rotation,
-        )
-        self.cancel()
-        self._publish_status(f"Moved {component_id} to {preview['x']:.2f}, {preview['y']:.2f} mm.")
+        try:
+            state = self.controller_service.move_component(
+                self.doc,
+                component_id=component_id,
+                x=float(preview["x"]),
+                y=float(preview["y"]),
+                rotation=self.session.original_rotation,
+            )
+        except Exception as exc:
+            self._handle_interaction_error(exc)
+            raise
+        component_id = self.session.component_id
+        self.cancel(reason="finish", publish_status=False)
+        self._publish_status("Committed")
         return state
 
     def _active_view(self, doc: Any) -> Any | None:
@@ -184,40 +214,19 @@ class ViewDragController:
                 gui_doc = Gui.getDocument(doc_name)
             except Exception:
                 gui_doc = None
-        if gui_doc is None:
+        active_gui_doc = getattr(Gui, "ActiveDocument", None)
+        active_gui_doc_name = getattr(active_gui_doc, "Document", None)
+        active_gui_doc_name = getattr(active_gui_doc_name, "Name", getattr(active_gui_doc, "Name", None))
+        if gui_doc is None and not isinstance(doc_name, str):
             gui_doc = getattr(Gui, "ActiveDocument", None)
+        if gui_doc is None and isinstance(doc_name, str) and active_gui_doc_name == doc_name:
+            gui_doc = active_gui_doc
         if gui_doc is None or not hasattr(gui_doc, "activeView"):
             return None
         try:
             return gui_doc.activeView()
         except Exception:
             return None
-
-    def _register_callbacks(self, view: Any) -> None:
-        callback_types = ("SoMouseButtonEvent", "SoLocation2Event", "SoKeyboardEvent")
-        if hasattr(view, "addEventCallback"):
-            for event_type in callback_types:
-                try:
-                    handle = view.addEventCallback(event_type, self.handle_view_event)
-                except Exception:
-                    continue
-                self._callback_handles.append((event_type, handle))
-        if not self._callback_handles and hasattr(view, "addEventCallback"):
-            try:
-                handle = view.addEventCallback("SoEvent", self.handle_view_event)
-                self._callback_handles.append(("SoEvent", handle))
-            except Exception:
-                pass
-
-    def _remove_callbacks(self) -> None:
-        view = self.view
-        if view is not None and hasattr(view, "removeEventCallback"):
-            for event_type, handle in self._callback_handles:
-                try:
-                    view.removeEventCallback(event_type, handle)
-                except Exception:
-                    continue
-        self._callback_handles = []
 
     def _view_point(self, view: Any, screen_x: float, screen_y: float) -> tuple[float, float, float] | None:
         if not hasattr(view, "getPoint"):
@@ -270,3 +279,36 @@ class ViewDragController:
         log_to_console(message)
         if self.on_status is not None:
             self.on_status(message)
+
+    def _ensure_view_binding(self) -> bool:
+        if self.doc is None:
+            return False
+        view = self._active_view(self.doc)
+        if view is None and self.view is not None:
+            view = self.view
+        if view is None:
+            self.cancel(reason="view_unavailable")
+            return False
+        self.view = view
+        if not self._view_callbacks.attach(view, self.handle_view_event):
+            self.cancel(reason="error")
+            return False
+        return True
+
+    def _handle_interaction_error(self, exc: Exception) -> None:
+        log_exception("Drag interaction failed", exc)
+        self.cancel(reason="error")
+
+    def _notify_finished(self) -> None:
+        if self.on_finished is not None:
+            try:
+                self.on_finished(self)
+            except Exception:
+                pass
+
+    def _status_for_reason(self, reason: str) -> str:
+        if reason == "error":
+            return "Interaction error"
+        if reason == "finish":
+            return "Committed"
+        return "Cancelled"
