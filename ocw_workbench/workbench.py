@@ -13,6 +13,7 @@ except ImportError:
     Gui = None
 
 from ocw_workbench.gui.interaction.move_tool import MoveTool
+from ocw_workbench.gui.interaction.view_place_controller import ViewPlaceController
 from ocw_workbench.gui.docking import create_or_reuse_dock, focus_dock, remove_dock
 from ocw_workbench.gui.feedback import apply_status_message, format_toggle_message, format_validation_message
 from ocw_workbench.gui.overlay.renderer import OverlayRenderer
@@ -36,6 +37,7 @@ _ACTIVE_WORKBENCH: ProductWorkbenchPanel | None = None
 _ACTIVE_DOCK: Any | None = None
 _ACTIVE_COMPONENT_PALETTE: ComponentPalettePanel | None = None
 _ACTIVE_COMPONENT_PALETTE_DOCK: Any | None = None
+_ACTIVE_PLACE_CONTROLLER: ViewPlaceController | None = None
 _FAVORITE_COMMAND_IDS = [f"OCW_FavoriteComponent_{index + 1}" for index in range(MAX_FAVORITE_COMPONENTS)]
 _FAVORITE_MORE_COMMAND_ID = "OCW_OpenComponentPaletteMore"
 
@@ -95,8 +97,9 @@ class _FavoriteComponentCommand:
             doc = App.ActiveDocument or App.newDocument("Controller")
             palette = ensure_component_palette_ui(doc)
             palette.select_component_template(component["id"])
+            start_component_place_mode(doc, component["id"])
             focus_dock(_ACTIVE_COMPONENT_PALETTE_DOCK)
-            log_to_console(f"Favorite component '{component['id']}' prepared for placement.")
+            log_to_console(f"Favorite component '{component['id']}' entered placement mode.")
         except Exception as exc:
             from ocw_workbench.gui.runtime import show_error
 
@@ -235,6 +238,12 @@ class ProductWorkbenchPanel:
         self.move_tool = MoveTool(
             interaction_service=self.interaction_service,
             controller_service=self.controller_service,
+        )
+        self.place_controller = ViewPlaceController(
+            controller_service=self.controller_service,
+            interaction_service=self.interaction_service,
+            overlay_renderer=self.overlay_renderer,
+            on_status=self.set_status,
         )
         self.form = self._build_shell()
         self.widget = self.form["widget"]
@@ -465,6 +474,7 @@ class ProductWorkbenchPanel:
         return True
 
     def reject(self) -> bool:
+        self.place_controller.cancel()
         return True
 
     def _build_shell(self) -> dict[str, Any]:
@@ -736,3 +746,15 @@ def refresh_favorite_component_commands() -> None:
             command_id,
             _LoggedCommand(command_id, _FavoriteComponentCommand(slot_index)),
         )
+
+
+def start_component_place_mode(doc: Any | None, template_id: str) -> bool:
+    global _ACTIVE_PLACE_CONTROLLER
+
+    if doc is None and App is not None:
+        doc = App.ActiveDocument or App.newDocument("Controller")
+    if doc is None:
+        return False
+    workbench = ensure_workbench_ui(doc, focus="components")
+    _ACTIVE_PLACE_CONTROLLER = workbench.place_controller
+    return _ACTIVE_PLACE_CONTROLLER.start(doc, template_id)

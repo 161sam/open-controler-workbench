@@ -1,0 +1,228 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
+
+from ocw_workbench.gui.overlay.renderer import OverlayRenderer
+from ocw_workbench.gui.interaction.view_place_preview import (
+    clear_preview_state,
+    load_preview_state,
+    serialize_preview_state,
+    store_preview_state,
+)
+from ocw_workbench.gui.panels._common import log_to_console
+from ocw_workbench.services.controller_service import ControllerService
+from ocw_workbench.services.interaction_service import InteractionService
+
+
+def map_view_point_to_controller_xy(
+    point: tuple[float, float, float] | list[float],
+    *,
+    controller_width: float,
+    controller_depth: float,
+    snap_enabled: bool,
+    grid_mm: float,
+) -> tuple[float, float]:
+    raw_x = float(point[0]) if len(point) >= 1 else 0.0
+    raw_y = float(point[1]) if len(point) >= 2 else 0.0
+    clamped_x = max(0.0, min(float(controller_width), raw_x))
+    clamped_y = max(0.0, min(float(controller_depth), raw_y))
+    if snap_enabled and grid_mm > 0:
+        clamped_x = round(clamped_x / grid_mm) * grid_mm
+        clamped_y = round(clamped_y / grid_mm) * grid_mm
+        clamped_x = max(0.0, min(float(controller_width), clamped_x))
+        clamped_y = max(0.0, min(float(controller_depth), clamped_y))
+    return (clamped_x, clamped_y)
+
+
+
+
+class ViewPlaceController:
+    def __init__(
+        self,
+        controller_service: ControllerService | None = None,
+        interaction_service: InteractionService | None = None,
+        overlay_renderer: OverlayRenderer | None = None,
+        on_status: Any | None = None,
+    ) -> None:
+        self.controller_service = controller_service or ControllerService()
+        self.interaction_service = interaction_service or InteractionService(self.controller_service)
+        self.overlay_renderer = overlay_renderer or OverlayRenderer()
+        self.on_status = on_status
+        self.doc: Any | None = None
+        self.view: Any | None = None
+        self.active_template_id: str | None = None
+        self.preview_active = False
+        self._callback_handles: list[tuple[str, Any]] = []
+
+    def start(self, doc: Any, template_id: str) -> bool:
+        self.controller_service.library_service.get(template_id)
+        view = self._active_view(doc)
+        if view is None:
+            self._publish_status("Could not start placement mode because no active 3D view is available.")
+            return False
+        self.cancel()
+        self.doc = doc
+        self.view = view
+        self.active_template_id = template_id
+        self.preview_active = True
+        self._register_callbacks(view)
+        self._publish_status(f"Placing {template_id}... click to place, ESC to cancel.")
+        return True
+
+    def cancel(self) -> None:
+        if self.doc is not None:
+            clear_preview_state(self.doc)
+            self.overlay_renderer.refresh(self.doc)
+        self._remove_callbacks()
+        self.doc = None
+        self.view = None
+        self.active_template_id = None
+        self.preview_active = False
+
+    def commit(self) -> dict[str, Any]:
+        if self.doc is None or self.active_template_id is None:
+            raise ValueError("No active placement preview to commit")
+        preview = load_preview_state(self.doc)
+        if preview is None:
+            raise ValueError("No preview position available")
+        state = self.controller_service.add_component(
+            self.doc,
+            library_ref=self.active_template_id,
+            x=float(preview["x"]),
+            y=float(preview["y"]),
+            rotation=float(preview.get("rotation", 0.0) or 0.0),
+        )
+        placed_template_id = self.active_template_id
+        self.cancel()
+        self._publish_status(f"Placed {placed_template_id} at {preview['x']:.2f}, {preview['y']:.2f} mm.")
+        return state
+
+    def update_preview_from_screen(self, screen_x: float, screen_y: float) -> dict[str, Any] | None:
+        if self.doc is None or self.view is None or self.active_template_id is None:
+            return None
+        point = self._view_point(self.view, screen_x, screen_y)
+        if point is None:
+            return None
+        state = self.controller_service.get_state(self.doc)
+        settings = self.interaction_service.get_settings(self.doc)
+        x, y = map_view_point_to_controller_xy(
+            point,
+            controller_width=float(state["controller"]["width"]),
+            controller_depth=float(state["controller"]["depth"]),
+            snap_enabled=bool(settings.get("snap_enabled", True)),
+            grid_mm=float(settings.get("grid_mm", 1.0)),
+        )
+        payload = store_preview_state(self.doc, self.active_template_id, x=x, y=y)
+        self.overlay_renderer.refresh(self.doc)
+        return payload
+
+    def handle_view_event(self, info: Any) -> None:
+        if self.doc is None or self.active_template_id is None:
+            return
+        payload = info if isinstance(info, dict) else {}
+        event_type = str(payload.get("Type") or payload.get("type") or "")
+        if self._is_escape_event(event_type, payload):
+            self.cancel()
+            self._publish_status("Placement cancelled.")
+            return
+        position = self._extract_position(payload)
+        if position is not None and self._is_mouse_move(event_type, payload):
+            self.update_preview_from_screen(float(position[0]), float(position[1]))
+            return
+        if position is not None and self._is_left_click_down(event_type, payload):
+            preview = self.update_preview_from_screen(float(position[0]), float(position[1]))
+            if preview is not None:
+                self.commit()
+
+    def _register_callbacks(self, view: Any) -> None:
+        callback_types = ("SoMouseButtonEvent", "SoLocation2Event", "SoKeyboardEvent")
+        if hasattr(view, "addEventCallback"):
+            for event_type in callback_types:
+                try:
+                    handle = view.addEventCallback(event_type, self.handle_view_event)
+                except Exception:
+                    continue
+                self._callback_handles.append((event_type, handle))
+        if not self._callback_handles and hasattr(view, "addEventCallback"):
+            try:
+                handle = view.addEventCallback("SoEvent", self.handle_view_event)
+                self._callback_handles.append(("SoEvent", handle))
+            except Exception:
+                pass
+
+    def _remove_callbacks(self) -> None:
+        view = self.view
+        if view is not None and hasattr(view, "removeEventCallback"):
+            for event_type, handle in self._callback_handles:
+                try:
+                    view.removeEventCallback(event_type, handle)
+                except Exception:
+                    continue
+        self._callback_handles = []
+
+    def _active_view(self, doc: Any) -> Any | None:
+        try:
+            import FreeCADGui as Gui
+        except ImportError:
+            return None
+        gui_doc = None
+        doc_name = getattr(doc, "Name", None)
+        if isinstance(doc_name, str) and hasattr(Gui, "getDocument"):
+            try:
+                gui_doc = Gui.getDocument(doc_name)
+            except Exception:
+                gui_doc = None
+        if gui_doc is None:
+            gui_doc = getattr(Gui, "ActiveDocument", None)
+        if gui_doc is None or not hasattr(gui_doc, "activeView"):
+            return None
+        try:
+            return gui_doc.activeView()
+        except Exception:
+            return None
+
+    def _view_point(self, view: Any, screen_x: float, screen_y: float) -> tuple[float, float, float] | None:
+        if not hasattr(view, "getPoint"):
+            return None
+        try:
+            point = view.getPoint(int(round(screen_x)), int(round(screen_y)))
+        except Exception:
+            return None
+        if isinstance(point, (list, tuple)) and len(point) >= 3:
+            return (float(point[0]), float(point[1]), float(point[2]))
+        if hasattr(point, "__iter__"):
+            values = list(point)
+            if len(values) >= 3:
+                return (float(values[0]), float(values[1]), float(values[2]))
+        return None
+
+    def _extract_position(self, payload: dict[str, Any]) -> tuple[float, float] | None:
+        for key in ("Position", "position", "pos"):
+            value = payload.get(key)
+            if isinstance(value, (list, tuple)) and len(value) >= 2:
+                return (float(value[0]), float(value[1]))
+        return None
+
+    def _is_mouse_move(self, event_type: str, payload: dict[str, Any]) -> bool:
+        state = str(payload.get("State") or payload.get("state") or "")
+        return event_type in {"SoLocation2Event", "SoEvent"} and state.lower() != "down"
+
+    def _is_left_click_down(self, event_type: str, payload: dict[str, Any]) -> bool:
+        if event_type not in {"SoMouseButtonEvent", "SoEvent"}:
+            return False
+        button = str(payload.get("Button") or payload.get("button") or "").upper()
+        state = str(payload.get("State") or payload.get("state") or "").upper()
+        return button in {"BUTTON1", "LEFT"} and state == "DOWN"
+
+    def _is_escape_event(self, event_type: str, payload: dict[str, Any]) -> bool:
+        if event_type not in {"SoKeyboardEvent", "SoEvent"}:
+            return False
+        key = str(payload.get("Key") or payload.get("key") or payload.get("Printable") or "").upper()
+        state = str(payload.get("State") or payload.get("state") or "").upper()
+        return key in {"ESCAPE", "ESC"} and state in {"DOWN", ""}
+
+    def _publish_status(self, message: str) -> None:
+        log_to_console(message)
+        if self.on_status is not None:
+            self.on_status(message)

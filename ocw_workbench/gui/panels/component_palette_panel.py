@@ -193,6 +193,23 @@ class ComponentPalettePanel:
         except Exception as exc:
             self._publish_status(friendly_ui_error("Could not update favorites", exc))
 
+    def start_place_mode(self) -> bool:
+        template_id = self.selected_component_template_id()
+        if template_id is None:
+            raise ValueError("No component template selected")
+        from ocw_workbench.workbench import start_component_place_mode
+
+        started = start_component_place_mode(self.doc, template_id)
+        if started:
+            self._publish_status(f"Placing '{template_id}' in 3D view. Click to place, ESC to cancel.")
+        return started
+
+    def handle_place_clicked(self, *_args: Any) -> None:
+        try:
+            self.start_place_mode()
+        except Exception as exc:
+            self._publish_status(friendly_ui_error("Could not start placement mode", exc))
+
     def _populate_grid(self, favorite_ids: set[str]) -> None:
         _qtcore, qtgui, qtwidgets = load_qt()
         grid = self.form["grid"]
@@ -314,6 +331,8 @@ class ComponentPalettePanel:
             self.form["grid"].itemClicked.connect(self.handle_grid_selection_changed)
         if hasattr(self.form["favorite_button"], "clicked"):
             self.form["favorite_button"].clicked.connect(self.handle_favorite_clicked)
+        if hasattr(self.form["place_button"], "clicked"):
+            self.form["place_button"].clicked.connect(self.handle_place_clicked)
 
     def _configure_tooltips(self) -> None:
         set_tooltip(self.form["search"], "Filter the component library by name, id, part number, description or tags.")
@@ -324,6 +343,7 @@ class ComponentPalettePanel:
             self.form["favorite_button"],
             f"Add or remove the selected component template from favorites. Limit: {MAX_FAVORITE_COMPONENTS}.",
         )
+        set_tooltip(self.form["place_button"], "Start interactive placement in the 3D view for the selected component.")
 
 
 def _build_form() -> dict[str, Any]:
@@ -338,6 +358,7 @@ def _build_form() -> dict[str, Any]:
             "category": FallbackCombo(["all"]),
             "favorites_only": favorites_only,
             "favorite_button": FallbackButton("Add Favorite"),
+            "place_button": FallbackButton("Place In 3D"),
             "grid": type("FallbackGrid", (), {"items": [], "selected_template_id": None})(),
             "details": FallbackText(),
             "status": FallbackLabel(),
@@ -352,10 +373,12 @@ def _build_form() -> dict[str, Any]:
     configure_combo_box(category)
     favorites_only = qtwidgets.QCheckBox("Favorites only")
     favorite_button = qtwidgets.QPushButton("Add Favorite")
+    place_button = qtwidgets.QPushButton("Place In 3D")
     controls.addWidget(search, 1)
     controls.addWidget(category)
     controls.addWidget(favorites_only)
     controls.addWidget(favorite_button)
+    controls.addWidget(place_button)
 
     grid = qtwidgets.QListWidget()
     if hasattr(grid, "setViewMode") and hasattr(qtwidgets, "QListView"):
@@ -390,6 +413,7 @@ def _build_form() -> dict[str, Any]:
         "category": category,
         "favorites_only": favorites_only,
         "favorite_button": favorite_button,
+        "place_button": place_button,
         "grid": grid,
         "details": details,
         "status": status,

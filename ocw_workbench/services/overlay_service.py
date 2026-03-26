@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from ocw_workbench.generator.controller_builder import ControllerBuilder
+from ocw_workbench.gui.interaction.view_place_preview import load_preview_state
 from ocw_workbench.gui.overlay.colors import overlay_style
 from ocw_workbench.gui.overlay.labels import component_label, issue_label, zone_label
 from ocw_workbench.gui.overlay.shapes import circle_item, rect_item, slot_item, text_item
@@ -160,6 +161,8 @@ class OverlayService:
             )
             items.extend(constraint_overlay["items"])
 
+        items.extend(self._preview_items(doc))
+
         return {
             "enabled": True,
             "surface": surface.to_dict(),
@@ -173,6 +176,78 @@ class OverlayService:
                 "finding_count": validation["summary"]["total_count"],
             },
         }
+
+    def _preview_items(self, doc: Any) -> list[dict[str, Any]]:
+        preview = load_preview_state(doc)
+        if preview is None:
+            return []
+        template_id = str(preview["template_id"])
+        component = self.controller_service.library_service.get(template_id)
+        preview_component = {
+            "id": "__preview__",
+            "type": str(component.get("category") or "component"),
+            "library_ref": template_id,
+            "x": float(preview["x"]),
+            "y": float(preview["y"]),
+            "rotation": float(preview.get("rotation", 0.0) or 0.0),
+        }
+        resolved = self.controller_builder.resolve_components([preview_component])[0]
+        keepouts = self.controller_builder.build_keepouts([preview_component])
+        cutouts = self.controller_builder.build_cutout_primitives([preview_component])
+        items: list[dict[str, Any]] = []
+        shape = resolved["resolved_mechanical"].keepout_top
+        items.append(
+            self._shape_item(
+                prefix="preview_component",
+                item_id=template_id,
+                x=float(preview_component["x"]),
+                y=float(preview_component["y"]),
+                rotation=float(preview_component["rotation"]),
+                shape=shape.to_dict(),
+                style=overlay_style("component_preview"),
+                label=f"Place {component.get('ui', {}).get('label') or template_id}",
+                source_component_id=template_id,
+            )
+        )
+        for feature in keepouts:
+            if feature.get("feature") != "keepout_top":
+                continue
+            items.append(
+                self._shape_item(
+                    prefix="preview_keepout",
+                    item_id=template_id,
+                    x=float(feature["x"]),
+                    y=float(feature["y"]),
+                    rotation=float(feature.get("rotation", 0.0) or 0.0),
+                    shape=feature,
+                    style=overlay_style("keepout_preview"),
+                    source_component_id=template_id,
+                )
+            )
+        for feature in cutouts:
+            items.append(
+                self._shape_item(
+                    prefix="preview_cutout",
+                    item_id=template_id,
+                    x=float(feature["x"]),
+                    y=float(feature["y"]),
+                    rotation=float(feature.get("rotation", 0.0) or 0.0),
+                    shape=feature,
+                    style=overlay_style("cutout_preview"),
+                    source_component_id=template_id,
+                )
+            )
+        items.append(
+            text_item(
+                item_id=f"preview_label:{template_id}",
+                x=float(preview_component["x"]),
+                y=float(preview_component["y"]),
+                text=f"{component.get('ui', {}).get('label') or template_id}",
+                style=overlay_style("preview_label"),
+                source_component_id=template_id,
+            )
+        )
+        return items
 
     def _constraint_items(
         self,

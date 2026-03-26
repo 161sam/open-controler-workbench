@@ -29,6 +29,9 @@
 - Favoriten können direkt in der Palette per Stern markiert werden
 - Bis zu 8 Favoriten erscheinen als Icon-Buttons in der Toolbar `OCW Favorites`
 - Favoriten werden in UserData gespeichert und bleiben über Neustarts erhalten
+- `Place In 3D` startet den interaktiven Platzierungsmodus im 3D-View
+- Die Ghost-Vorschau folgt der Maus nur über Overlay-Preview
+- Klick platziert die Komponente, `ESC` bricht den Modus ohne Modelländerung ab
 
 ## Begriffe
 
