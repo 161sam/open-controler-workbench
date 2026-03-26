@@ -72,7 +72,7 @@ class DocumentSyncService:
         top_cut = builder.apply_cutouts(top, components)
         self._set_generated_label(top_cut, "OCF_TopPlateCut" if state["components"] else "OCF_TopPlate")
         group_generated_object(doc, top_cut)
-        self._create_component_markers(doc, builder, components, float(state["controller"]["height"]))
+        self._materialize_debug_keepout_markers(doc, builder, components, float(state["controller"]["height"]))
         self._apply_selection_highlight(doc, state["meta"].get("selection"))
         if hasattr(doc, "recompute"):
             doc.recompute()
@@ -115,7 +115,7 @@ class DocumentSyncService:
         if recompute and hasattr(doc, "recompute"):
             doc.recompute()
 
-    def _create_component_markers(self, doc: Any, builder: Any, components: list[Any], z_height: float) -> None:
+    def _materialize_debug_keepout_markers(self, doc: Any, builder: Any, components: list[Any], z_height: float) -> None:
         if not self._should_materialize_component_markers(doc):
             return
         shapes_api = __import__("ocf_freecad.freecad_api.shapes", fromlist=["create_cylinder"])

@@ -355,6 +355,76 @@ def test_sync_document_clears_only_group_managed_objects(monkeypatch):
     assert doc.getObject("UserSolid") is user_obj
 
 
+def test_sync_document_does_not_materialize_keepout_markers_by_default(monkeypatch):
+    class FakeBuilder:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def build_body(self, _controller):
+            return self.doc.addObject("Part::Feature", "ControllerBody")
+
+        def build_top_plate(self, _controller):
+            return self.doc.addObject("Part::Feature", "TopPlate")
+
+        def apply_cutouts(self, top, _components):
+            top.Shape = "cut"
+            return top
+
+        def build_keepouts(self, _components):
+            raise AssertionError("keepouts must stay in overlay-only mode unless debug markers are enabled")
+
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.freecad_gui.reveal_generated_objects", lambda _doc: 0)
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.freecad_gui.activate_document", lambda _doc: True)
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.freecad_gui.focus_view", lambda _doc, fit=True: True)
+
+    service = ControllerService()
+    doc = FakeFeatureDocument()
+
+    service.create_controller(doc, {"id": "demo", "height": 30.0})
+
+    assert sorted(obj.Label for obj in doc.getObject("OCF_Generated").Group) == ["OCF_ControllerBody", "OCF_TopPlate"]
+
+
+def test_sync_document_can_materialize_keepout_markers_in_debug_mode(monkeypatch):
+    class FakeBuilder:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def build_body(self, _controller):
+            return self.doc.addObject("Part::Feature", "ControllerBody")
+
+        def build_top_plate(self, _controller):
+            return self.doc.addObject("Part::Feature", "TopPlate")
+
+        def apply_cutouts(self, top, _components):
+            top.Shape = "cut"
+            return top
+
+        def build_keepouts(self, _components):
+            return [{"component_id": "btn1", "feature": "keepout_top", "shape": "circle", "diameter": 20.0, "x": 30.0, "y": 20.0}]
+
+    def fake_create_cylinder(doc, name, **_kwargs):
+        return doc.addObject("Part::Feature", name)
+
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.freecad_gui.reveal_generated_objects", lambda _doc: 0)
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.freecad_gui.activate_document", lambda _doc: True)
+    monkeypatch.setattr("ocf_freecad.services.document_sync_service.freecad_gui.focus_view", lambda _doc, fit=True: True)
+    monkeypatch.setattr("ocf_freecad.freecad_api.shapes.create_cylinder", fake_create_cylinder)
+
+    service = ControllerService()
+    doc = FakeFeatureDocument()
+    doc.OCFDebugUI = {"materialize_component_markers": True}
+
+    service.create_controller(doc, {"id": "demo", "height": 30.0})
+
+    labels = sorted(obj.Label for obj in doc.getObject("OCF_Generated").Group)
+    assert labels == ["OCF_ControllerBody", "OCF_TopPlate", "OCF_btn1_keepout_top"]
+
+
 def test_repeated_sync_document_keeps_document_object_count_bounded(monkeypatch):
     class FakeBuilder:
         def __init__(self, doc):

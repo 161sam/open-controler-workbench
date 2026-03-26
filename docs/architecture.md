@@ -62,6 +62,7 @@ Legacy document metadata and `OCF_State` containers are migration inputs only.
 
 Generated document geometry is owned by the `OCF_Generated` group.
 Regular cleanup and rebuild paths operate on group membership instead of global name scans.
+Keepout helper geometry is overlay-driven by default and is only materialized as document objects in explicit debug mode.
 
 ### 8. Export
 - exporters/
