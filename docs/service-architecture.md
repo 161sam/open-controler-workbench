@@ -76,3 +76,9 @@ This facade exists to keep the current UI stable while internals are split into 
 - Existing callers can continue using `ControllerService`.
 - New logic should prefer the narrower services when it only needs state mutation or only needs document sync.
 - UI code should avoid directly performing FreeCAD rebuild work when a state-only update is sufficient.
+
+## Performance Instrumentation
+
+See also:
+
+- `docs/performance-metrics.md`

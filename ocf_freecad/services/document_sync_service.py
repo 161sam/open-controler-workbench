@@ -14,6 +14,7 @@ from ocf_freecad.freecad_api.model import (
     group_generated_object,
     iter_generated_objects,
 )
+from ocf_freecad.freecad_api.performance import record_profile_metric
 from ocf_freecad.generator.controller_builder import ControllerBuilder
 from ocf_freecad.services._logging import log_to_console
 
@@ -63,6 +64,7 @@ class DocumentSyncService:
 
     def _perform_full_sync(self, doc: Any, state: dict[str, Any], requested_mode: str) -> None:
         started_at = perf_counter()
+        phase_timings: dict[str, float] = {}
         controller_object = get_controller_object(doc, create=hasattr(doc, "addObject"))
         generated_group = get_generated_group(doc, create=hasattr(doc, "addObject"))
         self._set_last_sync(
@@ -83,15 +85,21 @@ class DocumentSyncService:
             f"for controller '{state['controller']['id']}' with {len(state['components'])} components."
         )
         if not hasattr(doc, "addObject"):
+            recompute_started_at = perf_counter()
             if hasattr(doc, "recompute"):
                 doc.recompute()
+            recompute_ms = round((perf_counter() - recompute_started_at) * 1000.0, 3)
+            phase_timings["document_recompute_ms"] = recompute_ms
             self._set_last_sync(
                 doc,
                 {
                     "sync_duration_ms": round((perf_counter() - started_at) * 1000.0, 3),
+                    **phase_timings,
                     "sync_mode": SyncMode.STATE_ONLY,
                 },
             )
+            for metric, duration_ms in phase_timings.items():
+                record_profile_metric(doc, "sync", metric, duration_ms, details={"mode": SyncMode.STATE_ONLY})
             log_to_console(
                 f"Document '{getattr(doc, 'Name', '<unnamed>')}' has no FreeCAD object API; state-only sync complete.",
                 level="warning",
@@ -102,27 +110,72 @@ class DocumentSyncService:
         controller = self._build_controller(state["controller"])
         components = [self._build_component(item) for item in state["components"]]
         builder = self.builder_factory(doc=doc)
+        body_started_at = perf_counter()
         body = builder.build_body(controller)
+        phase_timings["builder_body_generation_ms"] = round((perf_counter() - body_started_at) * 1000.0, 3)
         self._set_generated_label(body, "OCF_ControllerBody")
         group_generated_object(doc, body)
+        top_started_at = perf_counter()
         top = builder.build_top_plate(controller)
-        top_cut = builder.apply_cutouts(top, components)
+        phase_timings["builder_top_plate_generation_ms"] = round((perf_counter() - top_started_at) * 1000.0, 3)
+        cutout_tool_count = 0
+        cutout_diagnostic_count = 0
+        if hasattr(builder, "plan_cutout_boolean") and hasattr(builder, "apply_cutout_plan"):
+            cutout_plan_started_at = perf_counter()
+            cutout_plan = builder.plan_cutout_boolean(top, components)
+            phase_timings["cutout_generation_ms"] = round((perf_counter() - cutout_plan_started_at) * 1000.0, 3)
+            boolean_started_at = perf_counter()
+            top_cut = builder.apply_cutout_plan(top, cutout_plan)
+            phase_timings["boolean_phase_ms"] = round((perf_counter() - boolean_started_at) * 1000.0, 3)
+            cutout_tool_count = len(getattr(cutout_plan, "tools", []))
+            cutout_diagnostic_count = len(getattr(cutout_plan, "diagnostics", []))
+        else:
+            phase_timings["cutout_generation_ms"] = 0.0
+            boolean_started_at = perf_counter()
+            top_cut = builder.apply_cutouts(top, components)
+            phase_timings["boolean_phase_ms"] = round((perf_counter() - boolean_started_at) * 1000.0, 3)
         self._set_generated_label(top_cut, "OCF_TopPlateCut" if state["components"] else "OCF_TopPlate")
         group_generated_object(doc, top_cut)
         self._materialize_debug_keepout_markers(doc, builder, components, float(state["controller"]["height"]))
         self._apply_selection_highlight(doc, state["meta"].get("selection"))
+        recompute_started_at = perf_counter()
         if hasattr(doc, "recompute"):
             doc.recompute()
+        phase_timings["document_recompute_ms"] = round((perf_counter() - recompute_started_at) * 1000.0, 3)
         generated_count = self._generated_object_count(doc)
         duration_ms = round((perf_counter() - started_at) * 1000.0, 3)
         self._set_last_sync(
             doc,
             {
                 "generated_object_count": generated_count,
+                "cutout_tool_count": cutout_tool_count,
+                "cutout_diagnostic_count": cutout_diagnostic_count,
+                **phase_timings,
                 "sync_duration_ms": duration_ms,
                 "sync_mode": SyncMode.FULL,
             },
         )
+        record_profile_metric(
+            doc,
+            "sync",
+            "full_sync",
+            duration_ms,
+            details={
+                "mode": requested_mode,
+                "actual_mode": SyncMode.FULL,
+                "generated_object_count": generated_count,
+                "cutout_tool_count": cutout_tool_count,
+                "cutout_diagnostic_count": cutout_diagnostic_count,
+            },
+        )
+        for metric, metric_duration_ms in phase_timings.items():
+            record_profile_metric(
+                doc,
+                "sync",
+                metric,
+                metric_duration_ms,
+                details={"mode": requested_mode, "actual_mode": SyncMode.FULL},
+            )
         revealed = self.gui_module.reveal_generated_objects(doc)
         self.gui_module.activate_document(doc)
         self.gui_module.focus_view(doc, fit=True)
@@ -150,6 +203,7 @@ class DocumentSyncService:
         selection: str | None,
         recompute: bool = False,
     ) -> None:
+        started_at = perf_counter()
         self._set_last_sync(
             doc,
             {
@@ -162,7 +216,14 @@ class DocumentSyncService:
             return
         self._apply_selection_highlight(doc, selection)
         if recompute and hasattr(doc, "recompute"):
+            recompute_started_at = perf_counter()
             doc.recompute()
+            recompute_ms = round((perf_counter() - recompute_started_at) * 1000.0, 3)
+            self._set_last_sync(doc, {"document_recompute_ms": recompute_ms})
+            record_profile_metric(doc, "sync", "visual_recompute", recompute_ms, details={"mode": SyncMode.VISUAL_ONLY})
+        duration_ms = round((perf_counter() - started_at) * 1000.0, 3)
+        self._set_last_sync(doc, {"sync_duration_ms": duration_ms})
+        record_profile_metric(doc, "sync", "visual_refresh", duration_ms, details={"mode": SyncMode.VISUAL_ONLY})
 
     def _materialize_debug_keepout_markers(self, doc: Any, builder: Any, components: list[Any], z_height: float) -> None:
         if not self._should_materialize_component_markers(doc):

@@ -5,6 +5,7 @@ from time import perf_counter
 from typing import Any
 
 from ocf_freecad.freecad_api.metadata import set_document_data
+from ocf_freecad.freecad_api.performance import record_profile_metric
 from ocf_freecad.gui.overlay.object import clear_legacy_overlay_objects, overlay_render_path, update_overlay_object
 from ocf_freecad.gui.panels._common import log_to_console
 from ocf_freecad.services.overlay_service import OverlayService
@@ -18,10 +19,28 @@ class OverlayRenderer:
         self.overlay_service = overlay_service or OverlayService()
 
     def refresh(self, doc: Any) -> dict[str, Any]:
+        build_started_at = perf_counter()
         payload = self.overlay_service.build_overlay(doc)
-        return self.render(doc, payload)
+        build_duration_ms = (perf_counter() - build_started_at) * 1000.0
+        summary = dict(payload.get("summary", {}))
+        summary["build_duration_ms"] = round(build_duration_ms, 3)
+        payload["summary"] = summary
+        record_profile_metric(
+            doc,
+            "overlay",
+            "build",
+            build_duration_ms,
+            details={"item_count": len(payload.get("items", [])), "enabled": bool(payload.get("enabled", True))},
+        )
+        return self.render(doc, payload, build_duration_ms=build_duration_ms)
 
-    def render(self, doc: Any, payload: dict[str, Any], recompute: bool = False) -> dict[str, Any]:
+    def render(
+        self,
+        doc: Any,
+        payload: dict[str, Any],
+        recompute: bool = False,
+        build_duration_ms: float | None = None,
+    ) -> dict[str, Any]:
         started_at = perf_counter()
         clear_legacy_overlay_objects(doc)
         stats = {
@@ -32,6 +51,7 @@ class OverlayRenderer:
             "render_path": "disabled",
             "duration_ms": 0.0,
             "visual_only": True,
+            "build_duration_ms": round(float(build_duration_ms or payload.get("summary", {}).get("build_duration_ms", 0.0)), 3),
         }
         if not payload.get("enabled", True):
             if hasattr(doc, "addObject"):
@@ -39,6 +59,13 @@ class OverlayRenderer:
             stats["duration_ms"] = (perf_counter() - started_at) * 1000.0
             updated = self._with_render_summary(payload, stats)
             self._store_overlay_state(doc, updated)
+            record_profile_metric(
+                doc,
+                "overlay",
+                "render",
+                stats["duration_ms"],
+                details={"render_path": stats["render_path"], "rendered_items": 0, "dropped_items": 0},
+            )
             self._log_render_summary(updated)
             return updated
         if not hasattr(doc, "addObject"):
@@ -46,6 +73,13 @@ class OverlayRenderer:
             stats["duration_ms"] = (perf_counter() - started_at) * 1000.0
             updated = self._with_render_summary(payload, stats)
             self._store_overlay_state(doc, updated)
+            record_profile_metric(
+                doc,
+                "overlay",
+                "render",
+                stats["duration_ms"],
+                details={"render_path": stats["render_path"], "rendered_items": 0, "dropped_items": 0},
+            )
             self._log_render_summary(updated)
             return updated
         normalized_items = []
@@ -72,6 +106,17 @@ class OverlayRenderer:
         if overlay_obj is not None:
             update_overlay_object(doc, updated, stats)
         self._store_overlay_state(doc, updated)
+        record_profile_metric(
+            doc,
+            "overlay",
+            "render",
+            stats["duration_ms"],
+            details={
+                "render_path": stats["render_path"],
+                "rendered_items": stats["rendered_items"],
+                "dropped_items": stats["dropped_items"],
+            },
+        )
         self._log_render_summary(updated)
         return updated
 
@@ -124,6 +169,7 @@ class OverlayRenderer:
                 "render_item_count": int(stats["rendered_items"]),
                 "dropped_item_count": int(stats["dropped_items"]),
                 "render_path": str(stats["render_path"]),
+                "build_duration_ms": round(float(stats.get("build_duration_ms", 0.0)), 3),
                 "render_duration_ms": round(float(stats.get("duration_ms", 0.0)), 3),
                 "visual_only": bool(stats.get("visual_only", True)),
             }
@@ -144,6 +190,7 @@ class OverlayRenderer:
                 "render_item_count": summary.get("render_item_count", 0),
                 "dropped_item_count": summary.get("dropped_item_count", 0),
                 "dropped_reasons": dict(summary.get("dropped_reasons", {})),
+                "build_duration_ms": summary.get("build_duration_ms", 0.0),
                 "render_duration_ms": summary.get("render_duration_ms", 0.0),
             },
         )
@@ -156,5 +203,6 @@ class OverlayRenderer:
             f"items={summary.get('item_count', 0)} "
             f"rendered={summary.get('render_item_count', 0)} "
             f"dropped={summary.get('dropped_item_count', 0)} "
+            f"build_ms={summary.get('build_duration_ms', 0.0):.3f} "
             f"duration_ms={summary.get('render_duration_ms', 0.0):.3f}."
         )

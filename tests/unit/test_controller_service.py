@@ -316,6 +316,50 @@ def test_sync_document_uses_central_controller_object_and_generated_group(monkey
     assert doc.OCFLastSync["controller_object"] == "OCF_Controller"
     assert doc.OCFLastSync["generated_group"] == "OCF_Generated"
     assert doc.OCFLastSync["requested_sync_mode"] == "full"
+    assert doc.OCFLastSync["builder_body_generation_ms"] >= 0.0
+    assert doc.OCFLastSync["builder_top_plate_generation_ms"] >= 0.0
+    assert doc.OCFLastSync["cutout_generation_ms"] >= 0.0
+    assert doc.OCFLastSync["boolean_phase_ms"] >= 0.0
+    assert doc.OCFLastSync["document_recompute_ms"] >= 0.0
+
+
+def test_sync_document_records_detailed_profile_metrics_when_enabled(monkeypatch):
+    class FakeBuilder:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def build_body(self, _controller):
+            return self.doc.addObject("Part::Feature", "ControllerBody")
+
+        def build_top_plate(self, _controller):
+            top = self.doc.addObject("Part::Feature", "TopPlate")
+            top.Shape = type("Shape", (), {"BoundBox": type("BoundBox", (), {"ZMin": 0.0, "ZLength": 3.0})(), "copy": lambda self: self})()
+            return top
+
+        def apply_cutouts(self, top, _components):
+            top.Shape = "cut"
+            return top
+
+        def build_keepouts(self, _components):
+            return []
+
+    monkeypatch.setattr("ocf_freecad.services.controller_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.freecad_gui.reveal_generated_objects", lambda _doc: 0)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.freecad_gui.activate_document", lambda _doc: True)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.freecad_gui.focus_view", lambda _doc, fit=True: True)
+
+    service = ControllerService()
+    doc = FakeFeatureDocument()
+    doc.OCFDebugProfiling = {"enabled": True, "log": False}
+
+    service.create_controller(doc, {"id": "demo"})
+
+    profile = doc.OCFPerformance["sections"]["sync"]
+
+    assert profile["full_sync"]["duration_ms"] >= 0.0
+    assert profile["builder_body_generation_ms"]["duration_ms"] >= 0.0
+    assert profile["builder_top_plate_generation_ms"]["duration_ms"] >= 0.0
+    assert profile["boolean_phase_ms"]["duration_ms"] >= 0.0
 
 
 def test_sync_document_clears_only_group_managed_objects(monkeypatch):

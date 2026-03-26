@@ -149,6 +149,19 @@ def test_project_state_store_loads_existing_controller_state():
     assert state["controller"]["id"] == "existing"
 
 
+def test_project_state_store_records_load_and_save_metrics():
+    doc = FakeDocument()
+
+    write_state(doc, {"controller": {"id": "metrics-demo"}, "components": [], "meta": {}})
+    state = read_state(doc)
+
+    assert state is not None
+    assert doc.OCFStateMetrics["save"]["source"] == "controller"
+    assert doc.OCFStateMetrics["save"]["payload_bytes"] > 0
+    assert doc.OCFStateMetrics["load"]["source"] == "primary"
+    assert doc.OCFStateMetrics["load"]["controller_id"] == "metrics-demo"
+
+
 def test_read_state_migrates_legacy_state_container_into_controller_object():
     doc = FakeDocument()
     legacy = get_state_container(doc, create=True)

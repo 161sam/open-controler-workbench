@@ -191,6 +191,9 @@ class ControllerBuilder:
 
     def apply_cutouts(self, base_obj, components):
         plan = self.plan_cutout_boolean(base_obj, components)
+        return self.apply_cutout_plan(base_obj, plan)
+
+    def apply_cutout_plan(self, base_obj, plan: CutoutBooleanPlan):
         for diagnostic in plan.diagnostics:
             LOGGER.warning(diagnostic)
         result_shape = base_obj.Shape.copy() if hasattr(base_obj.Shape, "copy") else base_obj.Shape

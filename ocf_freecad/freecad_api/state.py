@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from time import perf_counter
 from typing import Any
 
 from ocf_freecad.freecad_api.metadata import (
@@ -10,6 +11,7 @@ from ocf_freecad.freecad_api.metadata import (
     set_document_data,
 )
 from ocf_freecad.freecad_api.model import read_project_state, write_project_state
+from ocf_freecad.freecad_api.performance import record_profile_metric
 
 # Deprecated legacy persistence path. Keep read support for migration only.
 STATE_CONTAINER_NAME = "OCF_State"
@@ -35,17 +37,31 @@ class ProjectStateStore:
         return self._read_primary_state() is not None or self._read_runtime_cache() is not None
 
     def load(self) -> dict[str, Any] | None:
+        started_at = perf_counter()
         self.migrate_legacy_state()
         state = self._read_primary_state()
+        source = "primary"
         if state is not None:
+            self._store_metrics("load", started_at, source=source, controller_id=self._controller_id(state))
             return state
-        return self._read_runtime_cache()
+        state = self._read_runtime_cache()
+        source = "runtime_cache" if state is not None else "missing"
+        self._store_metrics("load", started_at, source=source, controller_id=self._controller_id(state))
+        return state
 
     def save(self, state: dict[str, Any]) -> dict[str, Any]:
+        started_at = perf_counter()
         normalized = deepcopy(state)
         write_project_state(self.doc, normalized)
         set_document_data(self.doc, STATE_CACHE_KEY, normalized)
         self._clear_redundant_paths()
+        self._store_metrics(
+            "save",
+            started_at,
+            source="controller",
+            controller_id=self._controller_id(normalized),
+            payload_bytes=len(json.dumps(normalized, sort_keys=True)),
+        )
         return deepcopy(normalized)
 
     def migrate_legacy_state(self) -> dict[str, Any] | None:
@@ -95,6 +111,24 @@ class ProjectStateStore:
         clear_document_data(self.doc, STATE_CACHE_JSON_KEY)
         clear_document_data(self.doc, LEGACY_STATE_KEY)
         clear_document_data(self.doc, LEGACY_STATE_JSON_KEY)
+
+    def _store_metrics(self, operation: str, started_at: float, **details: Any) -> None:
+        duration_ms = round((perf_counter() - started_at) * 1000.0, 3)
+        metrics = get_document_data(self.doc, "OCFStateMetrics", {})
+        if not isinstance(metrics, dict):
+            metrics = {}
+        metrics[operation] = {"duration_ms": duration_ms, **details}
+        set_document_data(self.doc, "OCFStateMetrics", metrics)
+        record_profile_metric(self.doc, "state", operation, duration_ms, details=details)
+
+    def _controller_id(self, state: dict[str, Any] | None) -> str | None:
+        if not isinstance(state, dict):
+            return None
+        controller = state.get("controller")
+        if not isinstance(controller, dict):
+            return None
+        controller_id = controller.get("id")
+        return None if controller_id in {None, ""} else str(controller_id)
 
 
 def get_project_state_store(doc: Any) -> ProjectStateStore:

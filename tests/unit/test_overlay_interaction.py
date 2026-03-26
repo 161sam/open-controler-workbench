@@ -43,6 +43,8 @@ def test_overlay_renderer_refresh_stays_visual_only_without_recompute():
 
     assert payload["summary"]["visual_only"] is True
     assert doc.recompute_count == recomputes_before
+    assert doc.OCFOverlayRender["build_duration_ms"] >= 0.0
+    assert doc.OCFOverlayRender["render_duration_ms"] >= 0.0
 
 
 def test_overlay_renderer_render_ignores_recompute_requests_for_visual_updates():
@@ -65,6 +67,20 @@ def test_overlay_renderer_render_ignores_recompute_requests_for_visual_updates()
 
     assert payload["summary"]["visual_only"] is True
     assert doc.recompute_count == recomputes_before
+
+
+def test_overlay_renderer_records_profile_metrics_when_enabled():
+    doc = FakeDocument()
+    doc.OCFDebugProfiling = {"enabled": True, "log": False}
+    controller_service = ControllerService()
+    controller_service.create_from_template(doc, "encoder_module")
+    renderer = OverlayRenderer(OverlayService(controller_service=controller_service))
+
+    renderer.refresh(doc)
+
+    profile = doc.OCFPerformance["sections"]["overlay"]
+    assert profile["build"]["duration_ms"] >= 0.0
+    assert profile["render"]["duration_ms"] >= 0.0
 
 
 def test_overlay_service_includes_constraint_feedback_items():
