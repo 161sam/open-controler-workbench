@@ -534,9 +534,11 @@ class ControllerService:
         state["meta"]["overrides"] = deepcopy(overrides) if overrides is not None else {}
         if state["components"]:
             state["meta"]["selection"] = state["components"][0]["id"]
+        layout_spec = deepcopy(project.get("layout", {})) if isinstance(project.get("layout"), dict) else {}
         _log_to_console(
             f"Generated project loaded for document '{getattr(doc, 'Name', '<unnamed>')}': "
-            f"template={template_id or '-'} variant={variant_id or '-'} components={len(state['components'])}."
+            f"template={template_id or '-'} variant={variant_id or '-'} "
+            f"components={len(state['components'])} layout_strategy={layout_spec.get('strategy') or '-'}."
         )
         state = self._prepare_initial_layout_state(state, project)
         self.save_state(doc, state)
@@ -599,9 +601,11 @@ class ControllerService:
         config = deepcopy(layout_spec.get("config", {})) if isinstance(layout_spec.get("config"), dict) else {}
 
         if isinstance(strategy, str) and strategy:
+            resolved_config = self._resolved_layout_config(strategy, config)
             _log_to_console(
                 f"Applying initial layout for template='{state['meta'].get('template_id') or '-'}' "
-                f"variant='{state['meta'].get('variant_id') or '-'}' using strategy '{strategy}'."
+                f"variant='{state['meta'].get('variant_id') or '-'}' using strategy '{strategy}' "
+                f"with config={resolved_config}."
             )
             state, result = self._apply_layout_to_state(
                 state,
@@ -635,7 +639,8 @@ class ControllerService:
 
         fallback_config = self._fallback_layout_config(state["controller"], len(state["components"]))
         _log_to_console(
-            "No layout strategy provided and no authored positions found; applying fallback grid placement.",
+            f"No layout strategy provided and no authored positions found; applying fallback grid placement "
+            f"with config={fallback_config}.",
             level="warning",
         )
         state, result = self._apply_layout_to_state(state, strategy="grid", config=fallback_config, source="fallback")

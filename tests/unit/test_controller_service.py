@@ -161,6 +161,22 @@ def test_create_from_variant_populates_variant_metadata():
     assert any(component["x"] != 0.0 or component["y"] != 0.0 for component in state["components"])
 
 
+def test_create_from_variant_uses_variant_layout_config_for_initial_positions():
+    service = ControllerService()
+    doc = FakeDocument()
+
+    state = service.create_from_variant(doc, "pad_grid_4x4_oled")
+
+    assert state["meta"]["template_id"] == "pad_grid_4x4"
+    assert state["meta"]["variant_id"] == "pad_grid_4x4_oled"
+    assert state["meta"]["layout"]["strategy"] == "zone"
+    assert state["meta"]["layout"]["config"]["rows"] == 4
+    assert state["meta"]["layout"]["config"]["cols"] == 4
+    assert state["meta"]["layout"]["config"]["spacing_x_mm"] == 36.0
+    assert state["meta"]["layout"]["config"]["spacing_y_mm"] == 36.0
+    assert any(component["x"] != 0.0 or component["y"] != 0.0 for component in state["components"])
+
+
 def test_update_select_and_context_work_together():
     service = ControllerService()
     doc = FakeDocument()

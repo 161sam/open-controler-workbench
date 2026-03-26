@@ -76,6 +76,16 @@ def test_template_generator_outputs_controller_project():
     assert project["components"][0]["zone_id"] is not None
 
 
+def test_template_generator_preserves_pad_grid_layout_config():
+    project = TemplateGenerator().generate_from_template("pad_grid_4x4")
+
+    assert project["layout"]["strategy"] == "grid"
+    assert project["layout"]["config"]["rows"] == 4
+    assert project["layout"]["config"]["cols"] == 4
+    assert project["layout"]["config"]["spacing_x_mm"] == 36
+    assert project["layout"]["config"]["spacing_y_mm"] == 36
+
+
 def test_unknown_template_id_raises_key_error():
     generator = TemplateGenerator()
 
