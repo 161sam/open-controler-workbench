@@ -74,7 +74,16 @@ def test_view_drag_controller_preview_is_visual_only_until_commit():
     controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "UP", "Button": "BUTTON1", "Position": (31, 29)})
     moved = controller_service.get_component(doc, "btn1")
 
-    assert preview == {"component_id": "btn1", "x": 31.0, "y": 29.0, "rotation": 0.0, "mode": "move"}
+    assert preview == {
+        "version": 1,
+        "component_id": "btn1",
+        "x": 31.0,
+        "y": 29.0,
+        "rotation": 0.0,
+        "mode": "move",
+        "snap_enabled": True,
+        "grid_mm": 1.0,
+    }
     assert during_state == before_state
     assert moved["x"] == 31.0
     assert moved["y"] == 29.0
@@ -147,4 +156,13 @@ def test_view_drag_controller_clamps_and_snaps_to_bounds():
 
     preview = controller.update_preview_from_screen(102.2, 81.1)
 
-    assert preview == {"component_id": "btn1", "x": 100.0, "y": 80.0, "rotation": 0.0, "mode": "move"}
+    assert preview == {
+        "version": 1,
+        "component_id": "btn1",
+        "x": 100.0,
+        "y": 80.0,
+        "rotation": 0.0,
+        "mode": "move",
+        "snap_enabled": True,
+        "grid_mm": 5.0,
+    }

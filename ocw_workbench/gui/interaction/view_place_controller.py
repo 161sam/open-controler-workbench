@@ -3,11 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ocw_workbench.gui.overlay.renderer import OverlayRenderer
-from ocw_workbench.gui.interaction.view_place_preview import (
-    clear_preview_state,
-    load_preview_state,
-    store_preview_state,
-)
+from ocw_workbench.gui.interaction.view_place_preview import load_preview_state
 from ocw_workbench.gui.panels._common import log_to_console
 from ocw_workbench.services.controller_service import ControllerService
 from ocw_workbench.services.interaction_service import InteractionService
@@ -70,7 +66,7 @@ class ViewPlaceController:
 
     def cancel(self) -> None:
         if self.doc is not None:
-            clear_preview_state(self.doc)
+            self.interaction_service.clear_component_preview(self.doc)
             self.overlay_renderer.refresh(self.doc)
         self._remove_callbacks()
         self.doc = None
@@ -111,7 +107,15 @@ class ViewPlaceController:
             snap_enabled=bool(settings.get("snap_enabled", True)),
             grid_mm=float(settings.get("grid_mm", 1.0)),
         )
-        payload = store_preview_state(self.doc, template_id=self.active_template_id, x=x, y=y, mode="place")
+        payload = self.interaction_service.add_component_preview(
+            self.doc,
+            self.active_template_id,
+            target_x=x,
+            target_y=y,
+            rotation=0.0,
+            grid_mm=float(settings.get("grid_mm", 1.0)),
+            snap_enabled=bool(settings.get("snap_enabled", True)),
+        )
         self.overlay_renderer.refresh(self.doc)
         return payload
 

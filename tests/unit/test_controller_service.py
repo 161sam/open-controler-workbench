@@ -121,6 +121,19 @@ def test_select_component_uses_visual_refresh_without_recompute():
     assert doc.OCWLastSync["requested_sync_mode"] == "visual_only"
 
 
+def test_refresh_document_visuals_does_not_recompute_when_not_requested():
+    service = ControllerService()
+    doc = FakeDocument()
+    service.create_controller(doc, {"id": "demo"})
+    recomputes_before = doc.recompute_count
+
+    service.refresh_document_visuals(doc, recompute=False)
+
+    assert doc.recompute_count == recomputes_before
+    assert doc.OCWLastSync["sync_mode"] == "visual_only"
+    assert doc.OCWLastSync["requested_sync_mode"] == "visual_only"
+
+
 def test_update_controller_updates_geometry_fields():
     service = ControllerService()
     doc = FakeDocument()

@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from ocw_workbench.gui.interaction.view_place_preview import clear_preview_state, store_preview_state
 from ocw_workbench.layout.snap import snap_point
 from ocw_workbench.services.controller_service import ControllerService
 
@@ -66,6 +67,72 @@ class InteractionService:
         if template_id is not None:
             self.controller_service.library_service.get(template_id)
         return self.update_settings(doc, {"active_component_template_id": template_id})
+
+    def add_component_preview(
+        self,
+        doc: Any,
+        template_id: str,
+        target_x: float,
+        target_y: float,
+        rotation: float = 0.0,
+        grid_mm: float | None = None,
+        snap_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        self.controller_service.library_service.get(template_id)
+        settings = self.get_settings(doc)
+        resolved_grid = float(grid_mm if grid_mm is not None else settings["grid_mm"])
+        resolved_snap = settings["snap_enabled"] if snap_enabled is None else bool(snap_enabled)
+        x = float(target_x)
+        y = float(target_y)
+        if resolved_snap:
+            x, y = snap_point(x, y, resolved_grid)
+        payload = store_preview_state(
+            doc,
+            template_id=template_id,
+            x=x,
+            y=y,
+            rotation=float(rotation),
+            mode="place",
+            snap_enabled=resolved_snap,
+            grid_mm=resolved_grid,
+        )
+        self.controller_service.refresh_document_visuals(doc, recompute=False)
+        return payload
+
+    def move_component_preview(
+        self,
+        doc: Any,
+        component_id: str,
+        target_x: float,
+        target_y: float,
+        rotation: float | None = None,
+        grid_mm: float | None = None,
+        snap_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        component = self.controller_service.get_component(doc, component_id)
+        settings = self.get_settings(doc)
+        resolved_grid = float(grid_mm if grid_mm is not None else settings["grid_mm"])
+        resolved_snap = settings["snap_enabled"] if snap_enabled is None else bool(snap_enabled)
+        x = float(target_x)
+        y = float(target_y)
+        if resolved_snap:
+            x, y = snap_point(x, y, resolved_grid)
+        payload = store_preview_state(
+            doc,
+            component_id=component_id,
+            x=x,
+            y=y,
+            rotation=float(component.get("rotation", 0.0) if rotation is None else rotation),
+            mode="move",
+            snap_enabled=resolved_snap,
+            grid_mm=resolved_grid,
+        )
+        self.controller_service.refresh_document_visuals(doc, recompute=False)
+        return payload
+
+    def clear_component_preview(self, doc: Any) -> None:
+        clear_preview_state(doc)
+        self.controller_service.refresh_document_visuals(doc, recompute=False)
 
 
     def arm_move(self, doc: Any, component_id: str | None = None) -> dict[str, Any]:

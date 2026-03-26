@@ -5,6 +5,7 @@ from typing import Any
 from ocw_workbench.freecad_api.metadata import clear_document_data, get_document_data, set_document_data
 
 PREVIEW_METADATA_KEY = "OCWDragPreview"
+PREVIEW_SCHEMA_VERSION = 1
 
 
 def serialize_preview_state(
@@ -17,10 +18,13 @@ def serialize_preview_state(
     component_id: str | None = None,
 ) -> dict[str, Any]:
     payload = {
+        "version": PREVIEW_SCHEMA_VERSION,
         "x": float(x),
         "y": float(y),
         "rotation": float(rotation),
         "mode": str(mode or "place"),
+        "snap_enabled": None,
+        "grid_mm": None,
     }
     if template_id is not None:
         payload["template_id"] = str(template_id)
@@ -38,7 +42,7 @@ def load_preview_state(doc: Any) -> dict[str, Any] | None:
     if not isinstance(template_id, str) and not isinstance(component_id, str):
         return None
     try:
-        return serialize_preview_state(
+        preview = serialize_preview_state(
             x=float(payload.get("x", 0.0)),
             y=float(payload.get("y", 0.0)),
             rotation=float(payload.get("rotation", 0.0)),
@@ -46,6 +50,12 @@ def load_preview_state(doc: Any) -> dict[str, Any] | None:
             template_id=template_id if isinstance(template_id, str) and template_id else None,
             component_id=component_id if isinstance(component_id, str) and component_id else None,
         )
+        preview["version"] = int(payload.get("version", PREVIEW_SCHEMA_VERSION) or PREVIEW_SCHEMA_VERSION)
+        preview["snap_enabled"] = (
+            bool(payload["snap_enabled"]) if payload.get("snap_enabled") is not None else None
+        )
+        preview["grid_mm"] = float(payload["grid_mm"]) if payload.get("grid_mm") is not None else None
+        return preview
     except Exception:
         return None
 
@@ -59,6 +69,8 @@ def store_preview_state(
     rotation: float = 0.0,
     mode: str = "place",
     component_id: str | None = None,
+    snap_enabled: bool | None = None,
+    grid_mm: float | None = None,
 ) -> dict[str, Any]:
     payload = serialize_preview_state(
         x=x,
@@ -68,6 +80,8 @@ def store_preview_state(
         template_id=template_id,
         component_id=component_id,
     )
+    payload["snap_enabled"] = None if snap_enabled is None else bool(snap_enabled)
+    payload["grid_mm"] = None if grid_mm is None else float(grid_mm)
     set_document_data(doc, PREVIEW_METADATA_KEY, payload)
     return payload
 

@@ -5,7 +5,7 @@ from typing import Any
 
 from ocw_workbench.gui.interaction.hit_test import hit_test_components
 from ocw_workbench.gui.interaction.view_place_controller import map_view_point_to_controller_xy
-from ocw_workbench.gui.interaction.view_place_preview import clear_preview_state, load_preview_state, store_preview_state
+from ocw_workbench.gui.interaction.view_place_preview import load_preview_state
 from ocw_workbench.gui.overlay.renderer import OverlayRenderer
 from ocw_workbench.gui.panels._common import log_to_console
 from ocw_workbench.services.controller_service import ControllerService
@@ -57,7 +57,7 @@ class ViewDragController:
         doc = self.doc
         session = self.session
         if doc is not None:
-            clear_preview_state(doc)
+            self.interaction_service.clear_component_preview(doc)
             if session is not None:
                 self.controller_service.select_component(doc, session.previous_selection)
             self.overlay_renderer.refresh(doc)
@@ -114,13 +114,14 @@ class ViewDragController:
             previous_selection=previous_selection,
             dragging=True,
         )
-        store_preview_state(
+        self.interaction_service.move_component_preview(
             self.doc,
             component_id=component_id,
-            x=float(component["x"]),
-            y=float(component["y"]),
+            target_x=float(component["x"]),
+            target_y=float(component["y"]),
             rotation=float(component.get("rotation", 0.0) or 0.0),
-            mode="move",
+            grid_mm=float(self.interaction_service.get_settings(self.doc).get("grid_mm", 1.0)),
+            snap_enabled=bool(self.interaction_service.get_settings(self.doc).get("snap_enabled", True)),
         )
         self.overlay_renderer.refresh(self.doc)
         self._publish_status(f"Dragging {component_id}... release to commit, ESC to cancel.")
@@ -141,13 +142,14 @@ class ViewDragController:
             snap_enabled=bool(settings.get("snap_enabled", True)),
             grid_mm=float(settings.get("grid_mm", 1.0)),
         )
-        payload = store_preview_state(
+        payload = self.interaction_service.move_component_preview(
             self.doc,
             component_id=self.session.component_id,
-            x=x,
-            y=y,
+            target_x=x,
+            target_y=y,
             rotation=self.session.original_rotation,
-            mode="move",
+            grid_mm=float(settings.get("grid_mm", 1.0)),
+            snap_enabled=bool(settings.get("snap_enabled", True)),
         )
         self.overlay_renderer.refresh(self.doc)
         return payload

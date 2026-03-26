@@ -63,6 +63,9 @@ FreeCAD document rebuild and visual refresh live in `DocumentSyncService`.
 Project state is persisted on the `OCW_Controller` document object.
 `ProjectJson` is the primary source of truth for controller projects.
 Legacy document metadata and `OCW_State` containers are migration inputs only.
+Interactive preview state is not persisted in `ProjectJson`.
+Preview tools store transient payloads in document metadata under `OCWDragPreview`.
+Committed state lives in `ProjectJson`; preview state lives only in metadata and drives overlay-only ghosts.
 
 Generated document geometry is owned by the `OCW_Generated` group.
 Regular cleanup and rebuild paths operate on group membership instead of global name scans.
