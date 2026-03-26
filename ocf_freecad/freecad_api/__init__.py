@@ -1,1 +1,1 @@
-__all__ = ["document", "objects", "shapes"]
+__all__ = ["document", "gui", "metadata", "model", "objects", "shapes", "state"]

@@ -4,6 +4,17 @@ from typing import Any
 
 from ocf_freecad.freecad_api import gui as freecad_gui
 from ocf_freecad.freecad_api.metadata import get_document_data, set_document_data, update_document_data
+from ocf_freecad.freecad_api.model import (
+    CONTROLLER_OBJECT_LABEL,
+    CONTROLLER_OBJECT_NAME,
+    GENERATED_GROUP_LABEL,
+    GENERATED_GROUP_NAME,
+    clear_generated_group,
+    get_controller_object,
+    get_generated_group,
+    group_generated_object,
+    iter_generated_objects,
+)
 from ocf_freecad.freecad_api.state import STATE_CONTAINER_LABEL, STATE_CONTAINER_NAME, read_state, write_state
 from ocf_freecad.domain.component import Component
 from ocf_freecad.domain.controller import Controller
@@ -334,12 +345,16 @@ class ControllerService:
 
     def sync_document(self, doc: Any) -> None:
         state = self.get_state(doc)
+        controller_object = get_controller_object(doc, create=hasattr(doc, "addObject"))
+        generated_group = get_generated_group(doc, create=hasattr(doc, "addObject"))
         set_document_data(doc, "OCFLastSync", {
             "controller_id": state["controller"]["id"],
             "component_count": len(state["components"]),
             "template_id": state["meta"].get("template_id"),
             "variant_id": state["meta"].get("variant_id"),
             "selection": state["meta"].get("selection"),
+            "controller_object": getattr(controller_object, "Name", CONTROLLER_OBJECT_NAME) if controller_object is not None else None,
+            "generated_group": getattr(generated_group, "Name", GENERATED_GROUP_NAME) if generated_group is not None else None,
         })
         _log_to_console(
             f"Syncing document '{getattr(doc, 'Name', '<unnamed>')}' "
@@ -360,10 +375,13 @@ class ControllerService:
         builder = ControllerBuilder(doc=doc)
         body = builder.build_body(controller)
         self._set_generated_label(body, "OCF_ControllerBody")
+        group_generated_object(doc, body)
         top = builder.build_top_plate(controller)
         self._set_generated_label(top, "OCF_TopPlate")
+        group_generated_object(doc, top)
         top_cut = builder.apply_cutouts(top, components)
         self._set_generated_label(top_cut, "OCF_TopPlateCut")
+        group_generated_object(doc, top_cut)
         self._create_component_markers(doc, builder, components, controller.height)
         self._apply_selection_highlight(doc, state["meta"].get("selection"))
         if hasattr(doc, "recompute"):
@@ -394,6 +412,7 @@ class ControllerService:
                     z=float(z_height),
                 )
                 self._set_generated_label(marker, name)
+                group_generated_object(doc, marker)
                 continue
             if keepout["shape"] == "rect":
                 marker = __import__("ocf_freecad.freecad_api.shapes", fromlist=["create_rect_prism"]).create_rect_prism(
@@ -407,14 +426,18 @@ class ControllerService:
                     z=float(z_height),
                 )
                 self._set_generated_label(marker, name)
+                group_generated_object(doc, marker)
 
     def _clear_generated_objects(self, doc: Any) -> None:
         if not hasattr(doc, "Objects") or not hasattr(doc, "removeObject"):
             return
+        clear_generated_group(doc)
         for obj in list(doc.Objects):
             name = getattr(obj, "Name", "")
             label = getattr(obj, "Label", "")
-            if name == STATE_CONTAINER_NAME or label == STATE_CONTAINER_LABEL:
+            if name in {STATE_CONTAINER_NAME, CONTROLLER_OBJECT_NAME, GENERATED_GROUP_NAME}:
+                continue
+            if label in {STATE_CONTAINER_LABEL, CONTROLLER_OBJECT_LABEL, GENERATED_GROUP_LABEL}:
                 continue
             if (
                 str(name).startswith("OCF_")
@@ -716,10 +739,4 @@ class ControllerService:
                 view.LineColor = (0.9, 0.3, 0.2) if is_selected else (0.2, 0.2, 0.2)
 
     def _generated_object_count(self, doc: Any) -> int:
-        count = 0
-        for obj in getattr(doc, "Objects", []):
-            name = str(getattr(obj, "Name", ""))
-            label = str(getattr(obj, "Label", ""))
-            if name.startswith("OCF_") or label.startswith("OCF_"):
-                count += 1
-        return count
+        return len(iter_generated_objects(doc))

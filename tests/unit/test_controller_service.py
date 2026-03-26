@@ -11,6 +11,48 @@ class FakeDocument:
         self.recompute_count += 1
 
 
+class FakeFeatureDocument(FakeDocument):
+    def __init__(self) -> None:
+        super().__init__()
+        self._objects_by_name = {}
+
+    def addObject(self, type_name: str, name: str):
+        obj = FakeFeature(type_name, name)
+        self.Objects.append(obj)
+        self._objects_by_name[name] = obj
+        return obj
+
+    def getObject(self, name: str):
+        return self._objects_by_name.get(name)
+
+    def removeObject(self, name: str) -> None:
+        self.removed.append(name)
+        self.Objects = [obj for obj in self.Objects if obj.Name != name]
+        self._objects_by_name.pop(name, None)
+
+
+class FakeFeature:
+    def __init__(self, type_name: str, name: str) -> None:
+        self.TypeId = type_name
+        self.Name = name
+        self.Label = name
+        self.PropertiesList = []
+        self.Group = []
+        self.ViewObject = type("FakeViewObject", (), {"Visibility": True, "ShapeColor": None, "LineColor": None})()
+
+    def addProperty(self, _type_name: str, name: str, _group: str, _doc: str) -> None:
+        if name not in self.PropertiesList:
+            self.PropertiesList.append(name)
+            setattr(self, name, "")
+
+    def setEditorMode(self, _name: str, _mode: int) -> None:
+        return
+
+    def addObject(self, obj) -> None:
+        if obj not in self.Group:
+            self.Group.append(obj)
+
+
 def test_create_controller_and_add_components_without_freecad_objects():
     service = ControllerService()
     doc = FakeDocument()
@@ -172,3 +214,42 @@ def test_create_from_template_uses_fallback_grid_when_layout_is_missing():
     assert state["meta"]["layout"]["source"] == "fallback"
     assert len({(component["x"], component["y"]) for component in state["components"]}) == 3
     assert all(component["x"] != 0.0 or component["y"] != 0.0 for component in state["components"])
+
+
+def test_sync_document_uses_central_controller_object_and_generated_group(monkeypatch):
+    class FakeBuilder:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def build_body(self, _controller):
+            return self.doc.addObject("Part::Feature", "ControllerBody")
+
+        def build_top_plate(self, _controller):
+            return self.doc.addObject("Part::Feature", "TopPlate")
+
+        def apply_cutouts(self, top, _components):
+            top.Shape = "cut"
+            return top
+
+        def build_keepouts(self, _components):
+            return []
+
+    monkeypatch.setattr("ocf_freecad.services.controller_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.freecad_gui.reveal_generated_objects", lambda _doc: 0)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.freecad_gui.activate_document", lambda _doc: True)
+    monkeypatch.setattr("ocf_freecad.services.controller_service.freecad_gui.focus_view", lambda _doc, fit=True: True)
+
+    service = ControllerService()
+    doc = FakeFeatureDocument()
+
+    service.create_controller(doc, {"id": "demo"})
+
+    controller = doc.getObject("OCF_Controller")
+    generated = doc.getObject("OCF_Generated")
+
+    assert controller is not None
+    assert generated is not None
+    assert controller.ProjectJson
+    assert [obj.Label for obj in generated.Group] == ["OCF_ControllerBody", "OCF_TopPlateCut"]
+    assert doc.OCFLastSync["controller_object"] == "OCF_Controller"
+    assert doc.OCFLastSync["generated_group"] == "OCF_Generated"
