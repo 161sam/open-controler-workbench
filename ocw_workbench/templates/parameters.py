@@ -6,6 +6,7 @@ from typing import Any
 
 
 _PATH_TOKEN_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)(\[(?P<key>[^\]]+)\])?$")
+_PARAMETER_REFERENCE_RE = re.compile(r"\$\{parameters\.([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
 class TemplateParameterResolver:
@@ -51,6 +52,7 @@ class TemplateParameterResolver:
             "preset_id": ui_model["preset_id"],
         }
         self._apply_bindings(resolved, ui_model["values"])
+        self._resolve_parameter_references(resolved, ui_model["values"])
         return resolved
 
     def normalize_definitions(self, template: dict[str, Any]) -> list[dict[str, Any]]:
@@ -316,6 +318,39 @@ class TemplateParameterResolver:
         if match is None:
             raise ValueError(f"Invalid parameter binding path token '{token}'")
         return match.group("name"), match.group("key")
+
+    def _resolve_parameter_references(self, template: dict[str, Any], parameters: dict[str, Any]) -> None:
+        for field in ("controller", "zones", "components", "layout", "constraints", "defaults", "firmware", "ocf", "metadata"):
+            if field in template:
+                template[field] = self._resolve_reference_value(template[field], parameters, path=field)
+
+    def _resolve_reference_value(self, value: Any, parameters: dict[str, Any], *, path: str) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: self._resolve_reference_value(item, parameters, path=f"{path}.{key}")
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [
+                self._resolve_reference_value(item, parameters, path=f"{path}[{index}]")
+                for index, item in enumerate(value)
+            ]
+        if not isinstance(value, str):
+            return value
+        exact_match = _PARAMETER_REFERENCE_RE.fullmatch(value.strip())
+        if exact_match is not None:
+            parameter_id = exact_match.group(1)
+            if parameter_id not in parameters:
+                raise ValueError(f"Unknown parameter reference '{parameter_id}' at {path}")
+            return deepcopy(parameters[parameter_id])
+
+        def replace(match: re.Match[str]) -> str:
+            parameter_id = match.group(1)
+            if parameter_id not in parameters:
+                raise ValueError(f"Unknown parameter reference '{parameter_id}' at {path}")
+            return str(parameters[parameter_id])
+
+        return _PARAMETER_REFERENCE_RE.sub(replace, value)
 
     def _normalize_options(self, parameter_id: str, parameter_type: str, raw: Any) -> list[dict[str, Any]]:
         if parameter_type != "enum":

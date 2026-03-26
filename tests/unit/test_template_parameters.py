@@ -126,3 +126,39 @@ def test_parameter_bindings_map_component_selection_for_display_and_knob_profile
 
     assert resolved["components"][0]["library_ref"] == "adafruit_oled_130_i2c_ssd1306"
     assert resolved["components"][1]["library_ref"] == "generic_ec11_encoder_with_push_large_knob"
+
+
+def test_parameter_references_resolve_exact_numeric_and_embedded_string_values():
+    template = {
+        "controller": {
+            "width": "${parameters.case_width}",
+            "surface": {
+                "width": "${parameters.case_width}",
+                "label": "Case ${parameters.case_width} mm",
+            },
+        },
+        "parameters": [
+            {"id": "case_width", "type": "float", "default": 180.0},
+        ],
+    }
+
+    resolved = TemplateParameterResolver().apply(template, values={"case_width": 190.0})
+
+    assert resolved["controller"]["width"] == 190.0
+    assert resolved["controller"]["surface"]["width"] == 190.0
+    assert resolved["controller"]["surface"]["label"] == "Case 190.0 mm"
+
+
+def test_parameter_references_raise_clear_error_for_unknown_parameter():
+    template = {
+        "controller": {"width": "${parameters.unknown_width}"},
+        "parameters": [{"id": "case_width", "type": "float", "default": 180.0}],
+    }
+
+    try:
+        TemplateParameterResolver().apply(template)
+    except ValueError as exc:
+        assert "unknown_width" in str(exc)
+        assert "controller.width" in str(exc)
+    else:
+        raise AssertionError("Expected parameter reference error")

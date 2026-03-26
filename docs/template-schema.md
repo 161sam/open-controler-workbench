@@ -89,6 +89,31 @@ Supported target path patterns:
 - `components[component_id].library_ref`
 - `zones[zone_id].width`
 
+## Parameter References
+
+Templates can also reference final resolved values directly with a strictly limited placeholder syntax:
+
+```yaml
+controller:
+  width: "${parameters.case_width}"
+  surface:
+    width: "${parameters.case_width}"
+layout:
+  config:
+    cols: "${parameters.pad_count_x}"
+```
+
+Rules:
+
+- only `${parameters.<id>}` is supported
+- no arbitrary evaluation
+- no function calls
+- no math operators
+- if the whole field is a reference, the resolved value keeps its original type
+- if the reference is embedded into a longer string, the resolved value is stringified
+
+This keeps the system deterministic and readable while still allowing templates, layout configs, and component data to consume centralized resolved values.
+
 ### Generated Component Grids
 
 Use `parameter_bindings.component_grids` for parameter-driven repeated component generation.
@@ -110,6 +135,12 @@ This appends generated components to the template component list.
 ## Runtime And State
 
 - Template defaults are applied automatically during template or variant resolution.
+- Resolution order is:
+  - parameter definitions with defaults
+  - template preset values
+  - project or runtime overrides
+  - direct parameter bindings
+  - `${parameters.*}` reference substitution
 - Runtime parameter overrides use:
 
 ```yaml

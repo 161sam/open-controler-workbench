@@ -9,10 +9,12 @@ template:
     - "performance"
   version: "1.0"
 controller:
+  width: "${parameters.case_width}"
+  depth: "${parameters.case_depth}"
   surface:
     type: "rounded_rect"
-    width: 180
-    height: 180
+    width: "${parameters.case_width}"
+    height: "${parameters.case_depth}"
     corner_radius: 10
   height: 32
   top_thickness: 3
@@ -28,8 +30,8 @@ components: []
 layout:
   strategy: "grid"
   config:
-    rows: 4
-    cols: 4
+    rows: "${parameters.pad_count_y}"
+    cols: "${parameters.pad_count_x}"
     spacing_x_mm: 36
     spacing_y_mm: 36
 parameters:
@@ -85,19 +87,6 @@ parameter_presets:
       case_width: 300.0
       case_depth: 110.0
 parameter_bindings:
-  values:
-    - target: "controller.width"
-      parameter: "case_width"
-    - target: "controller.depth"
-      parameter: "case_depth"
-    - target: "controller.surface.width"
-      parameter: "case_width"
-    - target: "controller.surface.height"
-      parameter: "case_depth"
-    - target: "layout.config.cols"
-      parameter: "pad_count_x"
-    - target: "layout.config.rows"
-      parameter: "pad_count_y"
   component_grids:
     - id_prefix: "pad"
       count_x_parameter: "pad_count_x"

@@ -82,6 +82,23 @@ The document tree uses `OCW_Controller` as the visible project root.
 
 Schema → Domain → Resolver → Geometry → FreeCAD → Export
 
+### Parameter Resolution Flow
+
+Parameterized templates follow a strict value-resolution path before layout or builder work starts:
+
+- template parameter defaults
+- optional template preset values
+- project or runtime overrides
+- direct parameter bindings into controller, layout, zones, or components
+- `${parameters.<id>}` substitution in template fields
+
+The important boundary is:
+
+State → template or variant resolver → resolved template data → layout engine / builder / sync
+
+UI panels only edit staged parameter values or store them in project state.
+They do not push ad-hoc geometry values directly into builder code.
+
 ## Zielarchitektur
 
 - Schema-driven Design

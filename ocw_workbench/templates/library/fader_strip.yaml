@@ -8,10 +8,12 @@ template:
     - "strip"
   version: "1.0"
 controller:
+  width: "${parameters.case_width}"
+  depth: "${parameters.case_depth}"
   surface:
     type: "rounded_rect"
-    width: 80
-    height: 140
+    width: "${parameters.case_width}"
+    height: "${parameters.case_depth}"
     corner_radius: 8
   height: 30
   top_thickness: 3
@@ -94,14 +96,6 @@ parameter_presets:
       case_depth: 128.0
 parameter_bindings:
   values:
-    - target: "controller.width"
-      parameter: "case_width"
-    - target: "controller.depth"
-      parameter: "case_depth"
-    - target: "controller.surface.width"
-      parameter: "case_width"
-    - target: "controller.surface.height"
-      parameter: "case_depth"
     - target: "components[fader1].library_ref"
       parameter: "fader_length"
       value_map:
