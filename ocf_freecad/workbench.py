@@ -34,6 +34,9 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
     ToolTip = "Modular MIDI Controller Design"
     Icon = ""
 
+    def GetClassName(self) -> str:
+        return "Gui::PythonWorkbench"
+
     def Initialize(self) -> None:
         if Gui is None:
             return
