@@ -45,10 +45,10 @@ def format_validation_message(report: dict[str, Any]) -> tuple[str, str]:
     errors = int(summary.get("error_count", 0))
     warnings = int(summary.get("warning_count", 0))
     if errors:
-        return (f"Validation found {errors} errors and {warnings} warnings. Fix the highlighted components before export.", "error")
+        return (f"{errors} errors, {warnings} warnings. Resolve the errors before export.", "error")
     if warnings:
-        return (f"Validation finished with {warnings} warnings and no blocking errors.", "warning")
-    return ("Validation passed with no errors or warnings.", "success")
+        return (f"{warnings} warnings, no blocking errors.", "warning")
+    return ("Validation passed. No errors or warnings.", "success")
 
 
 def friendly_ui_error(prefix: str, exc: Exception, hint: str | None = None) -> str:

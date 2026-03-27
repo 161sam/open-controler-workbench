@@ -4,13 +4,15 @@ from typing import Any
 
 from ocw_workbench.gui.feedback import apply_status_message, format_validation_message, friendly_ui_error
 from ocw_workbench.gui.panels._common import (
-    configure_text_panel,
     FallbackButton,
     FallbackLabel,
     FallbackText,
     load_qt,
-    set_tooltip,
+    set_enabled,
+    set_label_text,
+    set_size_policy,
     set_text,
+    set_tooltip,
     wrap_widget_in_scroll_area,
 )
 from ocw_workbench.services.controller_service import ControllerService
@@ -43,7 +45,11 @@ class ConstraintsPanel:
         if isinstance(validation, dict):
             self._render_report(validation)
         else:
-            set_text(self.form["results"], "Run validation to check spacing, edge distance, and placement issues.")
+            self._messages = []
+            self._set_summary_counts(errors=0, warnings=0)
+            self._set_result_overview("Run Validate Layout to check spacing, edge distance, and placement issues.")
+            self._clear_results()
+            self._set_detail_text("No validation results yet.")
             apply_status_message(self.form["status"], "No validation results yet.", level="info")
 
     def validate(self) -> dict[str, Any]:
@@ -66,6 +72,25 @@ class ConstraintsPanel:
             self._publish_status(f"Selected component '{component_id}' from validation report.")
         return component_id
 
+    def handle_result_selection_changed(self) -> None:
+        issue_index = self._selected_issue_index()
+        if issue_index is None:
+            self._set_detail_text("Select an issue to inspect its details.")
+            set_enabled(self.form["focus_button"], False)
+            return
+        item = self._messages[issue_index]
+        self._set_detail_text(_format_issue_details(item))
+        set_enabled(self.form["focus_button"], bool(item.get("source_component")))
+
+    def handle_result_activated(self, *_args: Any) -> None:
+        self.handle_focus_clicked()
+
+    def handle_focus_clicked(self) -> None:
+        issue_index = self._selected_issue_index()
+        if issue_index is None:
+            return
+        self.select_issue_component(issue_index)
+
     def handle_validate_clicked(self) -> None:
         try:
             self.validate()
@@ -79,18 +104,20 @@ class ConstraintsPanel:
     def _render_report(self, report: dict[str, Any]) -> None:
         summary = report["summary"]
         self._messages = list(report["errors"]) + list(report["warnings"])
-        lines = [
-            f"Errors: {summary['error_count']}",
-            f"Warnings: {summary['warning_count']}",
-            "",
-        ]
-        for item in report["errors"]:
-            lines.append(_format_message("ERROR", item))
-        for item in report["warnings"]:
-            lines.append(_format_message("WARN", item))
-        set_text(self.form["results"], "\n".join(lines))
+        self._set_summary_counts(
+            errors=int(summary.get("error_count", 0)),
+            warnings=int(summary.get("warning_count", 0)),
+        )
+        self._set_result_overview(_result_overview_text(summary))
+        self._populate_results(report)
         message, level = format_validation_message(report)
         apply_status_message(self.form["status"], message, level=level)
+        if self._messages:
+            self._set_detail_text(_format_issue_details(self._messages[0]))
+            self.handle_result_selection_changed()
+        else:
+            self._set_detail_text("Validation passed. No issues to review.")
+            set_enabled(self.form["focus_button"], False)
 
     def _publish_status(self, message: str, level: str = "info") -> None:
         apply_status_message(self.form["status"], message, level=level)
@@ -101,9 +128,109 @@ class ConstraintsPanel:
         button = self.form["validate_button"]
         if hasattr(button, "clicked"):
             button.clicked.connect(self.handle_validate_clicked)
+        results = self.form.get("results")
+        if hasattr(results, "itemSelectionChanged"):
+            results.itemSelectionChanged.connect(self.handle_result_selection_changed)
+        item_activated = getattr(results, "itemActivated", None)
+        if hasattr(item_activated, "connect"):
+            item_activated.connect(self.handle_result_activated)
+        focus_button = self.form.get("focus_button")
+        if hasattr(focus_button, "clicked"):
+            focus_button.clicked.connect(self.handle_focus_clicked)
 
     def _configure_tooltips(self) -> None:
         set_tooltip(self.form["validate_button"], "Run spacing, overlap and edge-distance checks for the current controller.")
+        set_tooltip(self.form["focus_button"], "Select the component related to the currently highlighted issue.")
+
+    def _set_summary_counts(self, *, errors: int, warnings: int) -> None:
+        set_label_text(self.form["error_count"], str(errors))
+        set_label_text(self.form["warning_count"], str(warnings))
+        if errors > 0:
+            state_text = "Needs fixes"
+            state_level = "error"
+        elif warnings > 0:
+            state_text = "Warnings only"
+            state_level = "warning"
+        else:
+            state_text = "Ready"
+            state_level = "success"
+        set_label_text(self.form["state_value"], state_text)
+        if hasattr(self.form["state_value"], "setStyleSheet"):
+            self.form["state_value"].setStyleSheet(_summary_value_style(state_level))
+
+    def _set_result_overview(self, message: str) -> None:
+        set_label_text(self.form["results_overview"], message)
+
+    def _clear_results(self) -> None:
+        results = self.form["results"]
+        if hasattr(results, "clear"):
+            results.clear()
+
+    def _populate_results(self, report: dict[str, Any]) -> None:
+        _qtcore, _qtgui, qtwidgets = load_qt()
+        results = self.form["results"]
+        if qtwidgets is None or not hasattr(qtwidgets, "QTreeWidgetItem"):
+            lines = [
+                _format_message("ERROR", item) for item in report.get("errors", [])
+            ] + [
+                _format_message("WARN", item) for item in report.get("warnings", [])
+            ]
+            set_text(results, "\n".join(lines) if lines else "No issues found.")
+            return
+        results.clear()
+        groups = (
+            ("Errors", "errors", report.get("errors", []), "error"),
+            ("Warnings", "warnings", report.get("warnings", []), "warning"),
+        )
+        message_index = 0
+        for title, _key, items, level in groups:
+            parent = qtwidgets.QTreeWidgetItem([title, str(len(items)), ""])
+            if hasattr(parent, "setData") and _qtcore is not None:
+                parent.setData(0, _qtcore.Qt.UserRole, None)
+            results.addTopLevelItem(parent)
+            brush = _brush_for_level(level)
+            if brush is not None and hasattr(parent, "setForeground"):
+                parent.setForeground(0, brush)
+            for item in items:
+                row = qtwidgets.QTreeWidgetItem(
+                    [
+                        "Error" if level == "error" else "Warning",
+                        str(item.get("source_component") or "-"),
+                        str(item.get("message") or item.get("description") or "Issue"),
+                    ]
+                )
+                if hasattr(row, "setData") and _qtcore is not None:
+                    row.setData(0, _qtcore.Qt.UserRole, message_index)
+                if brush is not None and hasattr(row, "setForeground"):
+                    row.setForeground(0, brush)
+                parent.addChild(row)
+                message_index += 1
+            if hasattr(parent, "setExpanded"):
+                parent.setExpanded(True)
+        if hasattr(results, "expandAll"):
+            results.expandAll()
+        first_issue = None
+        for top_index in range(results.topLevelItemCount() if hasattr(results, "topLevelItemCount") else 0):
+            parent = results.topLevelItem(top_index)
+            if parent is not None and hasattr(parent, "childCount") and parent.childCount() > 0:
+                first_issue = parent.child(0)
+                break
+        if first_issue is not None and hasattr(results, "setCurrentItem"):
+            results.setCurrentItem(first_issue)
+
+    def _selected_issue_index(self) -> int | None:
+        _qtcore, _qtgui, _qtwidgets = load_qt()
+        results = self.form["results"]
+        if _qtcore is None or not hasattr(results, "currentItem"):
+            return None
+        current = results.currentItem()
+        if current is None or not hasattr(current, "data"):
+            return None
+        value = current.data(0, _qtcore.Qt.UserRole)
+        return value if isinstance(value, int) else None
+
+    def _set_detail_text(self, message: str) -> None:
+        set_text(self.form["detail"], message)
 
 
 def _build_form() -> dict[str, Any]:
@@ -112,7 +239,13 @@ def _build_form() -> dict[str, Any]:
         return {
             "widget": object(),
             "validate_button": FallbackButton("Validate Layout"),
+            "error_count": FallbackLabel("0"),
+            "warning_count": FallbackLabel("0"),
+            "state_value": FallbackLabel("Ready"),
+            "results_overview": FallbackLabel(),
             "results": FallbackText(),
+            "detail": FallbackText(),
+            "focus_button": FallbackButton("Focus Selected Issue"),
             "status": FallbackLabel(),
         }
 
@@ -120,23 +253,78 @@ def _build_form() -> dict[str, Any]:
     layout = qtwidgets.QVBoxLayout(content)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(8)
-    intro = qtwidgets.QLabel("Check spacing and edge issues before the next iteration.")
+    intro = qtwidgets.QLabel("Validate the current layout and review issues by severity.")
     intro.setWordWrap(True)
     validate_button = qtwidgets.QPushButton("Validate Layout")
     set_tooltip(validate_button, "Run spacing, overlap and edge-distance checks for the current controller.")
-    results = qtwidgets.QPlainTextEdit()
-    configure_text_panel(results, max_height=132)
+    focus_button = qtwidgets.QPushButton("Focus Selected Issue")
+    set_enabled(focus_button, False)
+    actions = qtwidgets.QHBoxLayout()
+    actions.setSpacing(8)
+    actions.addWidget(validate_button, 1)
+    actions.addWidget(focus_button, 1)
+
+    summary_row = qtwidgets.QHBoxLayout()
+    summary_row.setSpacing(8)
+    error_count = _summary_card(qtwidgets, "Errors", "0", "error")
+    warning_count = _summary_card(qtwidgets, "Warnings", "0", "warning")
+    state_value = _summary_card(qtwidgets, "State", "Ready", "success")
+    summary_row.addWidget(error_count["card"], 1)
+    summary_row.addWidget(warning_count["card"], 1)
+    summary_row.addWidget(state_value["card"], 1)
+
+    results_overview = qtwidgets.QLabel("Run validation to populate the issue list.")
+    results_overview.setWordWrap(True)
+    results_overview.setStyleSheet("color: #cbd5e1; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 6px 8px;")
+
+    results = qtwidgets.QTreeWidget()
+    results.setColumnCount(3)
+    results.setHeaderLabels(["Severity", "Component", "Issue"])
+    if hasattr(results, "setRootIsDecorated"):
+        results.setRootIsDecorated(True)
+    if hasattr(results, "setAlternatingRowColors"):
+        results.setAlternatingRowColors(True)
+    if hasattr(results, "setUniformRowHeights"):
+        results.setUniformRowHeights(True)
+    if hasattr(results, "setMinimumHeight"):
+        results.setMinimumHeight(180)
+    if hasattr(results, "setStyleSheet"):
+        results.setStyleSheet(
+            "QTreeWidget { background: #0f172a; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; }"
+            "QHeaderView::section { background: #111827; color: #94a3b8; border: none; border-bottom: 1px solid #334155; padding: 4px 6px; }"
+        )
+    set_size_policy(results, horizontal="expanding", vertical="expanding")
+
+    detail = qtwidgets.QPlainTextEdit()
+    if hasattr(detail, "setReadOnly"):
+        detail.setReadOnly(True)
+    if hasattr(detail, "setMaximumHeight"):
+        detail.setMaximumHeight(96)
+    if hasattr(detail, "setMinimumHeight"):
+        detail.setMinimumHeight(72)
+    if hasattr(detail, "setStyleSheet"):
+        detail.setStyleSheet("background: #0f172a; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 6px;")
+
     status = qtwidgets.QLabel()
     status.setWordWrap(True)
     layout.addWidget(intro)
-    layout.addWidget(validate_button)
+    layout.addLayout(actions)
+    layout.addLayout(summary_row)
+    layout.addWidget(results_overview)
     layout.addWidget(results)
+    layout.addWidget(detail)
     layout.addWidget(status)
     widget = wrap_widget_in_scroll_area(content)
     return {
         "widget": widget,
         "validate_button": validate_button,
+        "focus_button": focus_button,
+        "error_count": error_count["value"],
+        "warning_count": warning_count["value"],
+        "state_value": state_value["value"],
+        "results_overview": results_overview,
         "results": results,
+        "detail": detail,
         "status": status,
     }
 
@@ -145,3 +333,76 @@ def _format_message(severity: str, item: dict[str, Any]) -> str:
     component_id = item.get("source_component") or "-"
     description = item.get("description") or item["message"]
     return f"[{severity}] {component_id}: {item['message']} ({description})"
+
+
+def _result_overview_text(summary: dict[str, Any]) -> str:
+    errors = int(summary.get("error_count", 0))
+    warnings = int(summary.get("warning_count", 0))
+    total = int(summary.get("total_count", errors + warnings))
+    if errors:
+        return f"{total} findings. Errors are blocking and should be fixed first."
+    if warnings:
+        return f"{total} findings. Warnings are advisory but should be reviewed."
+    return "No findings. The layout is currently clear."
+
+
+def _format_issue_details(item: dict[str, Any]) -> str:
+    component_id = str(item.get("source_component") or "-")
+    message = str(item.get("message") or "Issue")
+    description = str(item.get("description") or message)
+    code = str(item.get("code") or item.get("rule_id") or "-")
+    severity = str(item.get("severity") or "-").upper()
+    return "\n".join(
+        [
+            f"Severity: {severity}",
+            f"Component: {component_id}",
+            f"Code: {code}",
+            f"Message: {message}",
+            f"Details: {description}",
+        ]
+    )
+
+
+def _summary_card(qtwidgets: Any, title: str, value: str, level: str) -> dict[str, Any]:
+    card = qtwidgets.QFrame()
+    layout = qtwidgets.QVBoxLayout(card)
+    layout.setContentsMargins(10, 8, 10, 8)
+    layout.setSpacing(4)
+    title_label = qtwidgets.QLabel(title)
+    title_label.setStyleSheet("color: #94a3b8; font-size: 11px; font-weight: 600;")
+    value_label = qtwidgets.QLabel(value)
+    value_label.setStyleSheet(_summary_value_style(level))
+    layout.addWidget(title_label)
+    layout.addWidget(value_label)
+    card.setStyleSheet("QFrame { background: #0f172a; border: 1px solid #334155; border-radius: 8px; }")
+    return {"card": card, "value": value_label}
+
+
+def _summary_value_style(level: str) -> str:
+    palette = {
+        "success": ("#d1fae5", "#065f46"),
+        "warning": ("#fef3c7", "#92400e"),
+        "error": ("#fee2e2", "#991b1b"),
+        "info": ("#e5e7eb", "#1f2937"),
+    }
+    foreground, accent = palette.get(level, palette["info"])
+    return (
+        f"color: {foreground};"
+        "font-size: 18px;"
+        "font-weight: 700;"
+        f"background: {accent};"
+        "border-radius: 6px;"
+        "padding: 4px 6px;"
+    )
+
+
+def _brush_for_level(level: str) -> Any:
+    _qtcore, qtgui, _qtwidgets = load_qt()
+    if qtgui is None:
+        return None
+    color = {
+        "error": "#fca5a5",
+        "warning": "#fcd34d",
+        "success": "#86efac",
+    }.get(level, "#cbd5e1")
+    return qtgui.QBrush(qtgui.QColor(color))
