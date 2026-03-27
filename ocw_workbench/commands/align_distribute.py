@@ -10,6 +10,9 @@ class SelectionArrangeCommand(BaseCommand):
     def __init__(self, operation: str) -> None:
         self.operation = operation
 
+    def icon_name(self) -> str:
+        return _command_icon_name(self.operation)
+
     def GetResources(self):
         menu_text, tooltip = _command_text(self.operation)
         return self.resources(menu_text, tooltip)
@@ -54,3 +57,19 @@ def _command_text(operation: str) -> tuple[str, str]:
     if operation not in labels:
         raise ValueError(f"Unsupported arrangement operation: {operation}")
     return labels[operation]
+
+
+def _command_icon_name(operation: str) -> str:
+    icon_names = {
+        "align_left": "align_left",
+        "align_center_x": "align_center_x",
+        "align_right": "align_right",
+        "align_top": "align_top",
+        "align_center_y": "align_center_y",
+        "align_bottom": "align_bottom",
+        "distribute_horizontal": "distribute_horizontal",
+        "distribute_vertical": "distribute_vertical",
+    }
+    if operation not in icon_names:
+        raise ValueError(f"Unsupported arrangement operation: {operation}")
+    return icon_names[operation]

@@ -10,6 +10,9 @@ class SelectionTransformCommand(BaseCommand):
     def __init__(self, operation: str) -> None:
         self.operation = operation
 
+    def icon_name(self) -> str:
+        return _command_icon_name(self.operation)
+
     def GetResources(self):
         menu_text, tooltip = _command_text(self.operation)
         return self.resources(menu_text, tooltip)
@@ -51,3 +54,16 @@ def _command_text(operation: str) -> tuple[str, str]:
     if operation not in labels:
         raise ValueError(f"Unsupported transform operation: {operation}")
     return labels[operation]
+
+
+def _command_icon_name(operation: str) -> str:
+    icon_names = {
+        "rotate_cw_90": "rotate_cw_90",
+        "rotate_ccw_90": "rotate_ccw_90",
+        "rotate_180": "rotate_180",
+        "mirror_horizontal": "mirror_horizontal",
+        "mirror_vertical": "mirror_vertical",
+    }
+    if operation not in icon_names:
+        raise ValueError(f"Unsupported transform operation: {operation}")
+    return icon_names[operation]

@@ -8,7 +8,7 @@ from ocw_workbench.gui.runtime import show_error, show_info
 
 
 class DuplicateSelectionCommand(BaseCommand):
-    ICON_NAME = "default"
+    ICON_NAME = "duplicate_selected"
 
     def GetResources(self):
         return self.resources(
@@ -40,6 +40,9 @@ class LinearArrayCommand(BaseCommand):
     def __init__(self, axis: str) -> None:
         self.axis = axis
 
+    def icon_name(self) -> str:
+        return "array_horizontal" if self.axis == "x" else "array_vertical"
+
     def GetResources(self):
         title = "Array Horizontally" if self.axis == "x" else "Array Vertically"
         tooltip = "Create a linear array from the current selection."
@@ -64,7 +67,7 @@ class LinearArrayCommand(BaseCommand):
 
 
 class GridArrayCommand(BaseCommand):
-    ICON_NAME = "default"
+    ICON_NAME = "grid_array"
 
     def GetResources(self):
         return self.resources(

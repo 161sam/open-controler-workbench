@@ -1,12 +1,12 @@
 from ocw_workbench.commands.base import BaseCommand
 from ocw_workbench.services.controller_service import ControllerService
 
+
 class CreateControllerCommand(BaseCommand):
+    ICON_NAME = "create_controller"
+
     def GetResources(self):
-        return {
-            "MenuText": "Create Controller",
-            "ToolTip": "Create a new MIDI controller project"
-        }
+        return self.resources("Create Controller", "Create a new MIDI controller project")
 
     def Activated(self):
         import FreeCAD as App

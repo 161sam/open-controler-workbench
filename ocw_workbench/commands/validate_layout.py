@@ -4,11 +4,10 @@ from ocw_workbench.commands.base import BaseCommand
 
 
 class ValidateLayoutCommand(BaseCommand):
+    ICON_NAME = "validate_constraints"
+
     def GetResources(self):
-        return {
-            "MenuText": "Validate Layout",
-            "ToolTip": "Show constraint validation results",
-        }
+        return self.resources("Validate Layout", "Show constraint validation results")
 
     def Activated(self):
         import FreeCAD as App

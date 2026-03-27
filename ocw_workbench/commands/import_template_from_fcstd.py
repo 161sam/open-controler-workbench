@@ -6,7 +6,7 @@ from ocw_workbench.gui.runtime import open_dialog, show_error
 
 
 class ImportTemplateFromFCStdCommand(BaseCommand):
-    ICON_NAME = "create_controller"
+    ICON_NAME = "import_template"
 
     def GetResources(self):
         return self.resources(

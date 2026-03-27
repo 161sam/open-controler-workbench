@@ -4,11 +4,10 @@ from ocw_workbench.commands.base import BaseCommand
 
 
 class AutoLayoutCommand(BaseCommand):
+    ICON_NAME = "apply_layout"
+
     def GetResources(self):
-        return {
-            "MenuText": "Auto Layout",
-            "ToolTip": "Open the auto-layout task panel",
-        }
+        return self.resources("Auto Layout", "Open the auto-layout task panel")
 
     def Activated(self):
         import FreeCAD as App
