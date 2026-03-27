@@ -31,10 +31,12 @@ def test_release_workflow_has_expected_triggers_and_assets() -> None:
     assert any("python -m build --sdist --wheel" in value for value in runs)
     assert any("test_release_metadata.py" in value for value in runs)
     assert any("test_release_workflow_metadata.py" in value for value in runs)
+    assert any("scripts/build_release_assets.py" in value for value in runs)
 
     release_step = next(step for step in steps if step.get("uses", "").startswith("softprops/action-gh-release"))
     files_block = release_step["with"]["files"]
     assert "dist/*.tar.gz" in files_block
     assert "dist/*.whl" in files_block
     assert "dist/release/*.zip" in files_block
+    assert "dist/release/*sha256.txt" in files_block
     assert release_step["with"]["body_path"] == "RELEASE_NOTES_v0.1.md"

@@ -52,15 +52,17 @@ jobs:
           fi
 
           VERSION="${TAG_NAME#v}"
-          WORKBENCH_ARCHIVE="OpenControllerWorkbench-${TAG_NAME}-workbench.zip"
+          WORKBENCH_ARCHIVE="ocw-workbench-${TAG_NAME}-freecad-mod.zip"
+          CHECKSUM_FILE="ocw-workbench-${TAG_NAME}-sha256.txt"
 
           echo "tag_name=${TAG_NAME}" >> "${GITHUB_OUTPUT}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "draft=${DRAFT_VALUE}" >> "${GITHUB_OUTPUT}"
           echo "workbench_archive=${WORKBENCH_ARCHIVE}" >> "${GITHUB_OUTPUT}"
+          echo "checksum_file=${CHECKSUM_FILE}" >> "${GITHUB_OUTPUT}"
 
       - name: Install build tooling
-        run: python -m pip install --upgrade pip build
+        run: python -m pip install --upgrade pip build pytest pyyaml
 
       - name: Run release sanity tests
         run: python -m pytest -q tests/unit/test_release_metadata.py tests/unit/test_release_workflow_metadata.py
@@ -68,44 +70,8 @@ jobs:
       - name: Build source and wheel distributions
         run: python -m build --sdist --wheel
 
-      - name: Create workbench module archive
-        shell: bash
-        run: |
-          mkdir -p dist/release
-          python - <<'PY'
-          from pathlib import Path
-          import zipfile
-
-          repo_root = Path.cwd()
-          archive_path = repo_root / "dist" / "release" / "${{ steps.meta.outputs.workbench_archive }}"
-          include_paths = [
-              "Init.py",
-              "InitGui.py",
-              "README.md",
-              "CHANGELOG.md",
-              "RELEASE_NOTES_v0.1.md",
-              "docs",
-              "examples",
-              "ocw_kicad",
-              "ocw_kicad_plugin.py",
-              "ocw_workbench",
-              "pyproject.toml",
-              "resources",
-          ]
-
-          with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-              for rel in include_paths:
-                  path = repo_root / rel
-                  if path.is_file():
-                      archive.write(path, arcname=str(Path("OpenControllerWorkbench") / rel))
-                      continue
-                  for child in path.rglob("*"):
-                      if child.is_dir():
-                          continue
-                      if ".pytest_cache" in child.parts or "__pycache__" in child.parts or child.suffix == ".pyc":
-                          continue
-                      archive.write(child, arcname=str(Path("OpenControllerWorkbench") / child.relative_to(repo_root)))
-          PY
+      - name: Build GitHub release assets
+        run: python scripts/build_release_assets.py --tag "${{ steps.meta.outputs.tag_name }}"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -118,3 +84,4 @@ jobs:
             dist/*.tar.gz
             dist/*.whl
             dist/release/*.zip
+            dist/release/*sha256.txt

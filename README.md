@@ -34,6 +34,18 @@ OpenControllerWorkbench/
 
 ## Installation
 
+Recommended end-user distribution for `v0.1.0`:
+
+- GitHub Release asset `ocw-workbench-v0.1.0-freecad-mod.zip`
+- see [Installation](docs/plugin-installation.md) for the manual FreeCAD `Mod` installation path
+
+Secondary artifacts:
+
+- source distribution (`sdist`)
+- wheel
+
+These are published for reproducibility and development use, but the zip archive is the primary install format for FreeCAD users.
+
 ### Development install on Linux
 
 ```bash

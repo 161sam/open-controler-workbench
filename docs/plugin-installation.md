@@ -22,6 +22,21 @@ Always link or copy the repository root itself. Do not point FreeCAD only at `oc
 - FreeCAD
 - Python and `pip`
 - Git
+- `PyYAML` available in the Python environment used by FreeCAD
+
+## Recommended GitHub release install
+
+For `v0.1.0`, the recommended end-user distribution path is the GitHub Release asset:
+
+- `ocw-workbench-v0.1.0-freecad-mod.zip`
+
+Install steps:
+
+1. Download the zip from the GitHub Release page.
+2. Extract it so the top-level folder is `OpenControllerWorkbench/`.
+3. Copy or move that folder into the FreeCAD `Mod` directory.
+4. Make sure `PyYAML` is available to FreeCAD's Python interpreter.
+5. Restart FreeCAD.
 
 ## Linux development install
 
@@ -85,4 +100,5 @@ If installation is correct:
 
 ## Distribution note
 
-`v0.1.0` is prepared for source and wheel builds, but no public package publication is performed in this task.
+`v0.1.0` is distributed primarily through GitHub Release assets.
+The source distribution and wheel are published as secondary technical artifacts, not as the main end-user installation format.
