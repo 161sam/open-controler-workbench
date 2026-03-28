@@ -4,6 +4,7 @@ from typing import Any
 
 from ocw_workbench.gui.feedback import apply_status_message, format_validation_message, friendly_ui_error
 from ocw_workbench.gui.panels._common import (
+    build_group_box,
     build_panel_container,
     create_button_row,
     FallbackButton,
@@ -51,7 +52,7 @@ class ConstraintsPanel:
             self._set_summary_counts(errors=0, warnings=0)
             self._set_result_overview("Run Validate Layout to check spacing, edge distance, and placement issues.")
             self._clear_results()
-            self._set_detail_text("No validation results yet.")
+            self._clear_detail()
             apply_status_message(self.form["status"], "No validation results yet.", level="info")
 
     def validate(self) -> dict[str, Any]:
@@ -77,11 +78,11 @@ class ConstraintsPanel:
     def handle_result_selection_changed(self) -> None:
         issue_index = self._selected_issue_index()
         if issue_index is None:
-            self._set_detail_text("Select an issue to inspect its details.")
+            self._clear_detail("Select an issue to inspect its details.")
             set_enabled(self.form["focus_button"], False)
             return
         item = self._messages[issue_index]
-        self._set_detail_text(_format_issue_details(item))
+        self._render_issue_detail(item)
         set_enabled(self.form["focus_button"], bool(item.get("source_component")))
 
     def handle_result_activated(self, *_args: Any) -> None:
@@ -115,10 +116,10 @@ class ConstraintsPanel:
         message, level = format_validation_message(report)
         apply_status_message(self.form["status"], message, level=level)
         if self._messages:
-            self._set_detail_text(_format_issue_details(self._messages[0]))
+            self._render_issue_detail(self._messages[0])
             self.handle_result_selection_changed()
         else:
-            self._set_detail_text("Validation passed. No issues to review.")
+            self._clear_detail("Validation passed. No issues to review.")
             set_enabled(self.form["focus_button"], False)
 
     def _publish_status(self, message: str, level: str = "info") -> None:
@@ -186,31 +187,45 @@ class ConstraintsPanel:
         )
         message_index = 0
         for title, _key, items, level in groups:
-            parent = qtwidgets.QTreeWidgetItem([title, str(len(items)), ""])
+            parent = qtwidgets.QTreeWidgetItem([title, str(len(items)), "", ""])
             if hasattr(parent, "setData") and _qtcore is not None:
                 parent.setData(0, _qtcore.Qt.UserRole, None)
             results.addTopLevelItem(parent)
             brush = _brush_for_level(level)
             if brush is not None and hasattr(parent, "setForeground"):
-                parent.setForeground(0, brush)
+                for column in range(4):
+                    parent.setForeground(column, brush)
             for item in items:
+                severity_text = _severity_label(level)
+                component_text = str(item.get("source_component") or "Global")
+                rule_text = _rule_label(item)
+                summary_text = str(item.get("message") or item.get("description") or "Issue")
                 row = qtwidgets.QTreeWidgetItem(
                     [
-                        "Error" if level == "error" else "Warning",
-                        str(item.get("source_component") or "-"),
-                        str(item.get("message") or item.get("description") or "Issue"),
+                        severity_text,
+                        component_text,
+                        rule_text,
+                        summary_text,
                     ]
                 )
                 if hasattr(row, "setData") and _qtcore is not None:
                     row.setData(0, _qtcore.Qt.UserRole, message_index)
+                    row.setData(0, _qtcore.Qt.UserRole + 1, dict(item))
                 if brush is not None and hasattr(row, "setForeground"):
                     row.setForeground(0, brush)
+                background_brush = _background_brush_for_level(level)
+                if background_brush is not None and hasattr(row, "setBackground"):
+                    row.setBackground(0, background_brush)
                 parent.addChild(row)
                 message_index += 1
             if hasattr(parent, "setExpanded"):
                 parent.setExpanded(True)
         if hasattr(results, "expandAll"):
             results.expandAll()
+        if hasattr(results, "resizeColumnToContents"):
+            results.resizeColumnToContents(0)
+            results.resizeColumnToContents(1)
+            results.resizeColumnToContents(2)
         first_issue = None
         for top_index in range(results.topLevelItemCount() if hasattr(results, "topLevelItemCount") else 0):
             parent = results.topLevelItem(top_index)
@@ -231,8 +246,31 @@ class ConstraintsPanel:
         value = current.data(0, _qtcore.Qt.UserRole)
         return value if isinstance(value, int) else None
 
-    def _set_detail_text(self, message: str) -> None:
-        set_text(self.form["detail"], message)
+    def _render_issue_detail(self, item: dict[str, Any]) -> None:
+        severity = str(item.get("severity") or "info")
+        set_label_text(self.form["detail_severity"], _severity_label(severity))
+        if hasattr(self.form["detail_severity"], "setStyleSheet"):
+            self.form["detail_severity"].setStyleSheet(_detail_badge_style(severity))
+        set_label_text(self.form["detail_component"], str(item.get("source_component") or "Global"))
+        set_label_text(self.form["detail_rule"], _rule_label(item))
+        set_label_text(self.form["detail_message"], str(item.get("message") or "Issue"))
+        set_text(self.form["detail_description"], str(item.get("description") or item.get("message") or ""))
+        set_label_text(
+            self.form["detail_hint"],
+            "Double-click or use Focus to select the related component."
+            if item.get("source_component")
+            else "This finding is not tied to a single component yet.",
+        )
+
+    def _clear_detail(self, message: str = "No issue selected.") -> None:
+        set_label_text(self.form["detail_severity"], "No issue")
+        if hasattr(self.form["detail_severity"], "setStyleSheet"):
+            self.form["detail_severity"].setStyleSheet(_detail_badge_style("info"))
+        set_label_text(self.form["detail_component"], "-")
+        set_label_text(self.form["detail_rule"], "-")
+        set_label_text(self.form["detail_message"], message)
+        set_text(self.form["detail_description"], message)
+        set_label_text(self.form["detail_hint"], "Run validation and select a finding to inspect it.")
 
 
 def _build_form() -> dict[str, Any]:
@@ -246,22 +284,27 @@ def _build_form() -> dict[str, Any]:
             "state_value": FallbackLabel("Ready"),
             "results_overview": FallbackLabel(),
             "results": FallbackText(),
-            "detail": FallbackText(),
+            "detail_severity": FallbackLabel("No issue"),
+            "detail_component": FallbackLabel("-"),
+            "detail_rule": FallbackLabel("-"),
+            "detail_message": FallbackLabel("No issue selected."),
+            "detail_description": FallbackText(),
+            "detail_hint": FallbackLabel("Run validation and select a finding to inspect it."),
             "focus_button": FallbackButton("Focus Selected Issue"),
             "status": FallbackLabel(),
         }
 
     content, layout = build_panel_container(qtwidgets)
-    intro = qtwidgets.QLabel("Validate the current layout and review issues by severity.")
+    intro = qtwidgets.QLabel("Validate the current layout and review findings by priority.")
     intro.setWordWrap(True)
     validate_button = qtwidgets.QPushButton("Validate Layout")
     set_tooltip(validate_button, "Run spacing, overlap and edge-distance checks for the current controller.")
     focus_button = qtwidgets.QPushButton("Focus Selected Issue")
     set_enabled(focus_button, False)
-    actions = create_button_row(qtwidgets, validate_button, focus_button)
+    actions = create_button_row(qtwidgets, validate_button, focus_button, spacing=6)
 
     summary_row = qtwidgets.QHBoxLayout()
-    summary_row.setSpacing(8)
+    summary_row.setSpacing(6)
     error_count = _summary_card(qtwidgets, "Errors", "0", "error")
     warning_count = _summary_card(qtwidgets, "Warnings", "0", "warning")
     state_value = _summary_card(qtwidgets, "State", "Ready", "success")
@@ -271,35 +314,81 @@ def _build_form() -> dict[str, Any]:
 
     results_overview = qtwidgets.QLabel("Run validation to populate the issue list.")
     results_overview.setWordWrap(True)
-    results_overview.setStyleSheet("color: #cbd5e1; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 6px 8px;")
+    results_overview.setStyleSheet(
+        "color: #dbe5f1; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 6px 8px;"
+    )
 
     results = qtwidgets.QTreeWidget()
-    results.setColumnCount(3)
-    results.setHeaderLabels(["Severity", "Component", "Issue"])
+    results.setColumnCount(4)
+    results.setHeaderLabels(["State", "Component", "Rule", "Summary"])
     if hasattr(results, "setRootIsDecorated"):
         results.setRootIsDecorated(True)
     if hasattr(results, "setAlternatingRowColors"):
         results.setAlternatingRowColors(True)
     if hasattr(results, "setUniformRowHeights"):
         results.setUniformRowHeights(True)
+    if hasattr(results, "setItemsExpandable"):
+        results.setItemsExpandable(True)
+    if hasattr(results, "setAllColumnsShowFocus"):
+        results.setAllColumnsShowFocus(True)
+    if hasattr(results, "setSelectionBehavior") and hasattr(qtwidgets, "QAbstractItemView"):
+        results.setSelectionBehavior(qtwidgets.QAbstractItemView.SelectRows)
     if hasattr(results, "setMinimumHeight"):
         results.setMinimumHeight(180)
     if hasattr(results, "setStyleSheet"):
         results.setStyleSheet(
             "QTreeWidget { background: #0f172a; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; }"
+            "QTreeWidget::item { padding: 4px 2px; }"
+            "QTreeWidget::item:selected { background: #172554; color: #eff6ff; }"
             "QHeaderView::section { background: #111827; color: #94a3b8; border: none; border-bottom: 1px solid #334155; padding: 4px 6px; }"
         )
     set_size_policy(results, horizontal="expanding", vertical="expanding")
 
-    detail = qtwidgets.QPlainTextEdit()
-    if hasattr(detail, "setReadOnly"):
-        detail.setReadOnly(True)
-    if hasattr(detail, "setMaximumHeight"):
-        detail.setMaximumHeight(96)
-    if hasattr(detail, "setMinimumHeight"):
-        detail.setMinimumHeight(72)
-    if hasattr(detail, "setStyleSheet"):
-        detail.setStyleSheet("background: #0f172a; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 6px;")
+    list_box, list_layout = build_group_box(qtwidgets, "Findings", spacing=6)
+    list_hint = qtwidgets.QLabel("Errors are blocking. Warnings are advisory. Activate a row to focus its component.")
+    list_hint.setWordWrap(True)
+    list_hint.setStyleSheet("color: #94a3b8;")
+    list_layout.addWidget(list_hint)
+    list_layout.addWidget(results, 1)
+
+    detail_box, detail_layout = build_group_box(qtwidgets, "Selected Finding", spacing=6)
+    detail_header = qtwidgets.QHBoxLayout()
+    detail_header.setContentsMargins(0, 0, 0, 0)
+    detail_header.setSpacing(6)
+    detail_severity = qtwidgets.QLabel("No issue")
+    detail_severity.setStyleSheet(_detail_badge_style("info"))
+    detail_component = qtwidgets.QLabel("-")
+    detail_component.setStyleSheet("color: #e5e7eb; font-weight: 600;")
+    detail_header.addWidget(detail_severity)
+    detail_header.addWidget(detail_component, 1)
+
+    detail_meta = qtwidgets.QFormLayout()
+    detail_meta.setContentsMargins(0, 0, 0, 0)
+    detail_meta.setSpacing(4)
+    detail_rule = qtwidgets.QLabel("-")
+    detail_rule.setWordWrap(True)
+    detail_message = qtwidgets.QLabel("No issue selected.")
+    detail_message.setWordWrap(True)
+    detail_description = qtwidgets.QPlainTextEdit()
+    if hasattr(detail_description, "setReadOnly"):
+        detail_description.setReadOnly(True)
+    if hasattr(detail_description, "setMaximumHeight"):
+        detail_description.setMaximumHeight(84)
+    if hasattr(detail_description, "setMinimumHeight"):
+        detail_description.setMinimumHeight(64)
+    if hasattr(detail_description, "setStyleSheet"):
+        detail_description.setStyleSheet(
+            "background: #111827; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 6px;"
+        )
+    detail_hint = qtwidgets.QLabel("Run validation and select a finding to inspect it.")
+    detail_hint.setWordWrap(True)
+    detail_hint.setStyleSheet("color: #94a3b8;")
+    detail_meta.addRow("Rule", detail_rule)
+    detail_meta.addRow("Message", detail_message)
+    detail_layout.addLayout(detail_header)
+    detail_layout.addLayout(detail_meta)
+    detail_layout.addWidget(detail_description)
+    detail_layout.addWidget(detail_hint)
 
     status = qtwidgets.QLabel()
     status.setWordWrap(True)
@@ -307,9 +396,10 @@ def _build_form() -> dict[str, Any]:
     layout.addLayout(actions)
     layout.addLayout(summary_row)
     layout.addWidget(results_overview)
-    layout.addWidget(results)
-    layout.addWidget(detail)
+    layout.addWidget(list_box, 1)
+    layout.addWidget(detail_box)
     layout.addWidget(status)
+    layout.addStretch(1)
     widget = wrap_widget_in_scroll_area(content)
     return {
         "widget": widget,
@@ -320,7 +410,12 @@ def _build_form() -> dict[str, Any]:
         "state_value": state_value["value"],
         "results_overview": results_overview,
         "results": results,
-        "detail": detail,
+        "detail_severity": detail_severity,
+        "detail_component": detail_component,
+        "detail_rule": detail_rule,
+        "detail_message": detail_message,
+        "detail_description": detail_description,
+        "detail_hint": detail_hint,
         "status": status,
     }
 
@@ -340,23 +435,6 @@ def _result_overview_text(summary: dict[str, Any]) -> str:
     if warnings:
         return f"{total} findings. Warnings are advisory but should be reviewed."
     return "No findings. The layout is currently clear."
-
-
-def _format_issue_details(item: dict[str, Any]) -> str:
-    component_id = str(item.get("source_component") or "-")
-    message = str(item.get("message") or "Issue")
-    description = str(item.get("description") or message)
-    code = str(item.get("code") or item.get("rule_id") or "-")
-    severity = str(item.get("severity") or "-").upper()
-    return "\n".join(
-        [
-            f"Severity: {severity}",
-            f"Component: {component_id}",
-            f"Code: {code}",
-            f"Message: {message}",
-            f"Details: {description}",
-        ]
-    )
 
 
 def _summary_card(qtwidgets: Any, title: str, value: str, level: str) -> dict[str, Any]:
@@ -402,3 +480,49 @@ def _brush_for_level(level: str) -> Any:
         "success": "#86efac",
     }.get(level, "#cbd5e1")
     return qtgui.QBrush(qtgui.QColor(color))
+
+
+def _background_brush_for_level(level: str) -> Any:
+    _qtcore, qtgui, _qtwidgets = load_qt()
+    if qtgui is None:
+        return None
+    color = {
+        "error": "#3b0d12",
+        "warning": "#3f2a0b",
+        "success": "#052e2b",
+    }.get(level, "#111827")
+    return qtgui.QBrush(qtgui.QColor(color))
+
+
+def _severity_label(level: str) -> str:
+    labels = {
+        "error": "Blocking",
+        "warning": "Warning",
+        "success": "Clear",
+        "info": "Info",
+    }
+    return labels.get(str(level).lower(), str(level).title())
+
+
+def _rule_label(item: dict[str, Any]) -> str:
+    raw = str(item.get("code") or item.get("rule_id") or "-")
+    if raw == "-":
+        return raw
+    return raw.replace("_", " ").title()
+
+
+def _detail_badge_style(level: str) -> str:
+    palette = {
+        "success": ("#d1fae5", "#065f46"),
+        "warning": ("#fef3c7", "#92400e"),
+        "error": ("#fee2e2", "#991b1b"),
+        "info": ("#e5e7eb", "#1f2937"),
+    }
+    foreground, background = palette.get(str(level).lower(), palette["info"])
+    return (
+        f"color: {foreground};"
+        f"background: {background};"
+        "border-radius: 8px;"
+        "padding: 4px 8px;"
+        "font-weight: 700;"
+    )
