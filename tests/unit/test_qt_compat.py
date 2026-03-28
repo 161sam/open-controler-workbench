@@ -1108,3 +1108,62 @@ def test_product_workbench_panel_survives_plugin_panel_init_failure(monkeypatch)
 
     assert isinstance(panel.plugin_manager_panel, _UnavailablePluginManagerPanel)
     assert panel.plugin_manager_panel.error_message == "Plugins panel unavailable. Check the report view for details."
+
+
+def test_add_layout_content_wraps_nested_layout_for_form_layout(monkeypatch):
+    from ocw_workbench.gui.panels import _common
+
+    class FakeWidget:
+        def __init__(self) -> None:
+            self.layout = None
+            self.minimum_size = None
+            self.size_policy = None
+
+        def setLayout(self, layout) -> None:
+            self.layout = layout
+
+        def setMinimumSize(self, width, height) -> None:
+            self.minimum_size = (width, height)
+
+        def setSizePolicy(self, horizontal, vertical) -> None:
+            self.size_policy = (horizontal, vertical)
+
+    class FakeQLayout:
+        pass
+
+    class FakeNestedLayout(FakeQLayout):
+        pass
+
+    class FakeFormLayout:
+        def __init__(self) -> None:
+            self.rows = []
+
+        def addRow(self, widget) -> None:
+            self.rows.append(widget)
+
+    class FakeSizePolicy:
+        Fixed = 0
+        Minimum = 1
+        Preferred = 2
+        MinimumExpanding = 3
+        Expanding = 4
+
+    qtwidgets = types.SimpleNamespace(
+        QWidget=FakeWidget,
+        QLayout=FakeQLayout,
+        QSizePolicy=FakeSizePolicy,
+    )
+
+    monkeypatch.setattr(_common, "load_qt", lambda: (None, object(), qtwidgets))
+
+    form_layout = FakeFormLayout()
+    nested_layout = FakeNestedLayout()
+
+    _common.add_layout_content(form_layout, nested_layout)
+
+    assert len(form_layout.rows) == 1
+    wrapped = form_layout.rows[0]
+    assert isinstance(wrapped, FakeWidget)
+    assert wrapped.layout is nested_layout
+    assert wrapped.minimum_size == (0, 0)
+    assert wrapped.size_policy == (FakeSizePolicy.Expanding, FakeSizePolicy.Preferred)

@@ -543,6 +543,16 @@ def create_button_row_layout(qtwidgets: Any, *buttons: Any, spacing: int = SPACE
     return create_button_row(qtwidgets, *buttons, spacing=spacing)
 
 
+def wrap_layout_in_widget(qtwidgets: Any, content_layout: Any) -> Any:
+    container = qtwidgets.QWidget()
+    if hasattr(container, "setLayout"):
+        container.setLayout(content_layout)
+    if hasattr(container, "setMinimumSize"):
+        container.setMinimumSize(0, 0)
+    set_size_policy(container, horizontal="expanding", vertical="preferred")
+    return container
+
+
 def add_layout_content(layout: Any, content: Any, *, stretch: int | None = None) -> None:
     _qtcore, _qtgui, qtwidgets = load_qt()
     is_layout = bool(
@@ -558,12 +568,7 @@ def add_layout_content(layout: Any, content: Any, *, stretch: int | None = None)
                 layout.addLayout(content, stretch)
             return
         if hasattr(layout, "addRow") and qtwidgets is not None and hasattr(qtwidgets, "QWidget"):
-            container = qtwidgets.QWidget()
-            if hasattr(container, "setLayout"):
-                container.setLayout(content)
-            if hasattr(container, "setMinimumSize"):
-                container.setMinimumSize(0, 0)
-            set_size_policy(container, horizontal="expanding", vertical="preferred")
+            container = wrap_layout_in_widget(qtwidgets, content)
             layout.addRow(container)
             return
         raise AttributeError(f"Layout object {layout!r} does not support nested layout insertion")
