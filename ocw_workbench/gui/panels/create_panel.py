@@ -8,8 +8,10 @@ from ocw_workbench.gui.panels._common import (
     build_group_box,
     build_panel_container,
     build_collapsible_section,
+    build_form_layout,
     configure_combo_box,
     create_button_row,
+    create_status_label,
     create_text_panel,
     FallbackButton,
     FallbackCombo,
@@ -758,10 +760,8 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, root = build_panel_container(qtwidgets)
-    header = qtwidgets.QLabel("Select a template and variant, then create or update the current controller.")
-    header.setWordWrap(True)
-    active_project = qtwidgets.QLabel("No controller in the document yet.")
-    active_project.setWordWrap(True)
+    header = create_status_label(qtwidgets, "Select a template and variant, then create or update the current controller.")
+    active_project = create_status_label(qtwidgets, "No controller in the document yet.")
     shortcuts_row = qtwidgets.QHBoxLayout()
     shortcuts_row.setSpacing(6)
     shortcuts_row.addWidget(favorites_widget.widget, 1)
@@ -773,26 +773,24 @@ def _build_form() -> dict[str, Any]:
         spacing=6,
         margins=(8, 8, 8, 8),
     )
-    marketplace_controls = qtwidgets.QFormLayout()
-    marketplace_controls.setContentsMargins(0, 0, 0, 0)
-    marketplace_controls.setSpacing(4)
+    marketplace_controls = build_form_layout(qtwidgets, spacing=4)
     marketplace_registry_url = qtwidgets.QLineEdit()
     marketplace_refresh_button = qtwidgets.QPushButton("Reload")
     marketplace_search = qtwidgets.QLineEdit()
     marketplace_filter = qtwidgets.QComboBox()
     marketplace_filter.addItems(["all", "local", "remote"])
     marketplace_list = qtwidgets.QComboBox()
-    marketplace_summary = qtwidgets.QLabel("No marketplace template selected.")
-    marketplace_summary.setWordWrap(True)
+    marketplace_summary = create_status_label(qtwidgets, "No marketplace template selected.")
     marketplace_details = create_text_panel(qtwidgets, max_height=72)
-    marketplace_actions = qtwidgets.QHBoxLayout()
-    marketplace_actions.setContentsMargins(0, 0, 0, 0)
-    marketplace_actions.setSpacing(6)
     marketplace_apply_button = qtwidgets.QPushButton("Use")
     marketplace_details_button = qtwidgets.QPushButton("Details")
-    marketplace_actions.addWidget(marketplace_refresh_button)
-    marketplace_actions.addWidget(marketplace_apply_button)
-    marketplace_actions.addWidget(marketplace_details_button)
+    marketplace_actions = create_button_row(
+        qtwidgets,
+        marketplace_refresh_button,
+        marketplace_apply_button,
+        marketplace_details_button,
+        spacing=6,
+    )
     marketplace_controls.addRow("Registry", marketplace_registry_url)
     marketplace_controls.addRow("Search", marketplace_search)
     marketplace_controls.addRow("Filter", marketplace_filter)
@@ -802,28 +800,20 @@ def _build_form() -> dict[str, Any]:
     marketplace_layout.addWidget(marketplace_details)
     marketplace_layout.addLayout(marketplace_actions)
     selection_box, selection_layout = build_group_box(qtwidgets, "Current Selection")
-    form = qtwidgets.QFormLayout()
-    form.setContentsMargins(0, 0, 0, 0)
-    form.setSpacing(4)
+    form = build_form_layout(qtwidgets, spacing=4)
     template = qtwidgets.QComboBox()
-    template_summary = qtwidgets.QLabel()
-    template_summary.setWordWrap(True)
-    favorite_template_status = qtwidgets.QLabel()
-    favorite_template_status.setWordWrap(True)
+    template_summary = create_status_label(qtwidgets)
+    favorite_template_status = create_status_label(qtwidgets)
     favorite_template_button = qtwidgets.QPushButton("Favorite")
     variant = qtwidgets.QComboBox()
-    variant_summary = qtwidgets.QLabel()
-    variant_summary.setWordWrap(True)
-    favorite_variant_status = qtwidgets.QLabel()
-    favorite_variant_status.setWordWrap(True)
+    variant_summary = create_status_label(qtwidgets)
+    favorite_variant_status = create_status_label(qtwidgets)
     favorite_variant_button = qtwidgets.QPushButton("Favorite")
-    parameter_status = qtwidgets.QLabel("Select a template to review its parameters.")
-    parameter_status.setWordWrap(True)
+    parameter_status = create_status_label(qtwidgets, "Select a template to review its parameters.")
     preview = create_text_panel(qtwidgets, max_height=72)
     apply_parameters_button = qtwidgets.QPushButton("Apply")
     create_button = qtwidgets.QPushButton("Create Controller")
-    status = qtwidgets.QLabel()
-    status.setWordWrap(True)
+    status = create_status_label(qtwidgets)
     for combo in (
         favorites_widget.parts["combo"],
         recents_widget.parts["combo"],

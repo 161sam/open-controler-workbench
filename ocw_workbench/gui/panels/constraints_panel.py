@@ -6,7 +6,12 @@ from ocw_workbench.gui.feedback import apply_status_message, format_validation_m
 from ocw_workbench.gui.panels._common import (
     build_group_box,
     build_panel_container,
+    build_form_layout,
     create_button_row,
+    create_hint_label,
+    create_row_widget,
+    create_status_label,
+    create_text_panel,
     FallbackButton,
     FallbackLabel,
     FallbackText,
@@ -295,8 +300,7 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, layout = build_panel_container(qtwidgets)
-    intro = qtwidgets.QLabel("Validate the current layout and review findings by priority.")
-    intro.setWordWrap(True)
+    intro = create_status_label(qtwidgets, "Validate the current layout and review findings by priority.")
     validate_button = qtwidgets.QPushButton("Validate Layout")
     set_tooltip(validate_button, "Run spacing, overlap and edge-distance checks for the current controller.")
     focus_button = qtwidgets.QPushButton("Focus Issue")
@@ -312,11 +316,11 @@ def _build_form() -> dict[str, Any]:
     summary_row.addWidget(warning_count["card"], 1)
     summary_row.addWidget(state_value["card"], 1)
 
-    results_overview = qtwidgets.QLabel("Run validation to populate the issue list.")
-    results_overview.setWordWrap(True)
-    results_overview.setStyleSheet(
-        "color: #dbe5f1; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 6px 8px;"
-    )
+    results_overview = create_status_label(qtwidgets, "Run validation to populate the issue list.")
+    if hasattr(results_overview, "setStyleSheet"):
+        results_overview.setStyleSheet(
+            "color: #dbe5f1; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 6px 8px;"
+        )
 
     results = qtwidgets.QTreeWidget()
     results.setColumnCount(4)
@@ -345,53 +349,37 @@ def _build_form() -> dict[str, Any]:
     set_size_policy(results, horizontal="expanding", vertical="expanding")
 
     list_box, list_layout = build_group_box(qtwidgets, "Findings", spacing=6)
-    list_hint = qtwidgets.QLabel("Errors are blocking. Warnings are advisory. Activate a row to focus its component.")
-    list_hint.setWordWrap(True)
-    list_hint.setStyleSheet("color: #94a3b8;")
+    list_hint = create_hint_label(
+        qtwidgets,
+        "Errors are blocking. Warnings are advisory. Activate a row to focus its component.",
+    )
     list_layout.addWidget(list_hint)
     list_layout.addWidget(results, 1)
 
     detail_box, detail_layout = build_group_box(qtwidgets, "Selected Finding", spacing=6)
-    detail_header = qtwidgets.QHBoxLayout()
-    detail_header.setContentsMargins(0, 0, 0, 0)
-    detail_header.setSpacing(6)
     detail_severity = qtwidgets.QLabel("No issue")
     detail_severity.setStyleSheet(_detail_badge_style("info"))
     detail_component = qtwidgets.QLabel("-")
     detail_component.setStyleSheet("color: #e5e7eb; font-weight: 600;")
-    detail_header.addWidget(detail_severity)
-    detail_header.addWidget(detail_component, 1)
+    detail_header = create_row_widget(qtwidgets, detail_severity, detail_component, spacing=6, stretch_index=1)
 
-    detail_meta = qtwidgets.QFormLayout()
-    detail_meta.setContentsMargins(0, 0, 0, 0)
-    detail_meta.setSpacing(4)
-    detail_rule = qtwidgets.QLabel("-")
-    detail_rule.setWordWrap(True)
-    detail_message = qtwidgets.QLabel("No issue selected.")
-    detail_message.setWordWrap(True)
-    detail_description = qtwidgets.QPlainTextEdit()
-    if hasattr(detail_description, "setReadOnly"):
-        detail_description.setReadOnly(True)
-    if hasattr(detail_description, "setMaximumHeight"):
-        detail_description.setMaximumHeight(84)
-    if hasattr(detail_description, "setMinimumHeight"):
-        detail_description.setMinimumHeight(64)
+    detail_meta = build_form_layout(qtwidgets, spacing=4)
+    detail_rule = create_status_label(qtwidgets, "-")
+    detail_message = create_status_label(qtwidgets, "No issue selected.")
+    detail_description = create_text_panel(qtwidgets, max_height=84)
     if hasattr(detail_description, "setStyleSheet"):
         detail_description.setStyleSheet(
             "background: #111827; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 6px;"
         )
-    detail_hint = qtwidgets.QLabel("Run validation and select a finding to inspect it.")
-    detail_hint.setWordWrap(True)
-    detail_hint.setStyleSheet("color: #94a3b8;")
+    detail_hint = create_hint_label(qtwidgets, "Run validation and select a finding to inspect it.")
     detail_meta.addRow("Rule", detail_rule)
     detail_meta.addRow("Message", detail_message)
-    detail_layout.addLayout(detail_header)
+    detail_layout.addWidget(detail_header)
     detail_layout.addLayout(detail_meta)
     detail_layout.addWidget(detail_description)
     detail_layout.addWidget(detail_hint)
 
-    status = qtwidgets.QLabel()
-    status.setWordWrap(True)
+    status = create_status_label(qtwidgets)
     layout.addWidget(intro)
     layout.addLayout(actions)
     layout.addLayout(summary_row)

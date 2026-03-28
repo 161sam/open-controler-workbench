@@ -9,6 +9,9 @@ from ocw_workbench.gui.panels._common import (
     build_panel_container,
     build_collapsible_section,
     configure_combo_box,
+    create_button_row,
+    create_row_widget,
+    create_status_label,
     create_text_panel,
     FallbackButton,
     FallbackCombo,
@@ -652,15 +655,8 @@ def _build_form() -> dict[str, Any]:
         spinbox.setRange(-1000.0, 1000.0)
         spinbox.setDecimals(2)
         set_size_policy(spinbox, horizontal="expanding", vertical="preferred")
-    selector_summary = qtwidgets.QLabel("Select, adjust values, then apply or move in 3D.")
-    selector_summary.setWordWrap(True)
-    meta_row = qtwidgets.QWidget()
-    meta_layout = qtwidgets.QHBoxLayout(meta_row)
-    meta_layout.setContentsMargins(0, 0, 0, 0)
-    meta_layout.setSpacing(8)
-    meta_layout.addWidget(selected_id, 1)
-    meta_layout.addWidget(selected_type, 1)
-    meta_layout.addWidget(selected_library, 1)
+    selector_summary = create_status_label(qtwidgets, "Select, adjust values, then apply or move in 3D.")
+    meta_row = create_row_widget(qtwidgets, selected_id, selected_type, selected_library, spacing=8, stretch_index=2)
     selector_actions = qtwidgets.QGridLayout()
     selector_actions.setContentsMargins(0, 0, 0, 0)
     selector_actions.setHorizontalSpacing(6)
@@ -691,8 +687,7 @@ def _build_form() -> dict[str, Any]:
     bulk_box, bulk_form = build_group_box(qtwidgets, "Selection Batch Tools", layout_kind="form", spacing=4)
     bulk_count = qtwidgets.QLabel("Selected: 0")
     bulk_types = qtwidgets.QLabel("Types: -")
-    bulk_summary = qtwidgets.QLabel("Best for similar components in the current selection.")
-    bulk_summary.setWordWrap(True)
+    bulk_summary = create_status_label(qtwidgets, "Best for similar components in the current selection.")
     bulk_label_rotation = qtwidgets.QLabel("Rotation")
     bulk_apply_rotation = qtwidgets.QCheckBox()
     bulk_rotation = qtwidgets.QDoubleSpinBox()
@@ -724,11 +719,7 @@ def _build_form() -> dict[str, Any]:
         set_size_policy(spinbox, horizontal="expanding", vertical="preferred")
     bulk_update_button = qtwidgets.QPushButton("Apply Bulk Edit")
     bulk_reset_button = qtwidgets.QPushButton("Reset Bulk Edit")
-    bulk_actions = qtwidgets.QHBoxLayout()
-    bulk_actions.setContentsMargins(0, 0, 0, 0)
-    bulk_actions.setSpacing(6)
-    bulk_actions.addWidget(bulk_update_button, 0, 0)
-    bulk_actions.addWidget(bulk_reset_button)
+    bulk_actions = create_button_row(qtwidgets, bulk_update_button, bulk_reset_button, spacing=6)
     bulk_form.addRow("", bulk_count)
     bulk_form.addRow("", bulk_types)
     bulk_form.addRow("", bulk_summary)
@@ -771,8 +762,7 @@ def _build_form() -> dict[str, Any]:
     details_box, details_layout = build_group_box(qtwidgets, "Selection Details", spacing=6)
     details = create_text_panel(qtwidgets, max_height=72)
     details_layout.addWidget(details)
-    status = qtwidgets.QLabel()
-    status.setWordWrap(True)
+    status = create_status_label(qtwidgets)
     status_box, status_layout = build_group_box(qtwidgets, "Status", spacing=6)
     status_layout.addWidget(status)
     for child in (selector_box, bulk_box, bulk_section, add_box, component, add_category, add_component):
@@ -875,10 +865,4 @@ def _values_equal(left: Any, right: Any) -> bool:
 
 
 def _bulk_row_widget(qtwidgets: Any, apply_widget: Any, value_widget: Any) -> Any:
-    row = qtwidgets.QWidget()
-    layout = qtwidgets.QHBoxLayout(row)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(6)
-    layout.addWidget(apply_widget)
-    layout.addWidget(value_widget, 1)
-    return row
+    return create_row_widget(qtwidgets, apply_widget, value_widget, spacing=6, stretch_index=1)

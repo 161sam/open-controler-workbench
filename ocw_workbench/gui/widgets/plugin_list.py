@@ -6,6 +6,9 @@ from ocw_workbench.gui.panels._common import (
     build_group_box,
     build_collapsible_section,
     configure_combo_box,
+    create_button_row,
+    create_row_widget,
+    create_status_label,
     create_text_panel,
     FallbackButton,
     FallbackCombo,
@@ -155,13 +158,11 @@ def _build_widget() -> dict[str, Any]:
     import_path = qtwidgets.QLineEdit()
     export_button = qtwidgets.QPushButton("Export")
     import_button = qtwidgets.QPushButton("Import")
-    summary = qtwidgets.QLabel("")
-    summary.setWordWrap(True)
+    summary = create_status_label(qtwidgets)
     remote_url = qtwidgets.QLineEdit()
     remote_refresh_button = qtwidgets.QPushButton("Load")
     remote_plugin_combo = qtwidgets.QComboBox()
-    remote_summary = qtwidgets.QLabel("No remote plugin selected.")
-    remote_summary.setWordWrap(True)
+    remote_summary = create_status_label(qtwidgets, "No remote plugin selected.")
     for combo in (filter_combo, plugin_combo, remote_plugin_combo):
         configure_combo_box(combo)
     remote_details = create_text_panel(qtwidgets, max_height=96)
@@ -169,26 +170,23 @@ def _build_widget() -> dict[str, Any]:
     download_button = qtwidgets.QPushButton("Download")
     for child in (filter_combo, plugin_combo, export_path, import_path, remote_url, remote_plugin_combo, download_path):
         set_size_policy(child, horizontal="expanding", vertical="preferred")
-    row = qtwidgets.QHBoxLayout()
-    row.addWidget(enable_button)
-    row.addWidget(disable_button)
-    row.addWidget(refresh_button)
-    export_row = qtwidgets.QHBoxLayout()
-    export_row.addWidget(qtwidgets.QLabel("Export"))
-    export_row.addWidget(export_path, 1)
-    export_row.addWidget(export_button)
-    import_row = qtwidgets.QHBoxLayout()
-    import_row.addWidget(qtwidgets.QLabel("Import"))
-    import_row.addWidget(import_path, 1)
-    import_row.addWidget(import_button)
-    remote_url_row = qtwidgets.QHBoxLayout()
-    remote_url_row.addWidget(qtwidgets.QLabel("Registry"))
-    remote_url_row.addWidget(remote_url, 1)
-    remote_url_row.addWidget(remote_refresh_button)
-    remote_download_row = qtwidgets.QHBoxLayout()
-    remote_download_row.addWidget(qtwidgets.QLabel("Download"))
-    remote_download_row.addWidget(download_path, 1)
-    remote_download_row.addWidget(download_button)
+    row = create_button_row(qtwidgets, enable_button, disable_button, refresh_button, spacing=6)
+    export_row = create_row_widget(qtwidgets, qtwidgets.QLabel("Export"), export_path, export_button, stretch_index=1)
+    import_row = create_row_widget(qtwidgets, qtwidgets.QLabel("Import"), import_path, import_button, stretch_index=1)
+    remote_url_row = create_row_widget(
+        qtwidgets,
+        qtwidgets.QLabel("Registry"),
+        remote_url,
+        remote_refresh_button,
+        stretch_index=1,
+    )
+    remote_download_row = create_row_widget(
+        qtwidgets,
+        qtwidgets.QLabel("Download"),
+        download_path,
+        download_button,
+        stretch_index=1,
+    )
     layout.addWidget(filter_combo)
     layout.addWidget(plugin_combo)
     layout.addWidget(badge.widget)

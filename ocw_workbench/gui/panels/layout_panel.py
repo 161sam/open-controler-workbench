@@ -6,8 +6,10 @@ from typing import Any
 from ocw_workbench.gui.feedback import apply_status_message, format_layout_message, format_toggle_message, friendly_ui_error
 from ocw_workbench.gui.panels._common import (
     build_panel_container,
+    build_form_layout,
     configure_combo_box,
     create_button_row,
+    create_status_label,
     create_text_panel,
     FallbackButton,
     FallbackCombo,
@@ -318,11 +320,8 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, layout = build_panel_container(qtwidgets)
-    intro = qtwidgets.QLabel("Run Auto Place first, then use view helpers as needed.")
-    intro.setWordWrap(True)
-    form = qtwidgets.QFormLayout()
-    form.setContentsMargins(0, 0, 0, 0)
-    form.setSpacing(4)
+    intro = create_status_label(qtwidgets, "Run Auto Place first, then use view helpers as needed.")
+    form = build_form_layout(qtwidgets, spacing=4)
     preset = qtwidgets.QComboBox()
     preset.addItems(["grid", "row", "column", "zone"])
     configure_combo_box(preset)
@@ -374,8 +373,7 @@ def _build_form() -> dict[str, Any]:
         button_row.addWidget(button, row, column)
     summary = create_text_panel(qtwidgets, max_height=72)
     overlay_status = create_text_panel(qtwidgets, max_height=72)
-    status = qtwidgets.QLabel()
-    status.setWordWrap(True)
+    status = create_status_label(qtwidgets)
     settings_box, settings_layout = build_group_box(qtwidgets, "Placement Settings", layout_kind="form", spacing=4)
     settings_layout.addRow("Preset", preset)
     settings_layout.addRow("Grid (mm)", grid_mm)

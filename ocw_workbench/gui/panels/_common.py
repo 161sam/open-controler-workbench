@@ -318,11 +318,49 @@ def create_text_panel(qtwidgets: Any, *, max_height: int = 160) -> Any:
     return widget
 
 
+def build_form_layout(
+    qtwidgets: Any,
+    *,
+    spacing: int = 4,
+    margins: tuple[int, int, int, int] = (0, 0, 0, 0),
+) -> Any:
+    layout = qtwidgets.QFormLayout()
+    configure_layout(layout, margins=margins, spacing=spacing)
+    return layout
+
+
 def create_label(qtwidgets: Any, text: str = "", *, word_wrap: bool = False) -> Any:
     widget = qtwidgets.QLabel(text)
     if word_wrap and hasattr(widget, "setWordWrap"):
         widget.setWordWrap(True)
     return widget
+
+
+def create_wrapped_label(qtwidgets: Any, text: str = "", *, style: str | None = None) -> Any:
+    widget = create_label(qtwidgets, text, word_wrap=True)
+    if style and hasattr(widget, "setStyleSheet"):
+        widget.setStyleSheet(style)
+    return widget
+
+
+def create_hint_label(qtwidgets: Any, text: str = "") -> Any:
+    return create_wrapped_label(qtwidgets, text, style="color: #94a3b8;")
+
+
+def create_status_label(qtwidgets: Any, text: str = "") -> Any:
+    return create_wrapped_label(qtwidgets, text)
+
+
+def create_row_widget(qtwidgets: Any, *widgets: Any, spacing: int = 6, stretch_index: int | None = None) -> Any:
+    row = qtwidgets.QWidget()
+    layout = qtwidgets.QHBoxLayout(row)
+    configure_layout(layout, spacing=spacing)
+    for index, widget in enumerate(widgets):
+        if stretch_index is not None and index == stretch_index:
+            layout.addWidget(widget, 1)
+        else:
+            layout.addWidget(widget)
+    return row
 
 
 def create_button_row(qtwidgets: Any, *buttons: Any, spacing: int = 8) -> Any:
