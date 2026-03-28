@@ -1,303 +1,184 @@
 # Task Panel Strategy
 
-## Purpose
+## Current State
 
-This note defines when the Open Controller Workbench should use:
+The current Workbench UI is centered around a persistent right-side dock created in [`ocw_workbench/gui/docking.py`](../../ocw_workbench/gui/docking.py) and assembled in [`ocw_workbench/workbench.py`](../../ocw_workbench/workbench.py).
 
-- the persistent right-side dock
-- a FreeCAD task panel via `Gui.Control.showDialog(...)`
-- a hybrid of both
+The dock is the active UI hub for the main workflows:
 
-It is a planning document for incremental migration, not a request for immediate UI replacement.
+- `Create`: template selection, variants, presets, parameters
+- `Layout`: auto placement settings, overlay toggles, feedback
+- `Components`: selection, editing, quick add, bulk edit
+- `Plugins`: installed and remote plugin management
+- `Constraints`: validation results and issue review
 
-## Current Architecture
+The commands currently registered in the Workbench mostly focus the dock and execute work there:
 
-### Dock-based UI
+- `Create Controller` -> focuses `create`
+- `Auto Place` -> focuses `layout` and applies immediately
+- `Validate Layout` -> focuses `constraints` and validates there
+- `Plugin Manager` -> focuses `plugins`
 
-The main Workbench UI lives in the persistent right dock created by `create_or_reuse_dock(...)` in:
+## Existing Task Panels
 
-- `ocw_workbench/gui/docking.py`
-- `ocw_workbench/workbench.py`
+Task panels already exist in [`ocw_workbench/gui/taskpanels`](../../ocw_workbench/gui/taskpanels):
 
-The dock hosts a tabbed shell with these panel areas:
+- `LayoutTaskPanel`
+- `ConstraintsTaskPanel`
+- `LibraryTaskPanel`
 
-- `Create`
-- `Layout`
-- `Components`
-- `Plugins`
+These task panels are currently thin standalone forms:
 
-The dock also keeps shared status context visible:
+- `LayoutTaskPanel`: mixes auto placement and direct component move in one small form
+- `ConstraintsTaskPanel`: renders validation as plain text
+- `LibraryTaskPanel`: offers quick add from the component library
 
-- workbench header
-- activity/status
-- overlay status
-- tab navigation
+They are not the primary UX path of the active Workbench. They are better understood as legacy or experimental focused dialogs than as the main interaction model.
 
-The dock is currently the primary production UI.
+## UI Classification
 
-### Existing Task Panels
+### Better kept in the Dock
 
-Task panels already exist, but they are narrow and currently closer to legacy or prototype forms:
+These areas benefit from being persistent, always reachable, and non-modal:
 
-- `ocw_workbench/gui/taskpanels/layout_taskpanel.py`
-- `ocw_workbench/gui/taskpanels/constraints_taskpanel.py`
-- `ocw_workbench/gui/taskpanels/library_taskpanel.py`
-
-They are currently used by older commands such as:
-
-- `ocw_workbench/commands/auto_layout.py`
-- `ocw_workbench/commands/move_component.py`
-- `ocw_workbench/commands/validate_layout.py`
-
-These task panels do not yet reflect the richer dock panels and currently duplicate simplified UI logic.
-
-### Dialog-based UI
-
-Some flows already use dedicated dialogs:
-
-- `Import Template From FCStd`
-- `Template Inspector`
-
-These are naturally workflow-driven and already separate from the persistent dock.
-
-## Architectural Reading
-
-### What belongs in the dock
-
-The dock is best for persistent context and quick switching:
-
-- always-visible project context
-- selection-aware editing
-- repeated small adjustments
-- overlay toggles
-- status and validation summary
+- overlay state and view toggles
+- current selection details
+- quick component edits
+- issue summary and passive validation browsing
 - plugin status overview
 
-The dock should remain the "control tower" of the Workbench.
+Reason:
 
-### What belongs in a task panel
+- users often need to look at the 3D view and the control surface in parallel
+- these areas behave like an inspector or dashboard
+- keeping them visible reduces context switching
 
-A FreeCAD task panel is strongest when the user is in a guided, temporary, or modal workflow:
+### Better suited for Task Panels
 
-- one focused goal
-- a clear accept/cancel lifecycle
-- temporary attention shift away from the full sidebar
-- actions that feel like "do this now, then return"
+These workflows are guided, goal-oriented, and have a natural `accept / cancel` shape:
 
-Task panels fit workflows better than persistent dashboards.
+- create controller from template or variant
+- import template from FCStd
+- remote plugin install / import / export flows
+- focused validation review sessions with explicit “review issues” intent
+- placement setup when the user wants a deliberate placement run instead of one-click execution
 
-## Candidate Evaluation
+Reason:
 
-### 1. Create Controller
+- task panels fit short-lived, workflow-driven actions
+- they make it easier to present a sequence without overloading the dock
+- they align with FreeCAD’s existing task workflow model
 
-Current state:
+## Recommendation
 
-- rich dock-based `CreatePanel`
-- includes templates, variants, favorites, presets, parameters, preview
+Use a **hybrid architecture**.
 
-Assessment:
+### Keep the Dock as the Workbench Home
 
-- not purely modal
-- users often compare templates, adjust parameters, then return later
-- benefits from persistent access while working in the document
+The dock should remain the persistent control hub for:
 
-Recommendation:
+- overview
+- status
+- selection
+- quick edits
+- overlays
+- passive issue browsing
 
-- keep the primary Create experience in the dock
-- optionally add a future guided task panel only for first-run onboarding or template-based creation wizard
+This matches the current command architecture and avoids destabilizing the Workbench.
 
-Conclusion:
+### Introduce Task Panels only for focused flows
 
-- `Dock-first`
-- task panel only as an optional guided entry flow later
+Task panels should be used for workflows that are:
 
-### 2. Auto Layout
-
-Current state:
-
-- dock-based `LayoutPanel` is richer
-- `LayoutTaskPanel` exists and is already used by legacy commands
-
-Assessment:
-
-- running Auto Layout is a focused operation
-- users may want a compact modal setup when starting a new placement pass
-- however overlay toggles and repeated iteration still benefit from dock visibility
-
-Recommendation:
-
-- adopt a hybrid model
-- keep the dock as the main iteration surface
-- task panel can remain for a compact "run Auto Layout" flow if it is later rebuilt on top of shared panel logic
-
-Conclusion:
-
-- `Hybrid`
-- the dock remains canonical
-
-### 3. Constraints / Validation
-
-Current state:
-
-- dock-based constraints panel is now richer and more navigable
-- old `ConstraintsTaskPanel` still exists
-
-Assessment:
-
-- validation summary should remain always reachable
-- focused issue review is a natural modal flow
-- future "jump to issue" and "next issue" behavior would fit a task panel very well
-
-Recommendation:
-
-- use a hybrid model
-- keep the dock for summary, overview, and quick checks
-- add a future task panel for focused review / issue navigation / step-through validation
-
-Conclusion:
-
-- `Hybrid`
-- validation overview in dock, issue-resolution workflow in task panel
-
-### 4. Plugin Management
-
-Current state:
-
-- full plugin UI lives in the dock
-
-Assessment:
-
-- plugin status is useful reference information, but most plugin actions are administrative and episodic
-- install/import/export/remote registry actions are not part of the normal controller editing loop
-- plugin management behaves more like a management console than persistent editing context
-
-Recommendation:
-
-- move toward a hybrid model
-- keep a compact plugin status/entry point in the dock
-- move advanced plugin operations to a dedicated management surface
-- that management surface could be a task panel or a dedicated dialog; task panel is appropriate if the flow becomes step-based
-
-Conclusion:
-
-- `Hybrid leaning away from dock`
-
-### 5. Add Component / Library Browsing
-
-Current state:
-
-- dock-based Components panel
-- separate component palette dock
-- legacy `LibraryTaskPanel`
-
-Assessment:
-
-- library browsing is often transient
-- placement itself is workflow-driven and attention-heavy
-- however selected-component editing belongs in persistent UI
-
-Recommendation:
-
-- keep selected-component editing in dock
-- treat library browsing / add-from-library / placement kickoff as a candidate for a compact task panel later
-- component palette dock can remain as a quick-access tool
-
-Conclusion:
-
-- `Hybrid`
+- guided
+- short-lived
+- commit-oriented
+- easier to understand as a step-by-step task than as permanent sidebar content
 
 ## Recommended Target Architecture
 
-### Principle
+### Phase 1: Stabilize the Hybrid Model
 
-Use the dock for persistent context.
-Use task panels for guided workflows.
+- Keep the existing dock as the main Workbench shell.
+- Treat current task panels as secondary focused surfaces.
+- Do not migrate the whole dock into task panels.
 
-### Target split
+### Phase 2: Add focused task panels where they help UX
 
-#### Persistent dock
+Priority candidates:
 
-Keep in the dock:
+1. **Create Controller Task Panel**
+   - Best candidate.
+   - Benefits from step-oriented flow: choose template -> variant -> parameters -> create.
+   - The dock can still show current project, recents, and quick create status.
 
-- project summary
-- selection-aware component editing
-- lightweight layout controls and overlay toggles
-- validation summary
-- quick plugin overview / entry points
+2. **Plugin Operations Task Panel**
+   - Good candidate for remote install, ZIP import/export, and registry-driven flows.
+   - The dock should remain the plugin overview and status surface.
 
-#### Task panels
+3. **Layout Setup Task Panel**
+   - Useful as an optional advanced mode for explicit placement runs.
+   - The dock should still keep fast overlay toggles and layout summary.
 
-Use task panels for:
+4. **Validation Review Task Panel**
+   - Optional candidate, not primary.
+   - Only worthwhile if it becomes a real issue-review workflow with focus/jump/next actions.
+   - The current dock is already the right home for persistent findings and quick revalidation.
 
-- focused Auto Layout run/setup
-- focused Validation review / issue stepping
-- future guided Create wizard
-- future Add Component / placement flow
-- advanced plugin management if it becomes multi-step
+### Phase 3: Share UI building blocks
 
-## Migration Recommendation
+If task panels are expanded, they should reuse the same panel widgets or shared sub-builders as the dock where possible.
 
-### Preferred strategy
+The desired direction is:
 
-Do not migrate panel-by-panel by copying UI again.
+- shared panel logic
+- thin dock container
+- thin task-panel container
 
-Instead:
+Not:
 
-1. keep the dock as the canonical surface for now
-2. treat existing task panels as provisional
-3. when rebuilding a task panel, compose it from shared Workbench UI logic or shared widget builders
-4. avoid maintaining two different feature-complete UIs for the same workflow
+- two separate UI implementations with duplicated behavior
 
-### Near-term roadmap
+## Concrete Decisions
 
-#### Phase 1
+### Create Controller
 
-- keep dock as primary UI
-- document the split of responsibilities
-- stop expanding legacy task panels independently
+**Move toward hybrid.**
 
-#### Phase 2
+- Keep the dock `Create` tab for always-available browsing and quick creation.
+- Add a future focused task panel for guided controller creation.
 
-- rebuild `ConstraintsTaskPanel` as the first serious hybrid candidate
-- focus it on issue review, next/previous issue, and jump-to-component
-- keep dock constraints panel as summary + quick access
+### Plugin Manager
 
-#### Phase 3
+**Use hybrid.**
 
-- review `LayoutTaskPanel`
-- either modernize it as a compact guided "Run Auto Layout" flow
-- or retire it if the dock proves sufficient
+- Keep plugin overview in the dock.
+- Move remote install/import/export into focused task panels if complexity grows.
 
-#### Phase 4
+### Constraints / Validation
 
-- decide whether plugin administration should remain dock-based, become dialog-based, or become task-panel-based
+**Keep primarily in the dock for now.**
 
-## Small Technical Preparation Guidelines
+- The dock is better for persistent issue visibility and repeated validation.
+- A task panel only becomes valuable once issue review supports step-through navigation and focus actions well.
 
-Before any migration:
+### Layout
 
-- keep shared strings and layout helpers centralized
-- prefer reusable builders over copying Qt form code into task panels
-- keep domain logic in services and panels, not in task panel glue
-- route task panels through existing service APIs and existing status formatting where possible
+**Use hybrid, but dock-first.**
 
-## Explicit Decision
+- One-click `Auto Place` fits the dock and toolbar well.
+- A future task panel can support advanced placement sessions.
 
-### Recommended architecture
+## Low-Risk Migration Plan
 
-- `Dock-only`: not recommended as the long-term answer
-- `Task-panel-only`: not recommended because too much persistent context would be lost
-- `Hybrid`: recommended
+1. Keep all primary commands dock-first.
+2. When adding a new task panel, limit it to one workflow.
+3. Reuse existing panel logic instead of cloning service calls and UI rules.
+4. Only migrate a workflow once the task panel is clearly better than the dock for that specific use case.
 
-### Short version
+## Immediate Follow-up Work
 
-The Open Controller Workbench should become:
-
-- a persistent dock for context, editing, and quick control
-- plus focused task panels for modal, guided workflows
-
-### First migration candidate
-
-`Constraints / Validation`
-
-This area has the clearest path to a meaningful task panel without weakening the dock.
+- design a `CreateControllerTaskPanel` as the first serious hybrid candidate
+- define shared sub-widgets for task-panel reuse from `CreatePanel` and `PluginManagerPanel`
+- decide whether `ApplyLayout` should stay instant-action or also offer `Open Layout Task`
+- postpone any full validation-panel migration until issue navigation is stronger
