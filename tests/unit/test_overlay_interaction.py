@@ -176,6 +176,22 @@ def test_overlay_service_marks_primary_and_secondary_selected_components():
     assert overlay["summary"]["selected_count"] == 2
 
 
+def test_overlay_service_marks_hovered_component_before_drag():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 120.0, "depth": 80.0, "height": 30.0, "top_thickness": 3.0})
+    controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=25.0, y=25.0)
+    controller_service.clear_selection(doc)
+    interaction_service.set_hovered_component(doc, "btn1")
+
+    overlay = OverlayService(controller_service=controller_service).build_overlay(doc)
+    hovered_item = next(item for item in overlay["items"] if item["id"] == "component:btn1")
+
+    assert hovered_item["style"]["kind"] == "component_hover"
+    assert hovered_item["label"].endswith(">")
+
+
 def test_overlay_service_and_hit_test_respect_rect_rotation():
     doc = FakeDocument()
     controller_service = ControllerService()

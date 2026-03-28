@@ -44,6 +44,7 @@ class ViewDragController:
         self.session: DragMoveSession | None = None
         self._view_callbacks = view_callbacks or ViewEventCallbackRegistry()
         self._last_preview_status: str | None = None
+        self._last_hover_component_id: str | None = None
 
     def start(self, doc: Any) -> bool:
         view = self._active_view(doc)
@@ -55,12 +56,13 @@ class ViewDragController:
         self.view = view
         self.armed = True
         self._last_preview_status = None
+        self._last_hover_component_id = None
         self.interaction_service.begin_interaction(doc, "drag")
         if not self._view_callbacks.attach(view, self.handle_view_event):
             self.cancel(reason="error", publish_status=False)
             self._publish_status("Interaction error")
             return False
-        self._publish_status("Drag in 3D. Pick a component, release to commit, ESC to cancel.")
+        self._publish_status("Drag in 3D. Hover a component, drag to move, ESC to cancel.")
         return self._view_callbacks.is_registered
 
     def cancel(self, reason: str = "cancel", publish_status: bool = True) -> None:
@@ -68,6 +70,10 @@ class ViewDragController:
         session = self.session
         self._view_callbacks.detach()
         if doc is not None:
+            try:
+                self.interaction_service.set_hovered_component(doc, None)
+            except Exception as exc:
+                log_exception("Failed to clear drag hover state", exc)
             try:
                 self.interaction_service.end_interaction(doc)
             except Exception as exc:
@@ -90,6 +96,7 @@ class ViewDragController:
         self.armed = False
         self.session = None
         self._last_preview_status = None
+        self._last_hover_component_id = None
         self._notify_finished()
         if publish_status:
             self._publish_status(self._status_for_reason(reason))
@@ -113,8 +120,11 @@ class ViewDragController:
             if self._is_left_click_down(event_type, payload):
                 self._begin_drag(screen_x, screen_y)
                 return
-            if self.session is not None and self.session.dragging and self._is_mouse_move(event_type, payload):
-                self.update_preview_from_screen(screen_x, screen_y)
+            if self._is_mouse_move(event_type, payload):
+                if self.session is not None and self.session.dragging:
+                    self.update_preview_from_screen(screen_x, screen_y)
+                else:
+                    self.update_hover_from_screen(screen_x, screen_y)
                 return
             if self.session is not None and self.session.dragging and self._is_left_click_up(event_type, payload):
                 preview = self.update_preview_from_screen(screen_x, screen_y)
@@ -135,6 +145,7 @@ class ViewDragController:
         component_id = hit_test_components(list(overlay.get("items", [])), x=float(point[0]), y=float(point[1]))
         if component_id is None:
             return False
+        self._set_hover_component(component_id, announce=False)
         component = self.controller_service.get_component(self.doc, component_id)
         previous_selection = self.controller_service.get_ui_context(self.doc).get("selection")
         self.controller_service.select_component(self.doc, component_id)
@@ -158,6 +169,19 @@ class ViewDragController:
         self.overlay_renderer.refresh(self.doc)
         self._publish_status(f"Dragging '{component_id}'. Release to commit, ESC to cancel.")
         return True
+
+    def update_hover_from_screen(self, screen_x: float, screen_y: float) -> str | None:
+        if self.doc is None or self.view is None:
+            return None
+        point = self._view_point(self.view, screen_x, screen_y)
+        if point is None:
+            return None
+        overlay = getattr(self.doc, "OCWOverlayState", None)
+        if not isinstance(overlay, dict):
+            overlay = self.overlay_renderer.refresh(self.doc)
+        component_id = hit_test_components(list(overlay.get("items", [])), x=float(point[0]), y=float(point[1]))
+        self._set_hover_component(component_id, announce=True)
+        return component_id
 
     def update_preview_from_screen(self, screen_x: float, screen_y: float) -> dict[str, Any] | None:
         if self.doc is None or self.session is None:
@@ -343,3 +367,19 @@ class ViewDragController:
         if reason == "view_unavailable":
             return "Drag mode stopped because the 3D view is no longer available."
         return "Drag cancelled."
+
+    def _set_hover_component(self, component_id: str | None, *, announce: bool) -> None:
+        if self.doc is None:
+            return
+        if component_id == self._last_hover_component_id:
+            return
+        self._last_hover_component_id = component_id
+        self.interaction_service.set_hovered_component(self.doc, component_id)
+        if not announce:
+            return
+        if component_id is None:
+            self._publish_status("Drag in 3D. Hover a component, drag to move, ESC to cancel.")
+            return
+        component = self.controller_service.get_component(self.doc, component_id)
+        label = component.get("label") or component_id
+        self._publish_status(f"Ready to drag '{label}'. Press and hold the left mouse button to move it.")

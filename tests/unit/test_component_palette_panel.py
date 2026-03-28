@@ -66,6 +66,21 @@ def test_interaction_service_sets_active_component_template_without_document_syn
     assert doc.recompute_count == recomputes_before
 
 
+def test_interaction_service_sets_hovered_component_with_visual_only_refresh():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo"})
+    controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=10.0, y=10.0)
+    recomputes_before = doc.recompute_count
+
+    settings = interaction_service.set_hovered_component(doc, "btn1")
+
+    assert settings["hovered_component_id"] == "btn1"
+    assert controller_service.get_state(doc)["meta"]["ui"]["hovered_component_id"] == "btn1"
+    assert doc.recompute_count == recomputes_before
+
+
 def test_component_favorites_persist_in_userdata(tmp_path):
     service = UserDataService(
         persistence=UserDataPersistence(base_dir=str(tmp_path)),

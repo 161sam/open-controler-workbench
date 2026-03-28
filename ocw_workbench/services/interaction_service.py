@@ -10,6 +10,7 @@ from ocw_workbench.services.preview_validation_service import PreviewValidationS
 
 DEFAULT_UI_SETTINGS = {
     "active_interaction": None,
+    "hovered_component_id": None,
     "overlay_enabled": True,
     "show_constraints": True,
     "grid_mm": 1.0,
@@ -79,6 +80,7 @@ class InteractionService:
         updates: dict[str, Any] = {
             "active_interaction": str(kind),
             "move_component_id": None,
+            "hovered_component_id": None,
         }
         if template_id is not None:
             self.controller_service.library_service.get(template_id)
@@ -91,8 +93,19 @@ class InteractionService:
             {
                 "active_interaction": None,
                 "move_component_id": None,
+                "hovered_component_id": None,
             },
         )
+
+    def set_hovered_component(self, doc: Any, component_id: str | None) -> dict[str, Any]:
+        if component_id is not None:
+            self.controller_service.get_component(doc, component_id)
+        settings = self.get_settings(doc)
+        if settings.get("hovered_component_id") == component_id:
+            return settings
+        updated = self.update_settings(doc, {"hovered_component_id": component_id})
+        self.controller_service.refresh_document_visuals(doc, recompute=False)
+        return updated
 
     def add_component_preview(
         self,

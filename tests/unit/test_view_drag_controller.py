@@ -104,7 +104,9 @@ def test_view_drag_controller_preview_is_visual_only_until_commit():
             "summary": {"error_count": 0, "warning_count": 0, "total_count": 0},
         },
     }
-    assert during_state == before_state
+    assert during_state["components"] == before_state["components"]
+    assert during_state["controller"] == before_state["controller"]
+    assert during_state["meta"]["selection"] == before_state["meta"]["selection"]
     assert moved["x"] == 31.0
     assert moved["y"] == 29.0
     assert len(overlay.calls) >= 3
@@ -146,6 +148,40 @@ def test_view_drag_controller_escape_cancels_without_side_effects():
     assert before["x"] == after["x"] == 20.0
     assert before["y"] == after["y"] == 20.0
     assert controller.session is None
+
+
+def test_view_drag_controller_hover_highlights_hit_target_before_drag():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=20.0, y=20.0)
+    overlay = RecordingOverlayRenderer(
+        items=[
+            {
+                "id": "component:btn1",
+                "type": "rect",
+                "geometry": {"x": 20.0, "y": 20.0, "width": 14.0, "height": 14.0, "rotation": 0.0},
+                "source_component_id": "btn1",
+            }
+        ]
+    )
+    statuses: list[str] = []
+    controller = ViewDragController(
+        controller_service=controller_service,
+        interaction_service=interaction_service,
+        overlay_renderer=overlay,
+        on_status=statuses.append,
+    )
+    controller.doc = doc
+    controller.view = FakeView()
+    controller.armed = True
+
+    controller.handle_view_event({"Type": "SoLocation2Event", "Position": (20, 20)})
+
+    settings = interaction_service.get_settings(doc)
+    assert settings["hovered_component_id"] == "btn1"
+    assert statuses[-1] == "Ready to drag 'btn1'. Press and hold the left mouse button to move it."
 
 
 def test_view_drag_controller_clamps_and_snaps_to_bounds():

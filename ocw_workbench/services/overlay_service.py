@@ -50,6 +50,7 @@ class OverlayService:
         selected_component_id = context.get("selection")
         selected_component_ids = set(context.get("selected_ids", []))
         move_component_id = settings.get("move_component_id")
+        hovered_component_id = settings.get("hovered_component_id")
         findings_by_component = self._group_findings(validation)
         items: list[dict[str, Any]] = []
         items.append(
@@ -99,6 +100,7 @@ class OverlayService:
         for component in resolved_components:
             severity = self._component_severity(findings_by_component, component["id"])
             selected_role: str | None = None
+            hovered = component["id"] == hovered_component_id and component["id"] != selected_component_id
             if component["id"] == selected_component_id:
                 selected_role = "primary"
             elif component["id"] in selected_component_ids:
@@ -108,13 +110,22 @@ class OverlayService:
                 item_kind = "component_selected"
             elif selected_role == "secondary":
                 item_kind = "component_selected_secondary"
+            elif hovered:
+                item_kind = "component_hover"
             if severity == "error":
-                item_kind = "component_error"
+                if hovered:
+                    item_kind = "component_hover_error"
+                elif selected_role in {"primary", "secondary"}:
+                    item_kind = "component_selected" if selected_role == "primary" else "component_selected_secondary"
+                else:
+                    item_kind = "component_error"
             elif severity == "warning":
                 if selected_role == "primary":
                     item_kind = "component_selected"
                 elif selected_role == "secondary":
                     item_kind = "component_selected_secondary"
+                elif hovered:
+                    item_kind = "component_hover_warning"
                 else:
                     item_kind = "component_warning"
             shape = component["resolved_mechanical"].keepout_top
@@ -127,7 +138,7 @@ class OverlayService:
                     rotation=float(component.get("rotation", 0.0) or 0.0),
                     shape=shape.to_dict(),
                     style=overlay_style(item_kind),
-                    label=component_label(component, severity=severity, selected_role=selected_role),
+                    label=component_label(component, severity=severity, selected_role=selected_role, hovered=hovered),
                     source_component_id=component["id"],
                     severity=severity,
                 )

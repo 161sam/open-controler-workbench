@@ -44,6 +44,7 @@ DEFAULT_META = {
     "validation": None,
     "ui": {
         "active_interaction": None,
+        "hovered_component_id": None,
         "overlay_enabled": True,
         "show_constraints": True,
         "grid_mm": 1.0,
