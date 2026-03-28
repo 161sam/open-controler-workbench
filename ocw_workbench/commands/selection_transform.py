@@ -5,7 +5,7 @@ from ocw_workbench.gui.runtime import show_error, show_info
 
 
 class SelectionTransformCommand(BaseCommand):
-    ICON_NAME = "default"
+    ICON_NAME = "rotate_cw_90"
 
     def __init__(self, operation: str) -> None:
         self.operation = operation

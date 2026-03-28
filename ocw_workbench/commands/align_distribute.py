@@ -5,7 +5,7 @@ from ocw_workbench.gui.runtime import show_error, show_info
 
 
 class SelectionArrangeCommand(BaseCommand):
-    ICON_NAME = "default"
+    ICON_NAME = "align_left"
 
     def __init__(self, operation: str) -> None:
         self.operation = operation

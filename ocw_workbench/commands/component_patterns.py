@@ -35,7 +35,7 @@ class DuplicateSelectionCommand(BaseCommand):
 
 
 class LinearArrayCommand(BaseCommand):
-    ICON_NAME = "default"
+    ICON_NAME = "array_horizontal"
 
     def __init__(self, axis: str) -> None:
         self.axis = axis
