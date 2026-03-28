@@ -328,6 +328,25 @@ def test_workbench_uses_single_flow_context_summary_for_active_step():
     assert plugins_summary.startswith("Plugins |")
 
 
+def test_workbench_exposes_single_navigation_and_all_main_sections_are_reachable():
+    doc = FakeDocument()
+    service = ControllerService()
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+
+    assert workbench.form["primary_navigation"] == "tabs"
+    assert workbench.form["navigation_items"] == ["Create", "Layout", "Components", "Validate", "Plugins"]
+
+    for panel_name, expected_prefix in (
+        ("create", "Create |"),
+        ("layout", "Layout |"),
+        ("components", "Components |"),
+        ("constraints", "Validate |"),
+        ("plugins", "Plugins |"),
+    ):
+        workbench.focus_panel(panel_name)
+        assert workbench.form["context_summary"].text.startswith(expected_prefix)
+
+
 def test_components_panel_saves_position_without_move_step():
     doc = FakeDocument()
     service = ControllerService()

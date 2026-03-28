@@ -363,7 +363,10 @@ def test_product_workbench_panel_uses_tab_shell():
     doc = FakeDocument()
     panel = ProductWorkbenchPanel(doc, controller_service=ControllerService())
 
+    assert panel.form["primary_navigation"] == "tabs"
+    assert panel.form["navigation_items"] == ["Create", "Layout", "Components", "Validate", "Plugins"]
     assert "tabs" not in panel.form or panel.form["tabs"] is not None
+    assert panel.form["title"].text == "Open Controller Workbench"
     assert panel.form["context_summary"].text.startswith("Create |")
 
 

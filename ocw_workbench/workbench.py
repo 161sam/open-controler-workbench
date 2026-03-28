@@ -45,6 +45,16 @@ _ACTIVE_COMPONENT_PALETTE: ComponentPalettePanel | None = None
 _ACTIVE_COMPONENT_PALETTE_DOCK: Any | None = None
 _FAVORITE_COMMAND_IDS = [f"OCW_FavoriteComponent_{index + 1}" for index in range(MAX_FAVORITE_COMPONENTS)]
 _FAVORITE_MORE_COMMAND_ID = "OCW_OpenComponentPaletteMore"
+_WORKBENCH_TITLE = "Open Controller Workbench"
+_PRIMARY_DOCK_TABS: tuple[tuple[str, str], ...] = (
+    ("create", "Create"),
+    ("layout", "Layout"),
+    ("components", "Components"),
+    ("constraints", "Validate"),
+    ("plugins", "Plugins"),
+)
+_PRIMARY_DOCK_TAB_INDEX = {panel_name: index for index, (panel_name, _label) in enumerate(_PRIMARY_DOCK_TABS)}
+_PRIMARY_DOCK_TAB_LABELS = [label for _panel_name, label in _PRIMARY_DOCK_TABS]
 
 
 class _UnavailablePluginManagerPanel:
@@ -140,7 +150,7 @@ class _FavoriteComponentCommand:
 
 
 class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
-    MenuText = "Open Controller Workbench"
+    MenuText = _WORKBENCH_TITLE
     ToolTip = "Create and refine modular controllers in the Open Controller Workbench."
     Icon = icon_path("workbench")
 
@@ -381,14 +391,8 @@ class ProductWorkbenchPanel:
         self._update_context_summary()
 
     def focus_panel(self, panel_name: str) -> None:
-        tab_index = {
-            "create": 0,
-            "info": 0,
-            "layout": 1,
-            "components": 2,
-            "constraints": 3,
-            "plugins": 4,
-        }.get(panel_name)
+        normalized_panel = "create" if panel_name == "info" else panel_name
+        tab_index = _PRIMARY_DOCK_TAB_INDEX.get(normalized_panel)
         tabs = self.form.get("tabs")
         if tab_index is not None and tabs is not None and hasattr(tabs, "setCurrentIndex"):
             tabs.setCurrentIndex(tab_index)
@@ -402,7 +406,7 @@ class ProductWorkbenchPanel:
         }.get(panel_name)
         if widget is not None and hasattr(widget, "setFocus"):
             widget.setFocus()
-        self._update_context_summary(active_panel=panel_name)
+        self._update_context_summary(active_panel=normalized_panel)
 
     def set_status(self, message: str) -> None:
         level = "error" if message.lower().startswith("could not") or message.lower().startswith("validation found") else "info"
@@ -660,10 +664,12 @@ class ProductWorkbenchPanel:
         if qtwidgets is None:
             return {
                 "widget": object(),
-                "title": FallbackLabel("Open Controller"),
+                "title": FallbackLabel(_WORKBENCH_TITLE),
                 "context_summary": FallbackLabel("Create | 0 components | grid 1.0 mm | validation clear"),
                 "status": FallbackLabel("Workbench ready."),
                 "overlay_status": FallbackLabel("Overlay ready."),
+                "primary_navigation": "tabs",
+                "navigation_items": list(_PRIMARY_DOCK_TAB_LABELS),
             }
 
         widget = qtwidgets.QWidget()
@@ -683,7 +689,7 @@ class ProductWorkbenchPanel:
         header_layout.setContentsMargins(12, 10, 12, 10)
         header_layout.setSpacing(4)
 
-        title = qtwidgets.QLabel("Open Controller")
+        title = qtwidgets.QLabel(_WORKBENCH_TITLE)
         if hasattr(title, "setObjectName"):
             title.setObjectName("OCWHeaderTitle")
         context_summary = qtwidgets.QLabel("Create | 0 components | grid 1.0 mm | validation clear")
@@ -722,11 +728,11 @@ class ProductWorkbenchPanel:
         plugins_page, plugins_layout = _tab_page(qtwidgets)
         for layout in (create_layout, layout_layout, components_layout, validate_layout, plugins_layout):
             layout.setSpacing(8)
-        tabs.addTab(create_page, "Create")
-        tabs.addTab(layout_page, "Layout")
-        tabs.addTab(components_page, "Components")
-        tabs.addTab(validate_page, "Validate")
-        tabs.addTab(plugins_page, "Plugins")
+        tabs.addTab(create_page, _PRIMARY_DOCK_TABS[0][1])
+        tabs.addTab(layout_page, _PRIMARY_DOCK_TABS[1][1])
+        tabs.addTab(components_page, _PRIMARY_DOCK_TABS[2][1])
+        tabs.addTab(validate_page, _PRIMARY_DOCK_TABS[3][1])
+        tabs.addTab(plugins_page, _PRIMARY_DOCK_TABS[4][1])
 
         footer = qtwidgets.QFrame()
         if hasattr(footer, "setObjectName"):
@@ -747,6 +753,8 @@ class ProductWorkbenchPanel:
             "status": status,
             "overlay_status": overlay_status,
             "tabs": tabs,
+            "primary_navigation": "tabs",
+            "navigation_items": list(_PRIMARY_DOCK_TAB_LABELS),
             "create_layout": create_layout,
             "layout_layout": layout_layout,
             "components_layout": components_layout,
@@ -936,13 +944,7 @@ class ProductWorkbenchPanel:
     def _active_panel_name(self) -> str:
         tabs = self.form.get("tabs")
         if tabs is not None and hasattr(tabs, "currentIndex"):
-            mapping = {
-                0: "create",
-                1: "layout",
-                2: "components",
-                3: "constraints",
-                4: "plugins",
-            }
+            mapping = {index: panel_name for index, (panel_name, _label) in enumerate(_PRIMARY_DOCK_TABS)}
             return mapping.get(int(tabs.currentIndex()), "create")
         return "create"
 
@@ -978,7 +980,7 @@ def ensure_workbench_ui(doc: Any | None = None, focus: str = "create") -> Produc
 
 
 def _show_in_dock(panel: ProductWorkbenchPanel) -> Any | None:
-    dock = create_or_reuse_dock("Open Controller Workbench", panel.widget)
+    dock = create_or_reuse_dock(_WORKBENCH_TITLE, panel.widget)
     if dock is None:
         log_to_console("Qt dock support unavailable; Open Controller dock not created.", level="warning")
     return dock
@@ -990,14 +992,14 @@ def _show_existing_dock(dock: Any | None) -> None:
 
 def _show_fallback_dock(exc: Exception) -> Any | None:
     widget = _build_unavailable_panel_widget(
-        "Open Controller Workbench",
+        _WORKBENCH_TITLE,
         "The Workbench UI could not be loaded. Check the FreeCAD report view for details.",
         f"{exc.__class__.__name__}: {exc}",
     )
     if widget is None:
         return None
     log_to_console("Showing fallback Open Controller dock after UI build failure.", level="warning")
-    return create_or_reuse_dock("Open Controller Workbench", widget)
+    return create_or_reuse_dock(_WORKBENCH_TITLE, widget)
 
 
 def _build_unavailable_panel_widget(title_text: str, message_text: str, details_text: str) -> Any | None:
@@ -1040,14 +1042,8 @@ def _section_splitter(orientation: str, widgets: list[Any], stretch_factors: lis
 
 
 def _panel_title(panel_name: str) -> str:
-    return {
-        "create": "Create",
-        "layout": "Layout",
-        "components": "Components",
-        "constraints": "Validate",
-        "plugins": "Plugins",
-        "info": "Create",
-    }.get(panel_name, "Create")
+    normalized_panel = "create" if panel_name == "info" else panel_name
+    return dict(_PRIMARY_DOCK_TABS).get(normalized_panel, "Create")
 
 
 def _workbench_shell_stylesheet() -> str:
