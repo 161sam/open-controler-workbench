@@ -333,18 +333,41 @@ def test_workbench_exposes_single_navigation_and_all_main_sections_are_reachable
     service = ControllerService()
     workbench = ProductWorkbenchPanel(doc, controller_service=service)
 
-    assert workbench.form["primary_navigation"] == "tabs"
-    assert workbench.form["navigation_items"] == ["Create", "Layout", "Components", "Validate", "Plugins"]
+    assert workbench.form["primary_navigation"] == "stepper"
+    assert workbench.form["navigation_count"] == 1
+    assert workbench.form["navigation_items"] == ["Template", "Components", "Layout", "Validate", "Plugins"]
+    assert workbench.form["content_host"] is workbench.form["stack"]
+    assert "tab_widget" not in workbench.form
 
     for panel_name, expected_prefix in (
-        ("create", "Create |"),
-        ("layout", "Layout |"),
+        ("create", "Template |"),
         ("components", "Components |"),
+        ("layout", "Layout |"),
         ("constraints", "Validate |"),
         ("plugins", "Plugins |"),
     ):
         workbench.focus_panel(panel_name)
+        assert workbench.form["active_step"] == panel_name
         assert workbench.form["context_summary"].text.startswith(expected_prefix)
+
+
+def test_workbench_shell_builds_single_flow_regions_and_switches_visible_content():
+    doc = FakeDocument()
+    service = ControllerService()
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+
+    assert workbench.form["header_bar"] is not None
+    assert workbench.form["stepper_bar"] is not None
+    assert workbench.form["content_host"] is not None
+    assert workbench.form["footer_bar"] is not None
+    assert workbench.form["content_host"].currentIndex() == 0
+
+    workbench.focus_panel("layout")
+
+    assert workbench.form["content_host"].currentIndex() == 2
+    assert workbench.form["active_step"] == "layout"
+    assert workbench.form["step_buttons"]["layout"].isChecked() is True
+
 
 
 def test_components_panel_saves_position_without_move_step():

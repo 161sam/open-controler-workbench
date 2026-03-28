@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import traceback
 from typing import Any
 
 try:
@@ -46,15 +47,25 @@ _ACTIVE_COMPONENT_PALETTE_DOCK: Any | None = None
 _FAVORITE_COMMAND_IDS = [f"OCW_FavoriteComponent_{index + 1}" for index in range(MAX_FAVORITE_COMPONENTS)]
 _FAVORITE_MORE_COMMAND_ID = "OCW_OpenComponentPaletteMore"
 _WORKBENCH_TITLE = "Open Controller Workbench"
-_PRIMARY_DOCK_TABS: tuple[tuple[str, str], ...] = (
-    ("create", "Create"),
-    ("layout", "Layout"),
+_WORKFLOW_STEPS: tuple[tuple[str, str], ...] = (
+    ("create", "Template"),
     ("components", "Components"),
+    ("layout", "Layout"),
     ("constraints", "Validate"),
     ("plugins", "Plugins"),
 )
-_PRIMARY_DOCK_TAB_INDEX = {panel_name: index for index, (panel_name, _label) in enumerate(_PRIMARY_DOCK_TABS)}
-_PRIMARY_DOCK_TAB_LABELS = [label for _panel_name, label in _PRIMARY_DOCK_TABS]
+_WORKFLOW_STEP_INDEX = {panel_name: index for index, (panel_name, _label) in enumerate(_WORKFLOW_STEPS)}
+_WORKFLOW_STEP_LABELS = [label for _panel_name, label in _WORKFLOW_STEPS]
+
+
+def _emit_runtime_traceback(context: str, exc: Exception) -> None:
+    details = traceback.format_exc()
+    if details.strip() == "NoneType: None":
+        details = f"{exc.__class__.__name__}: {exc}"
+    log_to_console(f"{context}: {exc.__class__.__name__}: {exc}", level="error")
+    log_to_console("[OCW TRACEBACK START]", level="error")
+    log_to_console(details.rstrip(), level="error")
+    log_to_console("[OCW TRACEBACK END]", level="error")
 
 
 class _UnavailablePluginManagerPanel:
@@ -399,14 +410,15 @@ class ProductWorkbenchPanel:
 
     def focus_panel(self, panel_name: str) -> None:
         normalized_panel = "create" if panel_name == "info" else panel_name
-        tab_index = _PRIMARY_DOCK_TAB_INDEX.get(normalized_panel)
-        tabs = self.form.get("tabs")
-        if tab_index is not None and tabs is not None and hasattr(tabs, "setCurrentIndex"):
-            tabs.setCurrentIndex(tab_index)
+        step_index = _WORKFLOW_STEP_INDEX.get(normalized_panel)
+        content_host = self.form.get("content_host")
+        if step_index is not None and content_host is not None and hasattr(content_host, "setCurrentIndex"):
+            content_host.setCurrentIndex(step_index)
+        self._update_stepper_state(normalized_panel)
         widget = {
             "create": self.create_panel.widget,
-            "layout": self.layout_panel.widget,
             "components": self.components_panel.widget,
+            "layout": self.layout_panel.widget,
             "constraints": self.constraints_panel.widget,
             "info": self.info_panel.widget,
             "plugins": self.plugin_manager_panel.widget,
@@ -672,11 +684,17 @@ class ProductWorkbenchPanel:
             return {
                 "widget": object(),
                 "title": FallbackLabel(_WORKBENCH_TITLE),
-                "context_summary": FallbackLabel("Create | 0 components | grid 1.0 mm | validation clear"),
+                "context_summary": FallbackLabel("Template | 0 components | grid 1.0 mm | validation clear"),
                 "status": FallbackLabel("Workbench ready."),
                 "overlay_status": FallbackLabel("Overlay ready."),
-                "primary_navigation": "tabs",
-                "navigation_items": list(_PRIMARY_DOCK_TAB_LABELS),
+                "header_bar": object(),
+                "stepper_bar": object(),
+                "content_host": object(),
+                "footer_bar": object(),
+                "primary_navigation": "stepper",
+                "navigation_items": list(_WORKFLOW_STEP_LABELS),
+                "navigation_count": 1,
+                "active_step": "create",
             }
 
         widget = qtwidgets.QWidget()
@@ -716,30 +734,47 @@ class ProductWorkbenchPanel:
         header_layout.addWidget(title)
         header_layout.addWidget(context_summary)
 
-        tabs = qtwidgets.QTabWidget()
-        if hasattr(tabs, "setObjectName"):
-            tabs.setObjectName("OCWMainTabs")
-        if hasattr(tabs, "setUsesScrollButtons"):
-            tabs.setUsesScrollButtons(True)
-        if hasattr(tabs, "setDocumentMode"):
-            tabs.setDocumentMode(True)
-        if hasattr(tabs, "setTabPosition") and hasattr(qtwidgets.QTabWidget, "North"):
-            tabs.setTabPosition(qtwidgets.QTabWidget.North)
-        if hasattr(tabs, "setElideMode") and _qtcore is not None:
-            tabs.setElideMode(_qtcore.Qt.ElideRight)
-        set_size_policy(tabs, horizontal="preferred", vertical="expanding")
-        create_page, create_layout = _tab_page(qtwidgets)
-        layout_page, layout_layout = _tab_page(qtwidgets)
-        components_page, components_layout = _tab_page(qtwidgets)
-        validate_page, validate_layout = _tab_page(qtwidgets)
-        plugins_page, plugins_layout = _tab_page(qtwidgets)
-        for layout in (create_layout, layout_layout, components_layout, validate_layout, plugins_layout):
+        stepper_box = qtwidgets.QFrame()
+        if hasattr(stepper_box, "setObjectName"):
+            stepper_box.setObjectName("OCWStepperBar")
+        stepper_layout = qtwidgets.QHBoxLayout(stepper_box)
+        stepper_layout.setContentsMargins(12, 0, 12, 0)
+        stepper_layout.setSpacing(8)
+        step_buttons: dict[str, Any] = {}
+        for panel_name, label in _WORKFLOW_STEPS:
+            button = qtwidgets.QPushButton(label)
+            if hasattr(button, "setObjectName"):
+                button.setObjectName("OCWStepButton")
+            if hasattr(button, "setCheckable"):
+                button.setCheckable(True)
+            if hasattr(button, "setProperty"):
+                button.setProperty("active", panel_name == "create")
+            if hasattr(button, "clicked"):
+                button.clicked.connect(lambda _checked=False, target=panel_name: self.focus_panel(target))
+            set_size_policy(button, horizontal="expanding", vertical="preferred")
+            stepper_layout.addWidget(button, 1)
+            step_buttons[panel_name] = button
+
+        # The stepper is the only primary navigation. Content pages stay in a
+        # stacked host so existing panels can be reused without tab chrome.
+        content_host = qtwidgets.QStackedWidget()
+        if hasattr(content_host, "setObjectName"):
+            content_host.setObjectName("OCWStepContentHost")
+        set_size_policy(content_host, horizontal="preferred", vertical="expanding")
+        create_page, create_layout = _step_page(qtwidgets)
+        components_page, components_layout = _step_page(qtwidgets)
+        layout_page, layout_layout = _step_page(qtwidgets)
+        validate_page, validate_layout = _step_page(qtwidgets)
+        plugins_page, plugins_layout = _step_page(qtwidgets)
+        for layout in (create_layout, components_layout, layout_layout, validate_layout, plugins_layout):
             layout.setSpacing(8)
-        tabs.addTab(create_page, _PRIMARY_DOCK_TABS[0][1])
-        tabs.addTab(layout_page, _PRIMARY_DOCK_TABS[1][1])
-        tabs.addTab(components_page, _PRIMARY_DOCK_TABS[2][1])
-        tabs.addTab(validate_page, _PRIMARY_DOCK_TABS[3][1])
-        tabs.addTab(plugins_page, _PRIMARY_DOCK_TABS[4][1])
+        content_host.addWidget(create_page)
+        content_host.addWidget(components_page)
+        content_host.addWidget(layout_page)
+        content_host.addWidget(validate_page)
+        content_host.addWidget(plugins_page)
+        if hasattr(content_host, "setCurrentIndex"):
+            content_host.setCurrentIndex(0)
 
         footer = qtwidgets.QFrame()
         if hasattr(footer, "setObjectName"):
@@ -751,7 +786,8 @@ class ProductWorkbenchPanel:
         footer_layout.addWidget(overlay_status)
 
         root.addWidget(header_box)
-        root.addWidget(tabs, 1)
+        root.addWidget(stepper_box)
+        root.addWidget(content_host, 1)
         root.addWidget(footer)
         return {
             "widget": widget,
@@ -759,12 +795,19 @@ class ProductWorkbenchPanel:
             "context_summary": context_summary,
             "status": status,
             "overlay_status": overlay_status,
-            "tabs": tabs,
-            "primary_navigation": "tabs",
-            "navigation_items": list(_PRIMARY_DOCK_TAB_LABELS),
+            "header_bar": header_box,
+            "stepper_bar": stepper_box,
+            "content_host": content_host,
+            "footer_bar": footer,
+            "step_buttons": step_buttons,
+            "stack": content_host,
+            "primary_navigation": "stepper",
+            "navigation_items": list(_WORKFLOW_STEP_LABELS),
+            "navigation_count": 1,
+            "active_step": "create",
             "create_layout": create_layout,
-            "layout_layout": layout_layout,
             "components_layout": components_layout,
+            "layout_layout": layout_layout,
             "validate_layout": validate_layout,
             "plugins_layout": plugins_layout,
         }
@@ -778,8 +821,8 @@ class ProductWorkbenchPanel:
             stretch_factors=[3, 2],
         )
         self.form["create_layout"].addWidget(create_splitter, 1)
-        self.form["layout_layout"].addWidget(self.layout_panel.widget, 1)
         self.form["components_layout"].addWidget(self.components_panel.widget, 1)
+        self.form["layout_layout"].addWidget(self.layout_panel.widget, 1)
         self.form["validate_layout"].addWidget(self.constraints_panel.widget, 1)
         self.form["plugins_layout"].addWidget(self.plugin_manager_panel.widget, 1)
 
@@ -842,6 +885,8 @@ class ProductWorkbenchPanel:
                 on_plugins_changed=self._handle_plugins_changed,
             )
         except Exception as exc:
+            tb = traceback.format_exc()
+            _emit_runtime_traceback("Plugin manager panel failed to initialize", exc)
             log_exception("Plugin manager panel failed to initialize", exc)
             error_message = "Plugins panel unavailable. Check the report view for details."
             self.set_status(error_message)
@@ -850,6 +895,7 @@ class ProductWorkbenchPanel:
                     "Plugins unavailable",
                     "The plugin manager could not be loaded. Core workbench panels remain available.",
                     f"{exc.__class__.__name__}: {exc}",
+                    traceback_text=tb,
                 ),
                 error_message,
             )
@@ -955,11 +1001,30 @@ class ProductWorkbenchPanel:
         set_label_text(label, " | ".join(pieces))
 
     def _active_panel_name(self) -> str:
-        tabs = self.form.get("tabs")
-        if tabs is not None and hasattr(tabs, "currentIndex"):
-            mapping = {index: panel_name for index, (panel_name, _label) in enumerate(_PRIMARY_DOCK_TABS)}
-            return mapping.get(int(tabs.currentIndex()), "create")
+        content_host = self.form.get("content_host") or self.form.get("stack")
+        if content_host is not None and hasattr(content_host, "currentIndex"):
+            mapping = {index: panel_name for index, (panel_name, _label) in enumerate(_WORKFLOW_STEPS)}
+            return mapping.get(int(content_host.currentIndex()), "create")
         return "create"
+
+    def _update_stepper_state(self, active_panel: str) -> None:
+        self.form["active_step"] = active_panel
+        for panel_name, button in self.form.get("step_buttons", {}).items():
+            is_active = panel_name == active_panel
+            if hasattr(button, "setChecked"):
+                button.setChecked(is_active)
+            if hasattr(button, "setProperty"):
+                button.setProperty("active", is_active)
+            style = getattr(button, "style", None)
+            if callable(style):
+                style_obj = style()
+                if style_obj is not None:
+                    if hasattr(style_obj, "unpolish"):
+                        style_obj.unpolish(button)
+                    if hasattr(style_obj, "polish"):
+                        style_obj.polish(button)
+            if hasattr(button, "update"):
+                button.update()
 
 
 def ensure_workbench_ui(doc: Any | None = None, focus: str = "create") -> ProductWorkbenchPanel:
@@ -987,8 +1052,10 @@ def ensure_workbench_ui(doc: Any | None = None, focus: str = "create") -> Produc
         return _ACTIVE_WORKBENCH
     except Exception as exc:
         _ACTIVE_WORKBENCH = None
+        tb = traceback.format_exc()
+        _emit_runtime_traceback("Failed to build Open Controller Workbench UI", exc)
         log_exception("Failed to build Open Controller Workbench UI", exc)
-        _ACTIVE_DOCK = _show_fallback_dock(exc)
+        _ACTIVE_DOCK = _show_fallback_dock(exc, traceback_text=tb)
         raise RuntimeError(f"Open Controller Workbench UI setup failed: {exc}") from exc
 
 
@@ -1003,11 +1070,12 @@ def _show_existing_dock(dock: Any | None) -> None:
     focus_dock(dock)
 
 
-def _show_fallback_dock(exc: Exception) -> Any | None:
+def _show_fallback_dock(exc: Exception, *, traceback_text: str | None = None) -> Any | None:
     widget = _build_unavailable_panel_widget(
         _WORKBENCH_TITLE,
         "The Workbench UI could not be loaded. Check the FreeCAD report view for details.",
         f"{exc.__class__.__name__}: {exc}",
+        traceback_text=traceback_text,
     )
     if widget is None:
         return None
@@ -1015,7 +1083,13 @@ def _show_fallback_dock(exc: Exception) -> Any | None:
     return create_or_reuse_dock(_WORKBENCH_TITLE, widget)
 
 
-def _build_unavailable_panel_widget(title_text: str, message_text: str, details_text: str) -> Any | None:
+def _build_unavailable_panel_widget(
+    title_text: str,
+    message_text: str,
+    details_text: str,
+    *,
+    traceback_text: str | None = None,
+) -> Any | None:
     _qtcore, _qtgui, qtwidgets = load_qt()
     if qtwidgets is None:
         return None
@@ -1029,10 +1103,25 @@ def _build_unavailable_panel_widget(title_text: str, message_text: str, details_
     layout.addWidget(title)
     layout.addWidget(message)
     layout.addWidget(details)
+    if hasattr(qtwidgets, "QPlainTextEdit"):
+        traceback_view = qtwidgets.QPlainTextEdit()
+        if hasattr(traceback_view, "setReadOnly"):
+            traceback_view.setReadOnly(True)
+        if hasattr(traceback_view, "setLineWrapMode"):
+            traceback_view.setLineWrapMode(qtwidgets.QPlainTextEdit.NoWrap)
+        if hasattr(traceback_view, "setPlainText"):
+            traceback_view.setPlainText(traceback_text or details_text)
+        if hasattr(traceback_view, "setMinimumHeight"):
+            traceback_view.setMinimumHeight(220)
+        if hasattr(traceback_view, "setPlaceholderText") and not traceback_text:
+            traceback_view.setPlaceholderText("No traceback captured.")
+        if hasattr(traceback_view, "setObjectName"):
+            traceback_view.setObjectName("OCWFailureTraceback")
+        layout.addWidget(traceback_view)
     return widget
 
 
-def _tab_page(qtwidgets: Any) -> tuple[Any, Any]:
+def _step_page(qtwidgets: Any) -> tuple[Any, Any]:
     return build_panel_container(qtwidgets, spacing=12, margins=(12, 12, 12, 12))
 
 
@@ -1056,7 +1145,7 @@ def _section_splitter(orientation: str, widgets: list[Any], stretch_factors: lis
 
 def _panel_title(panel_name: str) -> str:
     normalized_panel = "create" if panel_name == "info" else panel_name
-    return dict(_PRIMARY_DOCK_TABS).get(normalized_panel, "Create")
+    return dict(_WORKFLOW_STEPS).get(normalized_panel, "Create")
 
 
 def _workbench_shell_stylesheet() -> str:
@@ -1082,6 +1171,32 @@ QLabel#OCWHeaderTitle {
 QLabel#OCWContextSummary {
     color: #8ea0b5;
     font-size: 10px;
+}
+QFrame#OCWStepperBar {
+    background: transparent;
+    border: none;
+}
+QPushButton#OCWStepButton {
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid #202b3b;
+    background: #121b29;
+    color: #8ea0b5;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+}
+QPushButton#OCWStepButton:hover {
+    background: #182334;
+    color: #dbe5f1;
+    border-color: #2b3950;
+}
+QPushButton#OCWStepButton:checked,
+QPushButton#OCWStepButton[active="true"] {
+    background: #1b49ae;
+    color: #eff6ff;
+    border-color: #4b78d3;
 }
 QFrame#OCWFooterBar {
     background: transparent;
@@ -1176,25 +1291,6 @@ QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QPlainTextEdit:focus, QT
 QComboBox::drop-down {
     border: none;
     width: 18px;
-}
-QTabWidget#OCWMainTabs::pane {
-    border: none;
-    border-radius: 0px;
-    background: transparent;
-    top: 0px;
-}
-QTabBar::tab {
-    background: transparent;
-    color: #8ea0b5;
-    border: none;
-    border-bottom: 2px solid transparent;
-    padding: 6px 10px 7px 10px;
-    min-width: 72px;
-    font-weight: 600;
-}
-QTabBar::tab:selected {
-    color: #f3f7fb;
-    border-bottom-color: #4b78d3;
 }
 QGroupBox#OCWSectionGroup, QGroupBox {
     color: #aebdcb;

@@ -2,6 +2,7 @@ import builtins
 import types
 
 from ocw_workbench.gui import docking
+from ocw_workbench.gui.panels import create_panel
 from ocw_workbench.gui.panels import _common
 from ocw_workbench.gui.taskpanels import constraints_taskpanel, layout_taskpanel, library_taskpanel
 from ocw_workbench.gui.widgets import parameter_editor, plugin_list
@@ -702,6 +703,254 @@ def test_workbench_activated_logs_instead_of_raising(monkeypatch):
     assert logged == [("Workbench activation failed", "_init_pyside_extension is not defined")]
 
 
+def test_emit_runtime_traceback_logs_full_details(monkeypatch):
+    from ocw_workbench import workbench as workbench_module
+
+    logged = []
+
+    monkeypatch.setattr(workbench_module, "log_to_console", lambda message, level="message": logged.append((level, message)))
+    monkeypatch.setattr(workbench_module.traceback, "format_exc", lambda: "Traceback line 1\nTraceback line 2\nValueError: broken")
+
+    workbench_module._emit_runtime_traceback("UI build failed", ValueError("broken"))
+
+    assert logged == [
+        ("error", "UI build failed: ValueError: broken"),
+        ("error", "[OCW TRACEBACK START]"),
+        ("error", "Traceback line 1\nTraceback line 2\nValueError: broken"),
+        ("error", "[OCW TRACEBACK END]"),
+    ]
+
+
+def test_build_unavailable_panel_widget_includes_traceback_view(monkeypatch):
+    from ocw_workbench import workbench as workbench_module
+
+    class FakeWidget:
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.layout_ref = None
+            self.minimum_size = None
+
+        def setLayout(self, layout) -> None:
+            self.layout_ref = layout
+
+        def setMinimumSize(self, width: int, height: int) -> None:
+            self.minimum_size = (width, height)
+
+    class FakeLayout:
+        SetMinAndMaxSize = 7
+
+        def __init__(self, parent=None) -> None:
+            self.widgets = []
+            if parent is not None and hasattr(parent, "setLayout"):
+                parent.setLayout(self)
+
+        def setContentsMargins(self, *_args) -> None:
+            return
+
+        def setSpacing(self, *_args) -> None:
+            return
+
+        def setSizeConstraint(self, *_args) -> None:
+            return
+
+        def addWidget(self, widget, *_args) -> None:
+            self.widgets.append(widget)
+
+    class FakeLabel(FakeWidget):
+        def __init__(self, text: str = "") -> None:
+            super().__init__()
+            self.text = text
+            self.word_wrap = False
+
+        def setStyleSheet(self, *_args) -> None:
+            return
+
+        def setWordWrap(self, value: bool) -> None:
+            self.word_wrap = value
+
+    class FakePlainTextEdit(FakeWidget):
+        NoWrap = 0
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.read_only = False
+            self.line_wrap_mode = None
+            self.plain_text = ""
+            self.minimum_height = None
+            self.object_name = None
+            self.placeholder_text = None
+
+        def setReadOnly(self, value: bool) -> None:
+            self.read_only = value
+
+        def setLineWrapMode(self, value) -> None:
+            self.line_wrap_mode = value
+
+        def setPlainText(self, text: str) -> None:
+            self.plain_text = text
+
+        def setMinimumHeight(self, value: int) -> None:
+            self.minimum_height = value
+
+        def setObjectName(self, value: str) -> None:
+            self.object_name = value
+
+        def setPlaceholderText(self, value: str) -> None:
+            self.placeholder_text = value
+
+    qtwidgets = types.SimpleNamespace(
+        QWidget=FakeWidget,
+        QVBoxLayout=FakeLayout,
+        QLabel=FakeLabel,
+        QPlainTextEdit=FakePlainTextEdit,
+        QLayout=FakeLayout,
+    )
+
+    monkeypatch.setattr(workbench_module, "load_qt", lambda: (None, object(), qtwidgets))
+
+    widget = workbench_module._build_unavailable_panel_widget(
+        "Open Controller Workbench",
+        "The UI failed.",
+        "AttributeError: broken",
+        traceback_text="Traceback line 1\nTraceback line 2",
+    )
+
+    layout = widget.layout_ref
+    assert layout is not None
+    assert len(layout.widgets) == 4
+    traceback_view = layout.widgets[3]
+    assert isinstance(traceback_view, FakePlainTextEdit)
+    assert traceback_view.read_only is True
+    assert traceback_view.line_wrap_mode == FakePlainTextEdit.NoWrap
+    assert traceback_view.plain_text == "Traceback line 1\nTraceback line 2"
+    assert traceback_view.minimum_height == 220
+    assert traceback_view.object_name == "OCWFailureTraceback"
+
+
+def test_create_panel_build_wraps_nested_form_inside_selection_form(monkeypatch):
+    class FakeWidget:
+        def __init__(self, text: str = "") -> None:
+            self.text = text
+            self.layout_ref = None
+            self.minimum_size = None
+            self.size_policy = None
+
+        def setLayout(self, layout) -> None:
+            self.layout_ref = layout
+
+        def layout(self):
+            return self.layout_ref
+
+        def setMinimumSize(self, width: int, height: int) -> None:
+            self.minimum_size = (width, height)
+
+        def setSizePolicy(self, horizontal, vertical) -> None:
+            self.size_policy = (horizontal, vertical)
+
+        def setWordWrap(self, _value: bool) -> None:
+            return
+
+    class FakeComboBox(FakeWidget):
+        def addItems(self, items) -> None:
+            self.items = list(items)
+
+    class FakeLayout:
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.widgets = []
+            self.layouts = []
+            self.spacing = None
+
+        def addWidget(self, widget, *_args) -> None:
+            self.widgets.append(widget)
+
+        def addLayout(self, layout, *_args) -> None:
+            self.layouts.append(layout)
+
+        def addStretch(self, *_args) -> None:
+            return
+
+        def setSpacing(self, value: int) -> None:
+            self.spacing = value
+
+    class FakeFormLayout:
+        def __init__(self) -> None:
+            self.rows = []
+
+        def addRow(self, *args) -> None:
+            self.rows.append(args)
+
+    class FakeSizePolicy:
+        Fixed = 0
+        Minimum = 1
+        Preferred = 2
+        MinimumExpanding = 3
+        Expanding = 4
+
+    class FakeComposite:
+        def __init__(self, label: str = "widget") -> None:
+            self.widget = FakeWidget(label)
+            self.parts = {"combo": FakeComboBox()}
+
+    class FakeParameterEditor:
+        def __init__(self) -> None:
+            self.widget = FakeWidget("parameter-editor")
+
+    qtwidgets = types.SimpleNamespace(
+        QHBoxLayout=FakeLayout,
+        QVBoxLayout=FakeLayout,
+        QComboBox=FakeComboBox,
+        QLineEdit=FakeWidget,
+        QPushButton=FakeWidget,
+    )
+
+    selection_layout = FakeFormLayout()
+    marketplace_form = FakeFormLayout()
+    nested_form = FakeFormLayout()
+    created_forms = iter([marketplace_form, nested_form])
+    wrapped_forms = []
+
+    monkeypatch.setattr(create_panel, "load_qt", lambda: (None, object(), qtwidgets))
+    monkeypatch.setattr(create_panel, "build_panel_container", lambda _qtwidgets: (FakeWidget("content"), FakeLayout()))
+    monkeypatch.setattr(
+        create_panel,
+        "create_collapsible_section_widget",
+        lambda *_args, **_kwargs: (FakeWidget("section"), FakeLayout(), object()),
+    )
+    monkeypatch.setattr(
+        create_panel,
+        "create_form_section_widget",
+        lambda *_args, **_kwargs: (FakeWidget("selection-box"), selection_layout),
+    )
+    monkeypatch.setattr(create_panel, "create_form_layout", lambda *_args, **_kwargs: next(created_forms))
+    monkeypatch.setattr(create_panel, "create_status_label", lambda _qtwidgets, text="": FakeWidget(text))
+    monkeypatch.setattr(create_panel, "create_text_panel", lambda *_args, **_kwargs: FakeWidget("text-panel"))
+    monkeypatch.setattr(create_panel, "create_button_row_layout", lambda *_args, **_kwargs: FakeLayout())
+    monkeypatch.setattr(create_panel, "create_compact_header_widget", lambda *_args, **_kwargs: FakeWidget("compact-header"))
+    monkeypatch.setattr(create_panel, "configure_combo_box", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(create_panel, "set_button_role", lambda button, *_args, **_kwargs: button)
+    monkeypatch.setattr(create_panel, "set_size_policy", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(create_panel, "wrap_widget_in_scroll_area", lambda widget: widget)
+    monkeypatch.setattr(
+        create_panel,
+        "wrap_layout_in_widget",
+        lambda _qtwidgets, layout: wrapped_forms.append((layout, FakeWidget("wrapped-form"))) or wrapped_forms[-1][1],
+    )
+    monkeypatch.setattr(create_panel, "FavoritesListWidget", lambda: FakeComposite("favorites"))
+    monkeypatch.setattr(create_panel, "RecentListWidget", lambda: FakeComposite("recents"))
+    monkeypatch.setattr(create_panel, "PresetListWidget", lambda: FakeComposite("presets"))
+    monkeypatch.setattr(create_panel, "ParameterEditorWidget", FakeParameterEditor)
+
+    form = create_panel._build_form()
+
+    assert form["widget"] is not None
+    assert len(nested_form.rows) == 4
+    assert nested_form.rows[0] == ("Template", form["template"])
+    assert nested_form.rows[2] == ("Variant", form["variant"])
+    assert len(wrapped_forms) == 1
+    assert wrapped_forms[0][0] is nested_form
+    assert len(selection_layout.rows) == 3
+    assert selection_layout.rows[0][0].text == "wrapped-form"
+
+
 def test_create_or_reuse_dock_tabifies_existing_right_dock(monkeypatch):
     class FakeDockWidget:
         DockWidgetClosable = 1
@@ -881,9 +1130,153 @@ def test_create_or_reuse_dock_reuses_existing_named_dock(monkeypatch):
     assert dock_ref.activated is True
 
 
-def test_product_workbench_panel_uses_tab_shell():
+def test_product_workbench_panel_uses_stepper_shell(monkeypatch):
     from ocw_workbench.services.controller_service import ControllerService
-    from ocw_workbench.workbench import ProductWorkbenchPanel
+    from ocw_workbench import workbench as workbench_module
+
+    class FakeStyle:
+        def unpolish(self, *_args) -> None:
+            return
+
+        def polish(self, *_args) -> None:
+            return
+
+    class FakeSignal:
+        def __init__(self) -> None:
+            self._callbacks = []
+
+        def connect(self, callback) -> None:
+            self._callbacks.append(callback)
+
+        def emit(self, *args) -> None:
+            for callback in list(self._callbacks):
+                callback(*args)
+
+    class FakeWidget:
+        def __init__(self, text: str = "") -> None:
+            self.text = text
+            self.layout_ref = None
+            self.minimum_size = None
+            self.size_policy = None
+            self.object_name = ""
+            self.word_wrap = False
+            self.style_sheet = ""
+            self._style = FakeStyle()
+            self.properties = {}
+            self.focused = False
+
+        def setLayout(self, layout) -> None:
+            self.layout_ref = layout
+
+        def layout(self):
+            return self.layout_ref
+
+        def setMinimumSize(self, width: int, height: int) -> None:
+            self.minimum_size = (width, height)
+
+        def setSizePolicy(self, horizontal, vertical) -> None:
+            self.size_policy = (horizontal, vertical)
+
+        def setObjectName(self, name: str) -> None:
+            self.object_name = name
+
+        def setWordWrap(self, value: bool) -> None:
+            self.word_wrap = value
+
+        def setStyleSheet(self, value: str) -> None:
+            self.style_sheet = value
+
+        def setText(self, value: str) -> None:
+            self.text = value
+
+        def setProperty(self, key: str, value) -> None:
+            self.properties[key] = value
+
+        def property(self, key: str):
+            return self.properties.get(key)
+
+        def style(self):
+            return self._style
+
+        def update(self) -> None:
+            return
+
+        def setFocus(self) -> None:
+            self.focused = True
+
+    class FakeLayout:
+        def __init__(self, parent=None) -> None:
+            self.widgets = []
+            self.margins = None
+            self.spacing = None
+            if parent is not None and hasattr(parent, "setLayout"):
+                parent.setLayout(self)
+
+        def setContentsMargins(self, *margins) -> None:
+            self.margins = margins
+
+        def setSpacing(self, spacing: int) -> None:
+            self.spacing = spacing
+
+        def addWidget(self, widget, *_args) -> None:
+            self.widgets.append(widget)
+
+        def addStretch(self, *_args) -> None:
+            return
+
+    class FakeFrame(FakeWidget):
+        pass
+
+    class FakeLabel(FakeWidget):
+        pass
+
+    class FakeButton(FakeWidget):
+        def __init__(self, text: str = "") -> None:
+            super().__init__(text)
+            self.clicked = FakeSignal()
+            self.checkable = False
+            self.checked = False
+
+        def setCheckable(self, value: bool) -> None:
+            self.checkable = value
+
+        def setChecked(self, value: bool) -> None:
+            self.checked = value
+
+        def isChecked(self) -> bool:
+            return self.checked
+
+    class FakeStackedWidget(FakeWidget):
+        def __init__(self) -> None:
+            super().__init__()
+            self.pages = []
+            self.index = 0
+
+        def addWidget(self, widget) -> None:
+            self.pages.append(widget)
+
+        def setCurrentIndex(self, index: int) -> None:
+            self.index = index
+
+        def currentIndex(self) -> int:
+            return self.index
+
+    class FakeSizePolicy:
+        Fixed = 0
+        Minimum = 1
+        Preferred = 2
+        MinimumExpanding = 3
+        Expanding = 4
+
+    class FakePanel:
+        def __init__(self, *args, **kwargs) -> None:
+            self.widget = FakeWidget("panel")
+
+        def refresh(self):
+            return []
+
+        def validate(self):
+            return {"summary": {"error_count": 0, "warning_count": 0}}
 
     class FakeDocument:
         def __init__(self) -> None:
@@ -892,14 +1285,62 @@ def test_product_workbench_panel_uses_tab_shell():
         def recompute(self) -> None:
             return
 
-    doc = FakeDocument()
-    panel = ProductWorkbenchPanel(doc, controller_service=ControllerService())
+    qtwidgets = types.SimpleNamespace(
+        QWidget=FakeWidget,
+        QFrame=FakeFrame,
+        QLabel=FakeLabel,
+        QPushButton=FakeButton,
+        QVBoxLayout=FakeLayout,
+        QHBoxLayout=FakeLayout,
+        QStackedWidget=FakeStackedWidget,
+        QSizePolicy=FakeSizePolicy,
+    )
 
-    assert panel.form["primary_navigation"] == "tabs"
-    assert panel.form["navigation_items"] == ["Create", "Layout", "Components", "Validate", "Plugins"]
-    assert "tabs" not in panel.form or panel.form["tabs"] is not None
+    monkeypatch.setattr(workbench_module, "load_qt", lambda: (None, object(), qtwidgets))
+    monkeypatch.setattr(
+        workbench_module,
+        "build_panel_container",
+        lambda _qtwidgets, spacing=12, margins=(12, 12, 12, 12): (FakeWidget(), FakeLayout()),
+    )
+    monkeypatch.setattr(
+        workbench_module,
+        "set_size_policy",
+        lambda widget, horizontal="preferred", vertical="preferred": widget.setSizePolicy(horizontal, vertical),
+    )
+    monkeypatch.setattr(workbench_module, "CreatePanel", FakePanel)
+    monkeypatch.setattr(workbench_module, "LayoutPanel", FakePanel)
+    monkeypatch.setattr(workbench_module, "ComponentsPanel", FakePanel)
+    monkeypatch.setattr(workbench_module, "ConstraintsPanel", FakePanel)
+    monkeypatch.setattr(workbench_module, "InfoPanel", FakePanel)
+    monkeypatch.setattr(workbench_module, "PluginManagerPanel", FakePanel)
+    monkeypatch.setattr(workbench_module, "OverlayRenderer", lambda *_args, **_kwargs: types.SimpleNamespace(refresh=lambda _doc: {}))
+    monkeypatch.setattr(workbench_module, "_section_splitter", lambda _orientation, widgets, stretch_factors=None: widgets[0])
+
+    panel = workbench_module.ProductWorkbenchPanel(FakeDocument(), controller_service=ControllerService())
+
+    assert panel.form["primary_navigation"] == "stepper"
+    assert panel.form["navigation_count"] == 1
+    assert panel.form["navigation_items"] == ["Template", "Components", "Layout", "Validate", "Plugins"]
+    assert panel.form["header_bar"] is not None
+    assert panel.form["stepper_bar"] is not None
+    assert panel.form["content_host"] is not None
+    assert panel.form["footer_bar"] is not None
+    assert panel.form["content_host"] is panel.form["stack"]
+    assert set(panel.form["step_buttons"]) == {"create", "components", "layout", "constraints", "plugins"}
     assert panel.form["title"].text == "Open Controller Workbench"
-    assert panel.form["context_summary"].text.startswith("Create |")
+    assert panel.form["context_summary"].text.startswith("Template |")
+    assert panel.form["active_step"] == "create"
+
+    panel.focus_panel("components")
+    assert panel.form["content_host"].currentIndex() == 1
+    assert panel.form["step_buttons"]["components"].isChecked() is True
+    assert panel.form["step_buttons"]["create"].isChecked() is False
+    assert panel.form["active_step"] == "components"
+
+    panel.focus_panel("plugins")
+    assert panel.form["content_host"].currentIndex() == 4
+    assert panel.form["step_buttons"]["plugins"].isChecked() is True
+    assert panel.form["active_step"] == "plugins"
 
 
 def test_create_collapsible_section_widget_returns_widget_body_and_toggle(monkeypatch):
