@@ -5,7 +5,7 @@ from typing import Any
 
 from ocw_workbench.gui.feedback import apply_status_message, friendly_ui_error
 from ocw_workbench.gui.panels._common import (
-    build_panel_container,
+    build_scroll_content_root,
     configure_combo_box,
     create_button_row_layout,
     create_collapsible_section_widget,
@@ -662,7 +662,7 @@ def _build_form() -> dict[str, Any]:
             "status": FallbackLabel("Ready to add or edit components."),
         }
 
-    content, layout = build_panel_container(qtwidgets)
+    content, layout = build_scroll_content_root(qtwidgets)
     quick_add_section, quick_add_layout = create_form_section_widget(qtwidgets, "Quick Add", spacing=4)
     selected_component_box, selector_layout = create_form_section_widget(qtwidgets, "Selected Component", spacing=4)
     component_list_box, component_list_layout = create_form_section_widget(qtwidgets, "Components List", spacing=4)

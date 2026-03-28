@@ -16,7 +16,9 @@ SPACE_2 = 8
 SPACE_3 = 12
 SPACE_4 = 16
 HEADER_MIN_HEIGHT = 28
+SECTION_HEADER_MIN_HEIGHT = 34
 COLLAPSIBLE_TOGGLE_MIN_HEIGHT = 32
+DIVIDER_MIN_HEIGHT = 12
 SCROLL_VIEWPORT_TOP_PADDING = SPACE_2
 SCROLL_VIEWPORT_BOTTOM_PADDING = SPACE_1
 PANEL_TOP_MARGIN = SPACE_3
@@ -269,8 +271,19 @@ def create_panel_widget(
     _set_min_and_max_size_constraint(layout, qtwidgets)
     if hasattr(widget, "setMinimumSize"):
         widget.setMinimumSize(0, 0)
+    if hasattr(widget, "setObjectName"):
+        widget.setObjectName("OCWScrollContentRoot")
     set_size_policy(widget, horizontal="expanding", vertical="expanding")
     return widget, layout
+
+
+def build_scroll_content_root(
+    qtwidgets: Any,
+    *,
+    spacing: int = SPACE_3,
+    margins: tuple[int, int, int, int] = (0, PANEL_TOP_MARGIN, 0, PANEL_BOTTOM_MARGIN),
+) -> tuple[Any, Any]:
+    return create_panel_widget(qtwidgets, spacing=spacing, margins=margins)
 
 
 def build_panel_container(
@@ -279,7 +292,97 @@ def build_panel_container(
     spacing: int = SPACE_3,
     margins: tuple[int, int, int, int] = (0, PANEL_TOP_MARGIN, 0, PANEL_BOTTOM_MARGIN),
 ) -> tuple[Any, Any]:
-    return create_panel_widget(qtwidgets, spacing=spacing, margins=margins)
+    return build_scroll_content_root(qtwidgets, spacing=spacing, margins=margins)
+
+
+def build_divider(qtwidgets: Any, *, margins: tuple[int, int, int, int] = (0, SPACE_1, 0, SPACE_1)) -> Any:
+    container_factory = getattr(qtwidgets, "QFrame", qtwidgets.QWidget)
+    container = container_factory()
+    if hasattr(container, "setObjectName"):
+        container.setObjectName("OCWDivider")
+    layout = qtwidgets.QVBoxLayout(container)
+    configure_layout(layout, margins=margins, spacing=0)
+    _set_min_and_max_size_constraint(layout, qtwidgets)
+    if hasattr(container, "setMinimumHeight"):
+        container.setMinimumHeight(DIVIDER_MIN_HEIGHT)
+    if hasattr(container, "setMinimumSize"):
+        container.setMinimumSize(0, 0)
+    line_factory = getattr(qtwidgets, "QFrame", qtwidgets.QWidget)
+    line = line_factory()
+    if hasattr(line, "setObjectName"):
+        line.setObjectName("OCWDividerLine")
+    if hasattr(line, "setFrameShape") and hasattr(qtwidgets, "QFrame") and hasattr(qtwidgets.QFrame, "HLine"):
+        line.setFrameShape(qtwidgets.QFrame.HLine)
+    if hasattr(line, "setMinimumHeight"):
+        line.setMinimumHeight(1)
+    if hasattr(line, "setMaximumHeight"):
+        line.setMaximumHeight(1)
+    layout.addWidget(line)
+    set_size_policy(container, horizontal="expanding", vertical="preferred")
+    return container
+
+
+def build_section_header(
+    qtwidgets: Any,
+    title: str,
+    *,
+    subtitle: str | None = None,
+    trailing: Any | None = None,
+) -> Any:
+    header_factory = getattr(qtwidgets, "QFrame", qtwidgets.QWidget)
+    header = header_factory()
+    if hasattr(header, "setObjectName"):
+        header.setObjectName("OCWSectionHeader")
+    layout = qtwidgets.QHBoxLayout(header)
+    configure_layout(layout, margins=(0, SPACE_2, 0, SPACE_1), spacing=SPACE_2)
+    _set_min_and_max_size_constraint(layout, qtwidgets)
+    details = qtwidgets.QVBoxLayout()
+    configure_layout(details, margins=(0, 0, 0, 0), spacing=SPACE_1)
+    title_label = qtwidgets.QLabel(title)
+    if hasattr(title_label, "setObjectName"):
+        title_label.setObjectName("OCWSectionHeaderTitle")
+    details.addWidget(title_label)
+    if subtitle:
+        subtitle_label = create_hint_label(qtwidgets, subtitle)
+        if hasattr(subtitle_label, "setObjectName"):
+            subtitle_label.setObjectName("OCWSectionHeaderSubtitle")
+        details.addWidget(subtitle_label)
+    layout.addLayout(details, 1)
+    if trailing is not None:
+        add_layout_content(layout, trailing)
+    if hasattr(header, "setMinimumHeight"):
+        header.setMinimumHeight(SECTION_HEADER_MIN_HEIGHT)
+    if hasattr(header, "setMinimumSize"):
+        header.setMinimumSize(0, 0)
+    set_size_policy(header, horizontal="expanding", vertical="preferred")
+    return header
+
+
+def _create_section_body_layout(
+    qtwidgets: Any,
+    layout_kind: str,
+    margins: tuple[int, int, int, int],
+    spacing: int,
+) -> tuple[Any, Any]:
+    body_factory = getattr(qtwidgets, "QFrame", qtwidgets.QWidget)
+    body = body_factory()
+    if hasattr(body, "setObjectName"):
+        body.setObjectName("OCWSectionBody")
+    layout_factory = {
+        "vbox": qtwidgets.QVBoxLayout,
+        "hbox": qtwidgets.QHBoxLayout,
+        "form": qtwidgets.QFormLayout,
+        "grid": qtwidgets.QGridLayout,
+    }.get(layout_kind, qtwidgets.QVBoxLayout)
+    layout = layout_factory(body)
+    configure_layout(layout, margins=margins, spacing=spacing)
+    if layout_kind == "form":
+        _set_form_layout_spacing(layout)
+    _set_min_and_max_size_constraint(layout, qtwidgets)
+    if hasattr(body, "setMinimumSize"):
+        body.setMinimumSize(0, 0)
+    set_size_policy(body, horizontal="expanding", vertical="minimum_expanding")
+    return body, layout
 
 
 def create_section_widget(
@@ -290,28 +393,25 @@ def create_section_widget(
     spacing: int = SPACE_2,
     margins: tuple[int, int, int, int] = (0, SECTION_VERTICAL_MARGIN, 0, SECTION_VERTICAL_MARGIN),
 ) -> tuple[Any, Any]:
-    group = qtwidgets.QGroupBox(title)
-    if hasattr(group, "setObjectName"):
-        group.setObjectName("OCWSectionGroup")
-    if hasattr(group, "setFlat"):
-        group.setFlat(True)
-    layout_factory = {
-        "vbox": qtwidgets.QVBoxLayout,
-        "hbox": qtwidgets.QHBoxLayout,
-        "form": qtwidgets.QFormLayout,
-        "grid": qtwidgets.QGridLayout,
-    }.get(layout_kind, qtwidgets.QVBoxLayout)
-    layout = layout_factory(group)
-    configure_layout(layout, margins=margins, spacing=spacing)
-    if layout_kind == "form":
-        _set_form_layout_spacing(layout)
-    _set_min_and_max_size_constraint(layout, qtwidgets)
-    if hasattr(group, "setMinimumSize"):
-        group.setMinimumSize(0, 0)
-    if hasattr(group, "setMinimumHeight"):
-        group.setMinimumHeight(HEADER_MIN_HEIGHT + SPACE_4)
-    set_size_policy(group, horizontal="expanding", vertical="minimum_expanding")
-    return group, layout
+    panel_factory = getattr(qtwidgets, "QFrame", qtwidgets.QWidget)
+    panel = panel_factory()
+    if hasattr(panel, "setObjectName"):
+        panel.setObjectName("OCWSectionGroup")
+    outer = qtwidgets.QVBoxLayout(panel)
+    configure_layout(outer, margins=(0, 0, 0, 0), spacing=0)
+    _set_min_and_max_size_constraint(outer, qtwidgets)
+    header = build_section_header(qtwidgets, title)
+    divider = build_divider(qtwidgets)
+    body, layout = _create_section_body_layout(qtwidgets, layout_kind, margins, spacing)
+    outer.addWidget(header)
+    outer.addWidget(divider)
+    outer.addWidget(body)
+    if hasattr(panel, "setMinimumSize"):
+        panel.setMinimumSize(0, 0)
+    if hasattr(panel, "setMinimumHeight"):
+        panel.setMinimumHeight(SECTION_HEADER_MIN_HEIGHT + DIVIDER_MIN_HEIGHT)
+    set_size_policy(panel, horizontal="expanding", vertical="minimum_expanding")
+    return panel, layout
 
 
 def build_group_box(
@@ -356,13 +456,26 @@ def create_collapsible_section_widget(
     margins: tuple[int, int, int, int] = (0, SECTION_VERTICAL_MARGIN, 0, SECTION_VERTICAL_MARGIN),
 ) -> tuple[Any, Any, Any]:
     qtcore, _qtgui, _qtwidgets = load_qt()
-    widget = qtwidgets.QWidget()
+    widget_factory = getattr(qtwidgets, "QFrame", qtwidgets.QWidget)
+    widget = widget_factory()
+    if hasattr(widget, "setObjectName"):
+        widget.setObjectName("OCWCollapsibleSection")
     outer = qtwidgets.QVBoxLayout(widget)
-    configure_layout(outer, margins=(0, SECTION_VERTICAL_MARGIN, 0, SECTION_VERTICAL_MARGIN), spacing=SPACE_2)
+    configure_layout(outer, margins=(0, 0, 0, 0), spacing=0)
     _set_min_and_max_size_constraint(outer, qtwidgets)
     if hasattr(widget, "setMinimumSize"):
         widget.setMinimumSize(0, 0)
     set_size_policy(widget, horizontal="expanding", vertical="minimum_expanding")
+
+    header_factory = getattr(qtwidgets, "QFrame", qtwidgets.QWidget)
+    header = header_factory()
+    if hasattr(header, "setObjectName"):
+        header.setObjectName("OCWCollapsibleHeader")
+    header_layout = qtwidgets.QHBoxLayout(header)
+    configure_layout(header_layout, margins=(0, SPACE_1, 0, 0), spacing=SPACE_2)
+    _set_min_and_max_size_constraint(header_layout, qtwidgets)
+    if hasattr(header, "setMinimumHeight"):
+        header.setMinimumHeight(COLLAPSIBLE_TOGGLE_MIN_HEIGHT + SPACE_1)
 
     toggle = qtwidgets.QToolButton()
     if hasattr(toggle, "setText"):
@@ -380,16 +493,13 @@ def create_collapsible_section_widget(
     if hasattr(toggle, "setMinimumHeight"):
         toggle.setMinimumHeight(COLLAPSIBLE_TOGGLE_MIN_HEIGHT)
     set_size_policy(toggle, horizontal="expanding", vertical="preferred")
+    header_layout.addWidget(toggle)
 
-    body = qtwidgets.QFrame()
+    divider = build_divider(qtwidgets, margins=(0, 0, 0, SPACE_1))
+
+    body, body_layout = _create_section_body_layout(qtwidgets, "vbox", margins, spacing)
     if hasattr(body, "setObjectName"):
         body.setObjectName("OCWCollapsibleBody")
-    body_layout = qtwidgets.QVBoxLayout(body)
-    configure_layout(body_layout, margins=margins, spacing=spacing)
-    _set_min_and_max_size_constraint(body_layout, qtwidgets)
-    if hasattr(body, "setMinimumSize"):
-        body.setMinimumSize(0, 0)
-    set_size_policy(body, horizontal="expanding", vertical="minimum_expanding")
     if hasattr(body, "setVisible"):
         body.setVisible(expanded)
 
@@ -402,7 +512,8 @@ def create_collapsible_section_widget(
 
         toggle.toggled.connect(_handle_toggled)
 
-    outer.addWidget(toggle)
+    outer.addWidget(header)
+    outer.addWidget(divider)
     outer.addWidget(body)
     return widget, body_layout, toggle
 

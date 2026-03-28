@@ -4,7 +4,7 @@ from typing import Any
 
 from ocw_workbench.gui.feedback import apply_status_message, format_validation_message, friendly_ui_error
 from ocw_workbench.gui.panels._common import (
-    build_panel_container,
+    build_scroll_content_root,
     create_button_row_layout,
     create_form_layout,
     create_compact_header_widget,
@@ -352,7 +352,7 @@ def _build_form() -> dict[str, Any]:
             "status": FallbackLabel(),
         }
 
-    content, layout = build_panel_container(qtwidgets)
+    content, layout = build_scroll_content_root(qtwidgets)
     intro = create_status_label(qtwidgets, "Step 4 of 5. Validate before Plugins or export work.")
     validate_button = set_button_role(qtwidgets.QPushButton("Validate Layout"), "primary")
     set_tooltip(validate_button, "Run spacing, overlap and edge-distance checks for the current controller.")

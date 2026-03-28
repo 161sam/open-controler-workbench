@@ -5,7 +5,7 @@ from typing import Any
 
 from ocw_workbench.gui.feedback import apply_status_message, format_layout_message, format_toggle_message, friendly_ui_error
 from ocw_workbench.gui.panels._common import (
-    build_panel_container,
+    build_scroll_content_root,
     configure_combo_box,
     create_button_row_layout,
     create_collapsible_section_widget,
@@ -313,7 +313,7 @@ def _build_form() -> dict[str, Any]:
             "status": FallbackLabel(),
         }
 
-    content, layout = build_panel_container(qtwidgets)
+    content, layout = build_scroll_content_root(qtwidgets)
     intro = create_status_label(qtwidgets, "Place components automatically, then continue with Validate.")
     form = create_form_layout(qtwidgets, spacing=4)
     preset = qtwidgets.QComboBox()

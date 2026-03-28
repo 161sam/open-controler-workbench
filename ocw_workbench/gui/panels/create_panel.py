@@ -5,7 +5,7 @@ from copy import deepcopy
 from typing import Any
 
 from ocw_workbench.gui.panels._common import (
-    build_panel_container,
+    build_scroll_content_root,
     configure_combo_box,
     create_button_row_layout,
     create_collapsible_section_widget,
@@ -810,7 +810,7 @@ def _build_form() -> dict[str, Any]:
             "status": FallbackLabel("Ready to create a new controller."),
         }
 
-    content, root = build_panel_container(qtwidgets)
+    content, root = build_scroll_content_root(qtwidgets)
     header = create_hint_label(qtwidgets, "Select a template, then create the controller.")
     active_project = create_status_label(qtwidgets, "No controller loaded yet. Choose a template, review geometry, then create the controller.")
     template_section, template_layout = create_form_section_widget(qtwidgets, "Template Selection")

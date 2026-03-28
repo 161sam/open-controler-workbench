@@ -1293,6 +1293,40 @@ QFrame#OCWCollapsibleBody {
     background: transparent;
     border: none;
 }
+QFrame#OCWScrollContentRoot {
+    background: transparent;
+    border: none;
+}
+QFrame#OCWSectionGroup,
+QFrame#OCWCollapsibleSection {
+    background: transparent;
+    border: none;
+}
+QFrame#OCWSectionHeader,
+QFrame#OCWCollapsibleHeader {
+    background: transparent;
+    border: none;
+}
+QLabel#OCWSectionHeaderTitle {
+    color: #8798ac;
+    font-size: 10px;
+    font-weight: 700;
+}
+QLabel#OCWSectionHeaderSubtitle {
+    color: #72849a;
+    font-size: 10px;
+}
+QFrame#OCWDivider {
+    background: transparent;
+    border: none;
+    min-height: 12px;
+}
+QFrame#OCWDividerLine {
+    background: #1f2a39;
+    border: none;
+    min-height: 1px;
+    max-height: 1px;
+}
 QLabel#OCWHelperText {
     color: #72849a;
     font-size: 10px;
@@ -1371,51 +1405,54 @@ QGroupBox::title {
     padding: 0 0 5px 0;
     color: #8798ac;
 }
+QFrame#OCWQuickAddSection,
 QGroupBox#OCWQuickAddSection {
     border: 1px solid #2b4b78;
     border-radius: 8px;
     background: rgba(24, 45, 76, 0.35);
-    padding-top: 8px;
 }
+QFrame#OCWQuickAddSection QLabel#OCWSectionHeaderTitle,
 QGroupBox#OCWQuickAddSection::title {
     color: #d8e7ff;
 }
+QFrame#OCWSelectedComponentSection,
 QGroupBox#OCWSelectedComponentSection {
     border: 1px solid #223247;
     border-radius: 8px;
     background: rgba(14, 22, 34, 0.45);
-    padding-top: 8px;
 }
 QFrame#OCWEmptyStateCard {
     border: 1px dashed #31507e;
     border-radius: 10px;
     background: rgba(18, 34, 56, 0.28);
-    padding: 6px;
 }
+QFrame#OCWValidationSuccessCard,
 QGroupBox#OCWValidationSuccessCard {
     border: 1px solid #2f5a47;
     border-radius: 10px;
     background: rgba(16, 46, 37, 0.42);
-    padding-top: 8px;
 }
+QFrame#OCWValidationSuccessCard QLabel#OCWSectionHeaderTitle,
 QGroupBox#OCWValidationSuccessCard::title {
     color: #b8e5cf;
 }
+QFrame#OCWValidationEmptyCard,
 QGroupBox#OCWValidationEmptyCard {
     border: 1px dashed #38516d;
     border-radius: 10px;
     background: rgba(18, 28, 42, 0.38);
-    padding-top: 8px;
 }
+QFrame#OCWValidationEmptyCard QLabel#OCWSectionHeaderTitle,
 QGroupBox#OCWValidationEmptyCard::title {
     color: #c7d2e0;
 }
+QFrame#OCWValidationIssuesSection,
 QGroupBox#OCWValidationIssuesSection {
     border: 1px solid #4b2f35;
     border-radius: 10px;
     background: rgba(45, 17, 24, 0.16);
-    padding-top: 8px;
 }
+QFrame#OCWValidationIssuesSection QLabel#OCWSectionHeaderTitle,
 QGroupBox#OCWValidationIssuesSection::title {
     color: #f0b3b8;
 }
