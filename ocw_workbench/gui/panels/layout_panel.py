@@ -20,6 +20,7 @@ from ocw_workbench.gui.panels._common import (
     current_text,
     load_qt,
     set_label_text,
+    set_button_role,
     set_current_text,
     set_tooltip,
     set_value,
@@ -321,7 +322,7 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, layout = build_panel_container(qtwidgets)
-    intro = create_status_label(qtwidgets, "Run Auto Place first, then use view helpers as needed.")
+    intro = create_status_label(qtwidgets, "Auto Place first, then refine with view helpers.")
     form = build_form_layout(qtwidgets, spacing=4)
     preset = qtwidgets.QComboBox()
     preset.addItems(["grid", "row", "column", "zone"])
@@ -336,14 +337,14 @@ def _build_form() -> dict[str, Any]:
     grid_mm.setValue(1.0)
     spacing_mm.setValue(24.0)
     padding_mm.setValue(8.0)
-    apply_button = qtwidgets.QPushButton("Auto Place")
-    rerun_button = qtwidgets.QPushButton("Re-run Placement")
-    overlay_button = qtwidgets.QPushButton("Overlay Visibility")
-    constraint_overlay_button = qtwidgets.QPushButton("Issues")
-    snap_button = qtwidgets.QPushButton("Snap")
-    measurements_button = qtwidgets.QPushButton("Guides")
-    conflict_lines_button = qtwidgets.QPushButton("Conflict Lines")
-    constraint_labels_button = qtwidgets.QPushButton("Issue Labels")
+    apply_button = set_button_role(qtwidgets.QPushButton("Auto Place"), "primary")
+    rerun_button = set_button_role(qtwidgets.QPushButton("Re-run Placement"), "secondary")
+    overlay_button = set_button_role(qtwidgets.QPushButton("Overlay Visibility"), "ghost")
+    constraint_overlay_button = set_button_role(qtwidgets.QPushButton("Issues"), "ghost")
+    snap_button = set_button_role(qtwidgets.QPushButton("Snap"), "ghost")
+    measurements_button = set_button_role(qtwidgets.QPushButton("Guides"), "ghost")
+    conflict_lines_button = set_button_role(qtwidgets.QPushButton("Conflict Lines"), "ghost")
+    constraint_labels_button = set_button_role(qtwidgets.QPushButton("Issue Labels"), "ghost")
     set_tooltip(preset, "Choose the placement strategy used by Auto Place.")
     set_tooltip(grid_mm, "Grid size for snapping and placement.")
     set_tooltip(spacing_mm, "Target spacing between component centers.")

@@ -16,6 +16,7 @@ from ocw_workbench.gui.panels._common import (
     current_text,
     load_qt,
     set_combo_items,
+    set_button_role,
     set_label_text,
     set_size_policy,
     set_text,
@@ -236,7 +237,7 @@ def _build_form() -> dict[str, Any]:
     surface_shape = qtwidgets.QComboBox()
     configure_combo_box(surface_shape)
     surface_shape.addItems(["rectangle", "rounded_rect"])
-    apply_button = qtwidgets.QPushButton("Apply Geometry")
+    apply_button = set_button_role(qtwidgets.QPushButton("Apply Geometry"), "primary")
     set_tooltip(width, "Overall controller width in millimeters.")
     set_tooltip(depth, "Overall controller depth in millimeters.")
     set_tooltip(height, "Overall controller height in millimeters.")

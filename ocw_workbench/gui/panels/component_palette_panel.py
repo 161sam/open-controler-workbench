@@ -14,6 +14,7 @@ from ocw_workbench.gui.panels._common import (
     configure_combo_box,
     load_qt,
     set_combo_items,
+    set_button_role,
     set_text,
     set_tooltip,
 )
@@ -370,8 +371,8 @@ def _build_form() -> dict[str, Any]:
     category = qtwidgets.QComboBox()
     configure_combo_box(category)
     favorites_only = qtwidgets.QCheckBox("Favorites only")
-    favorite_button = qtwidgets.QPushButton("Add Favorite")
-    place_button = qtwidgets.QPushButton("Place In 3D")
+    favorite_button = set_button_role(qtwidgets.QPushButton("Add Favorite"), "secondary")
+    place_button = set_button_role(qtwidgets.QPushButton("Place In 3D"), "primary")
     controls.addWidget(search, 1)
     controls.addWidget(category)
     controls.addWidget(favorites_only)

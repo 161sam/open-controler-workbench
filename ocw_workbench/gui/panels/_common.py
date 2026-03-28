@@ -11,6 +11,11 @@ except ImportError:
 _QT_MODULES: tuple[Any, Any, Any] | None = None
 _QT_BINDING_NAME: str | None = None
 
+SPACE_1 = 4
+SPACE_2 = 8
+SPACE_3 = 12
+SPACE_4 = 16
+
 
 def log_to_console(message: str, level: str = "message") -> None:
     text = f"[OCW] {message}"
@@ -234,7 +239,7 @@ def configure_layout(
 def build_panel_container(
     qtwidgets: Any,
     *,
-    spacing: int = 8,
+    spacing: int = SPACE_3,
     margins: tuple[int, int, int, int] = (0, 0, 0, 0),
 ) -> tuple[Any, Any]:
     widget = qtwidgets.QWidget()
@@ -248,10 +253,14 @@ def build_group_box(
     title: str,
     *,
     layout_kind: str = "vbox",
-    spacing: int = 6,
-    margins: tuple[int, int, int, int] = (8, 8, 8, 8),
+    spacing: int = SPACE_2,
+    margins: tuple[int, int, int, int] = (0, 0, 0, 0),
 ) -> tuple[Any, Any]:
     group = qtwidgets.QGroupBox(title)
+    if hasattr(group, "setObjectName"):
+        group.setObjectName("OCWSectionGroup")
+    if hasattr(group, "setFlat"):
+        group.setFlat(True)
     layout_factory = {
         "vbox": qtwidgets.QVBoxLayout,
         "hbox": qtwidgets.QHBoxLayout,
@@ -268,13 +277,13 @@ def build_collapsible_section(
     title: str,
     *,
     expanded: bool = True,
-    spacing: int = 6,
-    margins: tuple[int, int, int, int] = (8, 8, 8, 8),
+    spacing: int = SPACE_2,
+    margins: tuple[int, int, int, int] = (0, 0, 0, 0),
 ) -> tuple[Any, Any, Any]:
     qtcore, _qtgui, _qtwidgets = load_qt()
     widget = qtwidgets.QWidget()
     outer = qtwidgets.QVBoxLayout(widget)
-    configure_layout(outer, margins=(0, 0, 0, 0), spacing=4)
+    configure_layout(outer, margins=(0, 0, 0, 0), spacing=SPACE_1)
 
     toggle = qtwidgets.QToolButton()
     if hasattr(toggle, "setText"):
@@ -321,11 +330,18 @@ def create_text_panel(qtwidgets: Any, *, max_height: int = 160) -> Any:
 def build_form_layout(
     qtwidgets: Any,
     *,
-    spacing: int = 4,
+    spacing: int = SPACE_2,
     margins: tuple[int, int, int, int] = (0, 0, 0, 0),
 ) -> Any:
+    qtcore, _qtgui, _qtwidgets = load_qt()
     layout = qtwidgets.QFormLayout()
     configure_layout(layout, margins=margins, spacing=spacing)
+    if hasattr(layout, "setFieldGrowthPolicy") and hasattr(qtwidgets.QFormLayout, "AllNonFixedFieldsGrow"):
+        layout.setFieldGrowthPolicy(qtwidgets.QFormLayout.AllNonFixedFieldsGrow)
+    if qtcore is not None and hasattr(layout, "setLabelAlignment"):
+        layout.setLabelAlignment(qtcore.Qt.AlignLeft | qtcore.Qt.AlignVCenter)
+    if qtcore is not None and hasattr(layout, "setFormAlignment"):
+        layout.setFormAlignment(qtcore.Qt.AlignTop | qtcore.Qt.AlignLeft)
     return layout
 
 
@@ -344,14 +360,20 @@ def create_wrapped_label(qtwidgets: Any, text: str = "", *, style: str | None = 
 
 
 def create_hint_label(qtwidgets: Any, text: str = "") -> Any:
-    return create_wrapped_label(qtwidgets, text, style="color: #94a3b8;")
+    widget = create_wrapped_label(qtwidgets, text)
+    if hasattr(widget, "setObjectName"):
+        widget.setObjectName("OCWHelperText")
+    return widget
 
 
 def create_status_label(qtwidgets: Any, text: str = "") -> Any:
-    return create_wrapped_label(qtwidgets, text)
+    widget = create_wrapped_label(qtwidgets, text)
+    if hasattr(widget, "setObjectName"):
+        widget.setObjectName("OCWStatusLabel")
+    return widget
 
 
-def create_row_widget(qtwidgets: Any, *widgets: Any, spacing: int = 6, stretch_index: int | None = None) -> Any:
+def create_row_widget(qtwidgets: Any, *widgets: Any, spacing: int = SPACE_2, stretch_index: int | None = None) -> Any:
     row = qtwidgets.QWidget()
     layout = qtwidgets.QHBoxLayout(row)
     configure_layout(layout, spacing=spacing)
@@ -363,7 +385,7 @@ def create_row_widget(qtwidgets: Any, *widgets: Any, spacing: int = 6, stretch_i
     return row
 
 
-def create_button_row(qtwidgets: Any, *buttons: Any, spacing: int = 8) -> Any:
+def create_button_row(qtwidgets: Any, *buttons: Any, spacing: int = SPACE_2) -> Any:
     layout = qtwidgets.QHBoxLayout()
     configure_layout(layout, spacing=spacing)
     for button in buttons:
@@ -388,6 +410,17 @@ def add_layout_content(layout: Any, content: Any, *, stretch: int | None = None)
         layout.addWidget(content)
     else:
         layout.addWidget(content, stretch)
+
+
+def set_button_role(button: Any, role: str = "secondary") -> Any:
+    if hasattr(button, "setObjectName"):
+        names = {
+            "primary": "OCWButtonPrimary",
+            "secondary": "OCWButtonSecondary",
+            "ghost": "OCWButtonGhost",
+        }
+        button.setObjectName(names.get(role, "OCWButtonSecondary"))
+    return button
 
 
 def set_size_policy(widget: Any, horizontal: str = "preferred", vertical: str = "preferred") -> None:

@@ -23,6 +23,7 @@ from ocw_workbench.gui.panels._common import (
     set_enabled,
     set_combo_items,
     set_current_text,
+    set_button_role,
     set_size_policy,
     set_text,
     set_tooltip,
@@ -634,10 +635,10 @@ def _build_form() -> dict[str, Any]:
     tags = qtwidgets.QLineEdit()
     visible = qtwidgets.QCheckBox()
     visible.setChecked(True)
-    update_button = qtwidgets.QPushButton("Apply Changes")
-    arm_move_button = qtwidgets.QPushButton("Pick In 3D")
-    snap_button = qtwidgets.QPushButton("Snap")
-    reset_button = qtwidgets.QPushButton("Reset")
+    update_button = set_button_role(qtwidgets.QPushButton("Apply Changes"), "primary")
+    arm_move_button = set_button_role(qtwidgets.QPushButton("Pick In 3D"), "secondary")
+    snap_button = set_button_role(qtwidgets.QPushButton("Snap"), "ghost")
+    reset_button = set_button_role(qtwidgets.QPushButton("Reset"), "ghost")
     configure_combo_box(library_ref)
     set_tooltip(component, "Select a component to inspect or edit.")
     set_tooltip(x, "Horizontal center position in millimeters.")
@@ -655,7 +656,7 @@ def _build_form() -> dict[str, Any]:
         spinbox.setRange(-1000.0, 1000.0)
         spinbox.setDecimals(2)
         set_size_policy(spinbox, horizontal="expanding", vertical="preferred")
-    selector_summary = create_status_label(qtwidgets, "Select, adjust values, then apply or move in 3D.")
+    selector_summary = create_status_label(qtwidgets, "Adjust values, then apply or pick in 3D.")
     meta_row = create_row_widget(qtwidgets, selected_id, selected_type, selected_library, spacing=8, stretch_index=2)
     selector_actions = qtwidgets.QGridLayout()
     selector_actions.setContentsMargins(0, 0, 0, 0)
@@ -717,8 +718,8 @@ def _build_form() -> dict[str, Any]:
         spinbox.setRange(-1000.0, 1000.0)
         spinbox.setDecimals(2)
         set_size_policy(spinbox, horizontal="expanding", vertical="preferred")
-    bulk_update_button = qtwidgets.QPushButton("Apply Bulk Edit")
-    bulk_reset_button = qtwidgets.QPushButton("Reset Bulk Edit")
+    bulk_update_button = set_button_role(qtwidgets.QPushButton("Apply Bulk Edit"), "primary")
+    bulk_reset_button = set_button_role(qtwidgets.QPushButton("Reset Bulk Edit"), "ghost")
     bulk_actions = create_button_row(qtwidgets, bulk_update_button, bulk_reset_button, spacing=6)
     bulk_form.addRow("", bulk_count)
     bulk_form.addRow("", bulk_types)
@@ -740,7 +741,7 @@ def _build_form() -> dict[str, Any]:
     add_x = qtwidgets.QDoubleSpinBox()
     add_y = qtwidgets.QDoubleSpinBox()
     add_rotation = qtwidgets.QDoubleSpinBox()
-    add_button = qtwidgets.QPushButton("Add")
+    add_button = set_button_role(qtwidgets.QPushButton("Add"), "primary")
     set_tooltip(add_category, "Filter the component library by category.")
     set_tooltip(add_component, "Choose a library part to add.")
     set_tooltip(add_x, "Initial X position.")

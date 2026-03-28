@@ -19,6 +19,7 @@ from ocw_workbench.gui.panels._common import (
     load_qt,
     set_combo_items,
     set_enabled,
+    set_button_role,
     set_label_text,
     set_size_policy,
     set_text,
@@ -152,23 +153,23 @@ def _build_widget() -> dict[str, Any]:
     filter_combo = qtwidgets.QComboBox()
     filter_combo.addItems(["all", "enabled", "disabled", "errors"])
     plugin_combo = qtwidgets.QComboBox()
-    enable_button = qtwidgets.QPushButton("Enable")
-    disable_button = qtwidgets.QPushButton("Disable")
-    refresh_button = qtwidgets.QPushButton("Refresh")
+    enable_button = set_button_role(qtwidgets.QPushButton("Enable"), "secondary")
+    disable_button = set_button_role(qtwidgets.QPushButton("Disable"), "ghost")
+    refresh_button = set_button_role(qtwidgets.QPushButton("Refresh"), "ghost")
     export_path = qtwidgets.QLineEdit(".plugin_packs")
     import_path = qtwidgets.QLineEdit()
-    export_button = qtwidgets.QPushButton("Export")
-    import_button = qtwidgets.QPushButton("Import")
+    export_button = set_button_role(qtwidgets.QPushButton("Export"), "secondary")
+    import_button = set_button_role(qtwidgets.QPushButton("Import"), "secondary")
     summary = create_status_label(qtwidgets)
     remote_url = qtwidgets.QLineEdit()
-    remote_refresh_button = qtwidgets.QPushButton("Load")
+    remote_refresh_button = set_button_role(qtwidgets.QPushButton("Load"), "ghost")
     remote_plugin_combo = qtwidgets.QComboBox()
     remote_summary = create_status_label(qtwidgets, "No remote plugin selected.")
     for combo in (filter_combo, plugin_combo, remote_plugin_combo):
         configure_combo_box(combo)
     remote_details = create_text_panel(qtwidgets, max_height=96)
     download_path = qtwidgets.QLineEdit(".plugin_downloads")
-    download_button = qtwidgets.QPushButton("Download")
+    download_button = set_button_role(qtwidgets.QPushButton("Download"), "primary")
     for child in (filter_combo, plugin_combo, export_path, import_path, remote_url, remote_plugin_combo, download_path):
         set_size_policy(child, horizontal="expanding", vertical="preferred")
     row = create_button_row(qtwidgets, enable_button, disable_button, refresh_button, spacing=6)

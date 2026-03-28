@@ -22,6 +22,7 @@ from ocw_workbench.gui.panels._common import (
     set_combo_items,
     set_enabled,
     set_label_text,
+    set_button_role,
     set_size_policy,
     set_text,
     text_value,
@@ -760,7 +761,7 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, root = build_panel_container(qtwidgets)
-    header = create_status_label(qtwidgets, "Select a template and variant, then create or update the current controller.")
+    header = create_status_label(qtwidgets, "Select template and variant, then create or update.")
     active_project = create_status_label(qtwidgets, "No controller in the document yet.")
     shortcuts_row = qtwidgets.QHBoxLayout()
     shortcuts_row.setSpacing(6)
@@ -786,8 +787,8 @@ def _build_form() -> dict[str, Any]:
     marketplace_details_button = qtwidgets.QPushButton("Details")
     marketplace_actions = create_button_row(
         qtwidgets,
-        marketplace_refresh_button,
-        marketplace_apply_button,
+        set_button_role(marketplace_refresh_button, "ghost"),
+        set_button_role(marketplace_apply_button, "primary"),
         marketplace_details_button,
         spacing=6,
     )
@@ -804,15 +805,15 @@ def _build_form() -> dict[str, Any]:
     template = qtwidgets.QComboBox()
     template_summary = create_status_label(qtwidgets)
     favorite_template_status = create_status_label(qtwidgets)
-    favorite_template_button = qtwidgets.QPushButton("Favorite")
+    favorite_template_button = set_button_role(qtwidgets.QPushButton("Favorite"), "ghost")
     variant = qtwidgets.QComboBox()
     variant_summary = create_status_label(qtwidgets)
     favorite_variant_status = create_status_label(qtwidgets)
-    favorite_variant_button = qtwidgets.QPushButton("Favorite")
-    parameter_status = create_status_label(qtwidgets, "Select a template to review its parameters.")
+    favorite_variant_button = set_button_role(qtwidgets.QPushButton("Favorite"), "ghost")
+    parameter_status = create_status_label(qtwidgets, "Select a template to review parameters.")
     preview = create_text_panel(qtwidgets, max_height=72)
-    apply_parameters_button = qtwidgets.QPushButton("Apply")
-    create_button = qtwidgets.QPushButton("Create Controller")
+    apply_parameters_button = set_button_role(qtwidgets.QPushButton("Apply"), "secondary")
+    create_button = set_button_role(qtwidgets.QPushButton("Create Controller"), "primary")
     status = create_status_label(qtwidgets)
     for combo in (
         favorites_widget.parts["combo"],

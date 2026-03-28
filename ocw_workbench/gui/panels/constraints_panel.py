@@ -17,6 +17,7 @@ from ocw_workbench.gui.panels._common import (
     FallbackText,
     load_qt,
     set_enabled,
+    set_button_role,
     set_label_text,
     set_size_policy,
     set_text,
@@ -304,10 +305,10 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, layout = build_panel_container(qtwidgets)
-    intro = create_status_label(qtwidgets, "Validate the current layout and review findings by priority.")
-    validate_button = qtwidgets.QPushButton("Validate Layout")
+    intro = create_status_label(qtwidgets, "Run validation and review findings.")
+    validate_button = set_button_role(qtwidgets.QPushButton("Validate Layout"), "primary")
     set_tooltip(validate_button, "Run spacing, overlap and edge-distance checks for the current controller.")
-    focus_button = qtwidgets.QPushButton("Focus Issue")
+    focus_button = set_button_role(qtwidgets.QPushButton("Focus Issue"), "secondary")
     set_enabled(focus_button, False)
     actions = create_button_row(qtwidgets, validate_button, focus_button, spacing=6)
 
