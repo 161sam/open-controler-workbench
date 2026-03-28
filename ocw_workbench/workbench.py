@@ -1379,6 +1379,18 @@ QGroupBox#OCWQuickAddSection {
 QGroupBox#OCWQuickAddSection::title {
     color: #d8e7ff;
 }
+QGroupBox#OCWSelectedComponentSection {
+    border: 1px solid #223247;
+    border-radius: 8px;
+    background: rgba(14, 22, 34, 0.45);
+    padding-top: 8px;
+}
+QFrame#OCWEmptyStateCard {
+    border: 1px dashed #31507e;
+    border-radius: 10px;
+    background: rgba(18, 34, 56, 0.28);
+    padding: 6px;
+}
 QScrollArea {
     background: transparent;
     border: none;

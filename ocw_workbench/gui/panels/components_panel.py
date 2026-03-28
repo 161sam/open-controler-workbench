@@ -310,6 +310,12 @@ class ComponentsPanel:
         except Exception as exc:
             self._publish_status(_friendly_component_error("Could not add component", exc))
 
+    def handle_empty_state_cta_clicked(self) -> None:
+        target = self.form.get("add_component") or self.form.get("add_button")
+        if target is not None and hasattr(target, "setFocus"):
+            target.setFocus()
+        self._publish_status("Quick Add is ready. Choose a component and add the first placement.")
+
     def handle_arm_move_clicked(self) -> None:
         try:
             self.arm_move_for_selected()
@@ -372,6 +378,8 @@ class ComponentsPanel:
             self.form["bulk_reset_button"].clicked.connect(self.handle_reset_clicked)
         if hasattr(self.form["add_button"], "clicked"):
             self.form["add_button"].clicked.connect(self.handle_add_clicked)
+        if hasattr(self.form["empty_state_cta_button"], "clicked"):
+            self.form["empty_state_cta_button"].clicked.connect(self.handle_empty_state_cta_clicked)
 
     def _configure_tooltips(self) -> None:
         set_tooltip(self.form["component"], "Select the component to inspect or edit.")
@@ -649,6 +657,7 @@ def _build_form() -> dict[str, Any]:
             "add_rotation": FallbackValue(0.0),
             "add_button": FallbackButton("Add"),
             "empty_state_cta": FallbackLabel("Add first component"),
+            "empty_state_cta_button": FallbackButton("Add first component"),
             "details": FallbackText("No components yet. Use Quick Add to place the first one."),
             "status": FallbackLabel("Ready to add or edit components."),
         }
@@ -658,6 +667,10 @@ def _build_form() -> dict[str, Any]:
     selected_component_box, selector_layout = create_form_section_widget(qtwidgets, "Selected Component", spacing=4)
     component_list_box, component_list_layout = create_form_section_widget(qtwidgets, "Components List", spacing=4)
     empty_state_box, empty_state_layout = create_section_widget(qtwidgets, "Components List", spacing=6)
+    if hasattr(selected_component_box, "setObjectName"):
+        selected_component_box.setObjectName("OCWSelectedComponentSection")
+    if hasattr(empty_state_box, "setObjectName"):
+        empty_state_box.setObjectName("OCWEmptyStateCard")
     context_summary = create_status_label(qtwidgets, "No components yet. Start with Quick Add.")
     component = qtwidgets.QComboBox()
     configure_combo_box(component)
@@ -816,8 +829,10 @@ def _build_form() -> dict[str, Any]:
         "No components placed yet. Start with Quick Add and place the first component into the controller.",
     )
     empty_state_cta = create_status_label(qtwidgets, "Add first component")
+    empty_state_cta_button = set_button_role(qtwidgets.QPushButton("Add first component"), "primary")
     empty_state_layout.addWidget(empty_state)
     empty_state_layout.addWidget(empty_state_cta)
+    empty_state_layout.addWidget(empty_state_cta_button)
     component_list_layout.addRow("", context_summary)
     component_list_layout.addRow("", list_hint)
     component_list_layout.addRow("Selection", component)
@@ -901,6 +916,7 @@ def _build_form() -> dict[str, Any]:
         "add_button": add_button,
         "empty_state": empty_state,
         "empty_state_cta": empty_state_cta,
+        "empty_state_cta_button": empty_state_cta_button,
         "details": details,
         "status": status,
     }

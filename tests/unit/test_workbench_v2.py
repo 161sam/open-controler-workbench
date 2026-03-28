@@ -527,6 +527,7 @@ def test_components_panel_uses_contextual_summary_and_quick_add_visibility():
     assert empty_panel.form["empty_state_box"].visible is True
     assert "No components placed yet" in empty_panel.form["empty_state"].text
     assert empty_panel.form["empty_state_cta"].text == "Add first component"
+    assert empty_panel.form["empty_state_cta_button"].text == "Add first component"
     assert empty_panel.form["quick_add_box"].visible is True
 
     service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=10.0, y=10.0)
