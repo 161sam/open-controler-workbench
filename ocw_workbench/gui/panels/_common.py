@@ -16,6 +16,12 @@ SPACE_2 = 8
 SPACE_3 = 12
 SPACE_4 = 16
 
+# Naming convention:
+# - helpers ending in `_widget` return a QWidget-like object
+# - helpers ending in `_layout` return a QLayout-like object
+# - helpers returning `(widget, layout)` use `_widget` in the name because the
+#   widget is the primary object inserted into parent layouts via addWidget()
+
 
 def log_to_console(message: str, level: str = "message") -> None:
     text = f"[OCW] {message}"
@@ -242,7 +248,7 @@ def configure_layout(
     return layout
 
 
-def build_panel_container(
+def create_panel_widget(
     qtwidgets: Any,
     *,
     spacing: int = SPACE_3,
@@ -258,7 +264,16 @@ def build_panel_container(
     return widget, layout
 
 
-def build_group_box(
+def build_panel_container(
+    qtwidgets: Any,
+    *,
+    spacing: int = SPACE_3,
+    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+) -> tuple[Any, Any]:
+    return create_panel_widget(qtwidgets, spacing=spacing, margins=margins)
+
+
+def create_section_widget(
     qtwidgets: Any,
     title: str,
     *,
@@ -288,7 +303,40 @@ def build_group_box(
     return group, layout
 
 
-def build_collapsible_section(
+def build_group_box(
+    qtwidgets: Any,
+    title: str,
+    *,
+    layout_kind: str = "vbox",
+    spacing: int = SPACE_2,
+    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+) -> tuple[Any, Any]:
+    return create_section_widget(
+        qtwidgets,
+        title,
+        layout_kind=layout_kind,
+        spacing=spacing,
+        margins=margins,
+    )
+
+
+def create_form_section_widget(
+    qtwidgets: Any,
+    title: str,
+    *,
+    spacing: int = SPACE_2,
+    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+) -> tuple[Any, Any]:
+    return create_section_widget(
+        qtwidgets,
+        title,
+        layout_kind="form",
+        spacing=spacing,
+        margins=margins,
+    )
+
+
+def create_collapsible_section_widget(
     qtwidgets: Any,
     title: str,
     *,
@@ -345,13 +393,30 @@ def build_collapsible_section(
     return widget, body_layout, toggle
 
 
+def build_collapsible_section(
+    qtwidgets: Any,
+    title: str,
+    *,
+    expanded: bool = True,
+    spacing: int = SPACE_2,
+    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+) -> tuple[Any, Any, Any]:
+    return create_collapsible_section_widget(
+        qtwidgets,
+        title,
+        expanded=expanded,
+        spacing=spacing,
+        margins=margins,
+    )
+
+
 def create_text_panel(qtwidgets: Any, *, max_height: int = 160) -> Any:
     widget = qtwidgets.QPlainTextEdit()
     configure_text_panel(widget, max_height=max_height)
     return widget
 
 
-def build_form_layout(
+def create_form_layout(
     qtwidgets: Any,
     *,
     spacing: int = SPACE_2,
@@ -368,6 +433,15 @@ def build_form_layout(
         layout.setFormAlignment(qtcore.Qt.AlignTop | qtcore.Qt.AlignLeft)
     _set_form_layout_spacing(layout)
     return layout
+
+
+def build_form_layout(
+    qtwidgets: Any,
+    *,
+    spacing: int = SPACE_2,
+    margins: tuple[int, int, int, int] = (0, 0, 0, 0),
+) -> Any:
+    return create_form_layout(qtwidgets, spacing=spacing, margins=margins)
 
 
 def finalize_panel_widget(widget: Any) -> Any:
@@ -405,6 +479,33 @@ def create_status_label(qtwidgets: Any, text: str = "") -> Any:
     return widget
 
 
+def create_compact_header_widget(
+    qtwidgets: Any,
+    primary: Any,
+    *,
+    secondary: Any | None = None,
+    trailing: Any | None = None,
+    spacing: int = SPACE_2,
+    detail_spacing: int = SPACE_1,
+) -> Any:
+    widget = qtwidgets.QWidget()
+    row = qtwidgets.QHBoxLayout(widget)
+    configure_layout(row, margins=(0, 0, 0, 0), spacing=spacing)
+    _set_min_and_max_size_constraint(row, qtwidgets)
+    details_layout = qtwidgets.QVBoxLayout()
+    configure_layout(details_layout, margins=(0, 0, 0, 0), spacing=detail_spacing)
+    add_layout_content(details_layout, primary)
+    if secondary is not None:
+        add_layout_content(details_layout, secondary)
+    add_layout_content(row, details_layout, stretch=1)
+    if trailing is not None:
+        add_layout_content(row, trailing)
+    if hasattr(widget, "setMinimumSize"):
+        widget.setMinimumSize(0, 0)
+    set_size_policy(widget, horizontal="expanding", vertical="preferred")
+    return widget
+
+
 def create_row_widget(qtwidgets: Any, *widgets: Any, spacing: int = SPACE_2, stretch_index: int | None = None) -> Any:
     row = qtwidgets.QWidget()
     layout = qtwidgets.QHBoxLayout(row)
@@ -421,12 +522,25 @@ def create_row_widget(qtwidgets: Any, *widgets: Any, spacing: int = SPACE_2, str
     return row
 
 
+def create_inline_status_widget(
+    qtwidgets: Any,
+    *widgets: Any,
+    spacing: int = SPACE_2,
+    stretch_index: int | None = None,
+) -> Any:
+    return create_row_widget(qtwidgets, *widgets, spacing=spacing, stretch_index=stretch_index)
+
+
 def create_button_row(qtwidgets: Any, *buttons: Any, spacing: int = SPACE_2) -> Any:
     layout = qtwidgets.QHBoxLayout()
     configure_layout(layout, spacing=spacing)
     for button in buttons:
         layout.addWidget(button, 1)
     return layout
+
+
+def create_button_row_layout(qtwidgets: Any, *buttons: Any, spacing: int = SPACE_2) -> Any:
+    return create_button_row(qtwidgets, *buttons, spacing=spacing)
 
 
 def add_layout_content(layout: Any, content: Any, *, stretch: int | None = None) -> None:

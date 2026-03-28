@@ -4,11 +4,11 @@ from typing import Any
 
 from ocw_workbench.gui.panels._common import (
     add_layout_content,
-    build_group_box,
-    build_collapsible_section,
+    create_button_row_layout,
+    create_collapsible_section_widget,
+    create_inline_status_widget,
+    create_section_widget,
     configure_combo_box,
-    create_button_row,
-    create_row_widget,
     create_status_label,
     create_text_panel,
     FallbackButton,
@@ -149,7 +149,7 @@ def _build_widget() -> dict[str, Any]:
             "download_button": FallbackButton("Download ZIP"),
         }
 
-    widget, layout = build_group_box(qtwidgets, "Installed Plugins", spacing=6)
+    widget, layout = create_section_widget(qtwidgets, "Installed Plugins", spacing=6)
     filter_combo = qtwidgets.QComboBox()
     filter_combo.addItems(["all", "enabled", "disabled", "errors"])
     plugin_combo = qtwidgets.QComboBox()
@@ -172,17 +172,17 @@ def _build_widget() -> dict[str, Any]:
     download_button = set_button_role(qtwidgets.QPushButton("Download"), "primary")
     for child in (filter_combo, plugin_combo, export_path, import_path, remote_url, remote_plugin_combo, download_path):
         set_size_policy(child, horizontal="expanding", vertical="preferred")
-    row = create_button_row(qtwidgets, enable_button, disable_button, refresh_button, spacing=6)
-    export_row = create_row_widget(qtwidgets, qtwidgets.QLabel("Export"), export_path, export_button, stretch_index=1)
-    import_row = create_row_widget(qtwidgets, qtwidgets.QLabel("Import"), import_path, import_button, stretch_index=1)
-    remote_url_row = create_row_widget(
+    row = create_button_row_layout(qtwidgets, enable_button, disable_button, refresh_button, spacing=6)
+    export_row = create_inline_status_widget(qtwidgets, qtwidgets.QLabel("Export"), export_path, export_button, stretch_index=1)
+    import_row = create_inline_status_widget(qtwidgets, qtwidgets.QLabel("Import"), import_path, import_button, stretch_index=1)
+    remote_url_row = create_inline_status_widget(
         qtwidgets,
         qtwidgets.QLabel("Registry"),
         remote_url,
         remote_refresh_button,
         stretch_index=1,
     )
-    remote_download_row = create_row_widget(
+    remote_download_row = create_inline_status_widget(
         qtwidgets,
         qtwidgets.QLabel("Download"),
         download_path,
@@ -196,7 +196,7 @@ def _build_widget() -> dict[str, Any]:
     add_layout_content(layout, row)
     add_layout_content(layout, export_row)
     add_layout_content(layout, import_row)
-    remote_section, remote_layout, _remote_toggle = build_collapsible_section(
+    remote_section, remote_layout, _remote_toggle = create_collapsible_section_widget(
         qtwidgets,
         "Remote Plugins",
         expanded=False,

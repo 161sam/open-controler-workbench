@@ -4,12 +4,12 @@ from typing import Any
 
 from ocw_workbench.gui.feedback import apply_status_message, format_validation_message, friendly_ui_error
 from ocw_workbench.gui.panels._common import (
-    build_group_box,
     build_panel_container,
-    build_form_layout,
-    create_button_row,
+    create_button_row_layout,
+    create_form_layout,
     create_hint_label,
-    create_row_widget,
+    create_inline_status_widget,
+    create_section_widget,
     create_status_label,
     create_text_panel,
     FallbackButton,
@@ -310,7 +310,7 @@ def _build_form() -> dict[str, Any]:
     set_tooltip(validate_button, "Run spacing, overlap and edge-distance checks for the current controller.")
     focus_button = set_button_role(qtwidgets.QPushButton("Focus Issue"), "secondary")
     set_enabled(focus_button, False)
-    actions = create_button_row(qtwidgets, validate_button, focus_button, spacing=6)
+    actions = create_button_row_layout(qtwidgets, validate_button, focus_button, spacing=6)
 
     summary_row = qtwidgets.QHBoxLayout()
     summary_row.setSpacing(6)
@@ -353,7 +353,7 @@ def _build_form() -> dict[str, Any]:
         )
     set_size_policy(results, horizontal="expanding", vertical="expanding")
 
-    list_box, list_layout = build_group_box(qtwidgets, "Findings", spacing=6)
+    list_box, list_layout = create_section_widget(qtwidgets, "Findings", spacing=6)
     list_hint = create_hint_label(
         qtwidgets,
         "Errors are blocking. Warnings are advisory. Activate a row to focus its component.",
@@ -361,14 +361,14 @@ def _build_form() -> dict[str, Any]:
     list_layout.addWidget(list_hint)
     list_layout.addWidget(results, 1)
 
-    detail_box, detail_layout = build_group_box(qtwidgets, "Selected Finding", spacing=6)
+    detail_box, detail_layout = create_section_widget(qtwidgets, "Selected Finding", spacing=6)
     detail_severity = qtwidgets.QLabel("No issue")
     detail_severity.setStyleSheet(_detail_badge_style("info"))
     detail_component = qtwidgets.QLabel("-")
     detail_component.setStyleSheet("color: #e5e7eb; font-weight: 600;")
-    detail_header = create_row_widget(qtwidgets, detail_severity, detail_component, spacing=6, stretch_index=1)
+    detail_header = create_inline_status_widget(qtwidgets, detail_severity, detail_component, spacing=6, stretch_index=1)
 
-    detail_meta = build_form_layout(qtwidgets, spacing=4)
+    detail_meta = create_form_layout(qtwidgets, spacing=4)
     detail_rule = create_status_label(qtwidgets, "-")
     detail_message = create_status_label(qtwidgets, "No issue selected.")
     detail_description = create_text_panel(qtwidgets, max_height=84)

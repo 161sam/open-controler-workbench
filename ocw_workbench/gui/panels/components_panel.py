@@ -5,12 +5,13 @@ from typing import Any
 
 from ocw_workbench.gui.feedback import apply_status_message, friendly_ui_error
 from ocw_workbench.gui.panels._common import (
-    build_group_box,
     build_panel_container,
-    build_collapsible_section,
     configure_combo_box,
-    create_button_row,
-    create_row_widget,
+    create_button_row_layout,
+    create_collapsible_section_widget,
+    create_form_section_widget,
+    create_inline_status_widget,
+    create_section_widget,
     create_status_label,
     create_text_panel,
     FallbackButton,
@@ -621,7 +622,7 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, layout = build_panel_container(qtwidgets)
-    selector_box, selector_layout = build_group_box(qtwidgets, "Selected Component", layout_kind="form", spacing=4)
+    selector_box, selector_layout = create_form_section_widget(qtwidgets, "Selected Component", spacing=4)
     component = qtwidgets.QComboBox()
     configure_combo_box(component)
     selected_id = qtwidgets.QLabel("ID: -")
@@ -657,7 +658,7 @@ def _build_form() -> dict[str, Any]:
         spinbox.setDecimals(2)
         set_size_policy(spinbox, horizontal="expanding", vertical="preferred")
     selector_summary = create_status_label(qtwidgets, "Adjust values, then apply or pick in 3D.")
-    meta_row = create_row_widget(qtwidgets, selected_id, selected_type, selected_library, spacing=8, stretch_index=2)
+    meta_row = create_inline_status_widget(qtwidgets, selected_id, selected_type, selected_library, spacing=8, stretch_index=2)
     selector_actions = qtwidgets.QGridLayout()
     selector_actions.setContentsMargins(0, 0, 0, 0)
     selector_actions.setHorizontalSpacing(6)
@@ -678,14 +679,14 @@ def _build_form() -> dict[str, Any]:
     selector_layout.addRow("Visible", visible)
     selector_layout.addRow("Type-Specific", specific_editor.widget)
     selector_layout.addRow("", selector_actions)
-    bulk_section, bulk_layout, _bulk_toggle = build_collapsible_section(
+    bulk_section, bulk_layout, _bulk_toggle = create_collapsible_section_widget(
         qtwidgets,
         "Bulk Edit",
         expanded=False,
         spacing=6,
         margins=(0, 0, 0, 0),
     )
-    bulk_box, bulk_form = build_group_box(qtwidgets, "Selection Batch Tools", layout_kind="form", spacing=4)
+    bulk_box, bulk_form = create_form_section_widget(qtwidgets, "Selection Batch Tools", spacing=4)
     bulk_count = qtwidgets.QLabel("Selected: 0")
     bulk_types = qtwidgets.QLabel("Types: -")
     bulk_summary = create_status_label(qtwidgets, "Best for similar components in the current selection.")
@@ -720,7 +721,7 @@ def _build_form() -> dict[str, Any]:
         set_size_policy(spinbox, horizontal="expanding", vertical="preferred")
     bulk_update_button = set_button_role(qtwidgets.QPushButton("Apply Bulk Edit"), "primary")
     bulk_reset_button = set_button_role(qtwidgets.QPushButton("Reset Bulk Edit"), "ghost")
-    bulk_actions = create_button_row(qtwidgets, bulk_update_button, bulk_reset_button, spacing=6)
+    bulk_actions = create_button_row_layout(qtwidgets, bulk_update_button, bulk_reset_button, spacing=6)
     bulk_form.addRow("", bulk_count)
     bulk_form.addRow("", bulk_types)
     bulk_form.addRow("", bulk_summary)
@@ -733,7 +734,7 @@ def _build_form() -> dict[str, Any]:
     bulk_form.addRow(bulk_label_cap_width, _bulk_row_widget(qtwidgets, bulk_apply_cap_width, bulk_cap_width))
     bulk_form.addRow("", bulk_actions)
     bulk_layout.addWidget(bulk_box)
-    add_box, add_layout = build_group_box(qtwidgets, "Quick Add", layout_kind="form", spacing=4)
+    add_box, add_layout = create_form_section_widget(qtwidgets, "Quick Add", spacing=4)
     add_category = qtwidgets.QComboBox()
     add_component = qtwidgets.QComboBox()
     configure_combo_box(add_category)
@@ -760,11 +761,11 @@ def _build_form() -> dict[str, Any]:
     add_layout.addRow("Y (mm)", add_y)
     add_layout.addRow("Rotation", add_rotation)
     add_layout.addRow("", add_button)
-    details_box, details_layout = build_group_box(qtwidgets, "Selection Details", spacing=6)
+    details_box, details_layout = create_section_widget(qtwidgets, "Selection Details", spacing=6)
     details = create_text_panel(qtwidgets, max_height=72)
     details_layout.addWidget(details)
     status = create_status_label(qtwidgets)
-    status_box, status_layout = build_group_box(qtwidgets, "Status", spacing=6)
+    status_box, status_layout = create_section_widget(qtwidgets, "Status", spacing=6)
     status_layout.addWidget(status)
     for child in (selector_box, bulk_box, bulk_section, add_box, component, add_category, add_component):
         set_size_policy(child, horizontal="expanding", vertical="preferred")
@@ -866,4 +867,4 @@ def _values_equal(left: Any, right: Any) -> bool:
 
 
 def _bulk_row_widget(qtwidgets: Any, apply_widget: Any, value_widget: Any) -> Any:
-    return create_row_widget(qtwidgets, apply_widget, value_widget, spacing=6, stretch_index=1)
+    return create_inline_status_widget(qtwidgets, apply_widget, value_widget, spacing=6, stretch_index=1)

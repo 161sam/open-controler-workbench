@@ -6,8 +6,8 @@ from ocw_workbench.gui.panels._common import (
     FallbackButton,
     FallbackCombo,
     FallbackText,
-    build_group_box,
-    create_button_row,
+    create_button_row_layout,
+    create_form_section_widget,
     current_text,
     load_qt,
     set_button_role,
@@ -41,12 +41,12 @@ def _build_widget() -> dict[str, Any]:
             "save_button": FallbackButton("Save"),
         }
 
-    widget, layout = build_group_box(qtwidgets, "Presets", layout_kind="form")
+    widget, layout = create_form_section_widget(qtwidgets, "Presets")
     combo = qtwidgets.QComboBox()
     name = qtwidgets.QLineEdit()
     load_button = set_button_role(qtwidgets.QPushButton("Load"), "secondary")
     save_button = set_button_role(qtwidgets.QPushButton("Save"), "primary")
-    actions = create_button_row(qtwidgets, load_button, save_button)
+    actions = create_button_row_layout(qtwidgets, load_button, save_button)
     layout.addRow("Saved", combo)
     layout.addRow("Name", name)
     layout.addRow("", actions)

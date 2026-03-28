@@ -8,10 +8,10 @@ from ocw_workbench.gui.panels._common import (
     FallbackCombo,
     FallbackLabel,
     FallbackText,
-    build_group_box,
     build_panel_container,
     FallbackValue,
     configure_combo_box,
+    create_form_section_widget,
     create_text_panel,
     current_text,
     load_qt,
@@ -198,7 +198,7 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, layout = build_panel_container(qtwidgets)
-    meta_box, meta_layout = build_group_box(qtwidgets, "Project", layout_kind="form")
+    meta_box, meta_layout = create_form_section_widget(qtwidgets, "Project")
     template = qtwidgets.QLabel("-")
     variant = qtwidgets.QLabel("-")
     selection = qtwidgets.QLabel("-")
@@ -210,7 +210,7 @@ def _build_form() -> dict[str, Any]:
     meta_layout.addRow("Selected count", selection_count)
     meta_layout.addRow("Components", component_count)
 
-    settings_box, settings_layout = build_group_box(qtwidgets, "Geometry", layout_kind="form")
+    settings_box, settings_layout = create_form_section_widget(qtwidgets, "Geometry")
     width = qtwidgets.QDoubleSpinBox()
     depth = qtwidgets.QDoubleSpinBox()
     height = qtwidgets.QDoubleSpinBox()

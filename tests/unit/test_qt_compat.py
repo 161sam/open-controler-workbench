@@ -283,6 +283,77 @@ def test_build_group_box_uses_layout_margin_and_minimum_expanding_policy(monkeyp
     assert layout.horizontal_spacing == _common.SPACE_2
 
 
+def test_create_compact_header_widget_returns_widget_shell_with_safe_layout(monkeypatch):
+    class FakeWidget:
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.layout_ref = None
+            self.minimum_size = None
+            self.size_policy = None
+
+        def setLayout(self, layout) -> None:
+            self.layout_ref = layout
+
+        def setMinimumSize(self, width: int, height: int) -> None:
+            self.minimum_size = (width, height)
+
+        def setSizePolicy(self, horizontal, vertical) -> None:
+            self.size_policy = (horizontal, vertical)
+
+    class FakeLayout:
+        def __init__(self, parent=None) -> None:
+            self.margins = None
+            self.spacing = None
+            self.widgets = []
+            self.layouts = []
+            self.constraint = None
+            if parent is not None and hasattr(parent, "setLayout"):
+                parent.setLayout(self)
+
+        def setContentsMargins(self, *margins) -> None:
+            self.margins = margins
+
+        def setSpacing(self, spacing) -> None:
+            self.spacing = spacing
+
+        def setSizeConstraint(self, value) -> None:
+            self.constraint = value
+
+        def addWidget(self, widget, *_args) -> None:
+            self.widgets.append(widget)
+
+        def addLayout(self, layout, *_args) -> None:
+            self.layouts.append(layout)
+
+    class FakeQLayout:
+        SetMinAndMaxSize = 5
+
+    class FakeSizePolicy:
+        Fixed = 0
+        Minimum = 1
+        Preferred = 2
+        MinimumExpanding = 3
+        Expanding = 4
+
+    qtwidgets = types.SimpleNamespace(
+        QWidget=FakeWidget,
+        QHBoxLayout=FakeLayout,
+        QVBoxLayout=FakeLayout,
+        QLayout=FakeQLayout,
+        QSizePolicy=FakeSizePolicy,
+    )
+    monkeypatch.setattr(_common, "load_qt", lambda: (None, object(), qtwidgets))
+
+    primary = object()
+    secondary = object()
+    trailing = object()
+    header = _common.create_compact_header_widget(qtwidgets, primary, secondary=secondary, trailing=trailing)
+
+    assert header.minimum_size == (0, 0)
+    assert header.size_policy == (FakeSizePolicy.Expanding, FakeSizePolicy.Preferred)
+    assert trailing in header.layout_ref.widgets
+    assert len(header.layout_ref.widgets) + len(header.layout_ref.layouts) >= 2
+
+
 def test_task_panel_builders_use_shared_layout_defaults(monkeypatch):
     class FakeWidget:
         def __init__(self, *_args, **_kwargs) -> None:

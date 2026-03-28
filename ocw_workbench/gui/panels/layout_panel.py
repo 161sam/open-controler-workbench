@@ -5,11 +5,12 @@ from typing import Any
 
 from ocw_workbench.gui.feedback import apply_status_message, format_layout_message, format_toggle_message, friendly_ui_error
 from ocw_workbench.gui.panels._common import (
-    build_group_box,
     build_panel_container,
-    build_form_layout,
     configure_combo_box,
-    create_button_row,
+    create_button_row_layout,
+    create_form_layout,
+    create_form_section_widget,
+    create_section_widget,
     create_status_label,
     create_text_panel,
     FallbackButton,
@@ -323,7 +324,7 @@ def _build_form() -> dict[str, Any]:
 
     content, layout = build_panel_container(qtwidgets)
     intro = create_status_label(qtwidgets, "Auto Place first, then refine with view helpers.")
-    form = build_form_layout(qtwidgets, spacing=4)
+    form = create_form_layout(qtwidgets, spacing=4)
     preset = qtwidgets.QComboBox()
     preset.addItems(["grid", "row", "column", "zone"])
     configure_combo_box(preset)
@@ -357,7 +358,7 @@ def _build_form() -> dict[str, Any]:
     set_tooltip(measurements_button, "Show or hide measurement guides.")
     set_tooltip(conflict_lines_button, "Show or hide conflict lines.")
     set_tooltip(constraint_labels_button, "Show or hide issue labels.")
-    primary_actions = create_button_row(qtwidgets, apply_button, rerun_button, spacing=6)
+    primary_actions = create_button_row_layout(qtwidgets, apply_button, rerun_button, spacing=6)
     button_row = qtwidgets.QGridLayout()
     button_row.setContentsMargins(0, 0, 0, 0)
     button_row.setHorizontalSpacing(8)
@@ -376,14 +377,14 @@ def _build_form() -> dict[str, Any]:
     summary = create_text_panel(qtwidgets, max_height=72)
     overlay_status = create_text_panel(qtwidgets, max_height=72)
     status = create_status_label(qtwidgets)
-    settings_box, settings_layout = build_group_box(qtwidgets, "Placement Settings", layout_kind="form", spacing=4)
+    settings_box, settings_layout = create_form_section_widget(qtwidgets, "Placement Settings", spacing=4)
     settings_layout.addRow("Preset", preset)
     settings_layout.addRow("Grid (mm)", grid_mm)
     settings_layout.addRow("Spacing (mm)", spacing_mm)
     settings_layout.addRow("Padding (mm)", padding_mm)
-    overlay_box, overlay_layout = build_group_box(qtwidgets, "View Helpers", spacing=6)
+    overlay_box, overlay_layout = create_section_widget(qtwidgets, "View Helpers", spacing=6)
     overlay_layout.addLayout(button_row)
-    diagnostics_box, diagnostics_layout = build_group_box(qtwidgets, "Feedback", spacing=6)
+    diagnostics_box, diagnostics_layout = create_section_widget(qtwidgets, "Feedback", spacing=6)
     diagnostics_row = qtwidgets.QHBoxLayout()
     diagnostics_row.setSpacing(6)
     diagnostics_row.addWidget(overlay_status, 1)
