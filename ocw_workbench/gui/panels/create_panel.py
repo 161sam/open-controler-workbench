@@ -934,10 +934,10 @@ def _build_form() -> dict[str, Any]:
         margins=(0, 0, 0, 0),
     )
     presets_layout.addWidget(presets_widget.widget)
-    geometry_layout.addRow(geometry_summary)
-    geometry_layout.addRow(parameter_status)
-    geometry_layout.addRow(parameter_editor.widget)
-    geometry_layout.addRow(presets_section)
+    geometry_layout.addWidget(geometry_summary)
+    geometry_layout.addWidget(parameter_status)
+    geometry_layout.addWidget(parameter_editor.widget)
+    geometry_layout.addWidget(presets_section)
 
     create_only_row = create_button_row_layout(qtwidgets, create_button)
     document_actions_layout.addWidget(active_project)

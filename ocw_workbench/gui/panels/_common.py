@@ -15,6 +15,13 @@ SPACE_1 = 4
 SPACE_2 = 8
 SPACE_3 = 12
 SPACE_4 = 16
+HEADER_MIN_HEIGHT = 28
+COLLAPSIBLE_TOGGLE_MIN_HEIGHT = 32
+SCROLL_VIEWPORT_TOP_PADDING = SPACE_2
+SCROLL_VIEWPORT_BOTTOM_PADDING = SPACE_1
+PANEL_TOP_MARGIN = SPACE_3
+PANEL_BOTTOM_MARGIN = SPACE_2
+SECTION_VERTICAL_MARGIN = SPACE_2
 
 # Naming convention:
 # - helpers ending in `_widget` return a QWidget-like object
@@ -216,6 +223,8 @@ def wrap_widget_in_scroll_area(widget: Any) -> Any:
     scroll_area.setWidgetResizable(True)
     if hasattr(scroll_area, "setContentsMargins"):
         scroll_area.setContentsMargins(0, 0, 0, 0)
+    if hasattr(scroll_area, "setViewportMargins"):
+        scroll_area.setViewportMargins(0, SCROLL_VIEWPORT_TOP_PADDING, 0, SCROLL_VIEWPORT_BOTTOM_PADDING)
     if hasattr(scroll_area, "setHorizontalScrollBarPolicy") and qtcore is not None:
         scroll_area.setHorizontalScrollBarPolicy(qtcore.Qt.ScrollBarAsNeeded)
     if hasattr(scroll_area, "setVerticalScrollBarPolicy") and qtcore is not None:
@@ -252,7 +261,7 @@ def create_panel_widget(
     qtwidgets: Any,
     *,
     spacing: int = SPACE_3,
-    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+    margins: tuple[int, int, int, int] = (0, PANEL_TOP_MARGIN, 0, PANEL_BOTTOM_MARGIN),
 ) -> tuple[Any, Any]:
     widget = qtwidgets.QWidget()
     layout = qtwidgets.QVBoxLayout(widget)
@@ -268,7 +277,7 @@ def build_panel_container(
     qtwidgets: Any,
     *,
     spacing: int = SPACE_3,
-    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+    margins: tuple[int, int, int, int] = (0, PANEL_TOP_MARGIN, 0, PANEL_BOTTOM_MARGIN),
 ) -> tuple[Any, Any]:
     return create_panel_widget(qtwidgets, spacing=spacing, margins=margins)
 
@@ -279,7 +288,7 @@ def create_section_widget(
     *,
     layout_kind: str = "vbox",
     spacing: int = SPACE_2,
-    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+    margins: tuple[int, int, int, int] = (0, SECTION_VERTICAL_MARGIN, 0, SECTION_VERTICAL_MARGIN),
 ) -> tuple[Any, Any]:
     group = qtwidgets.QGroupBox(title)
     if hasattr(group, "setObjectName"):
@@ -299,6 +308,8 @@ def create_section_widget(
     _set_min_and_max_size_constraint(layout, qtwidgets)
     if hasattr(group, "setMinimumSize"):
         group.setMinimumSize(0, 0)
+    if hasattr(group, "setMinimumHeight"):
+        group.setMinimumHeight(HEADER_MIN_HEIGHT + SPACE_4)
     set_size_policy(group, horizontal="expanding", vertical="minimum_expanding")
     return group, layout
 
@@ -309,7 +320,7 @@ def build_group_box(
     *,
     layout_kind: str = "vbox",
     spacing: int = SPACE_2,
-    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+    margins: tuple[int, int, int, int] = (0, SECTION_VERTICAL_MARGIN, 0, SECTION_VERTICAL_MARGIN),
 ) -> tuple[Any, Any]:
     return create_section_widget(
         qtwidgets,
@@ -325,7 +336,7 @@ def create_form_section_widget(
     title: str,
     *,
     spacing: int = SPACE_2,
-    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+    margins: tuple[int, int, int, int] = (0, SECTION_VERTICAL_MARGIN, 0, SECTION_VERTICAL_MARGIN),
 ) -> tuple[Any, Any]:
     return create_section_widget(
         qtwidgets,
@@ -342,12 +353,12 @@ def create_collapsible_section_widget(
     *,
     expanded: bool = True,
     spacing: int = SPACE_2,
-    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+    margins: tuple[int, int, int, int] = (0, SECTION_VERTICAL_MARGIN, 0, SECTION_VERTICAL_MARGIN),
 ) -> tuple[Any, Any, Any]:
     qtcore, _qtgui, _qtwidgets = load_qt()
     widget = qtwidgets.QWidget()
     outer = qtwidgets.QVBoxLayout(widget)
-    configure_layout(outer, margins=(0, 0, 0, 0), spacing=SPACE_1)
+    configure_layout(outer, margins=(0, SECTION_VERTICAL_MARGIN, 0, SECTION_VERTICAL_MARGIN), spacing=SPACE_2)
     _set_min_and_max_size_constraint(outer, qtwidgets)
     if hasattr(widget, "setMinimumSize"):
         widget.setMinimumSize(0, 0)
@@ -366,6 +377,9 @@ def create_collapsible_section_widget(
         toggle.setArrowType(qtcore.Qt.DownArrow if expanded else qtcore.Qt.RightArrow)
     if hasattr(toggle, "setObjectName"):
         toggle.setObjectName("OCWCollapsibleToggle")
+    if hasattr(toggle, "setMinimumHeight"):
+        toggle.setMinimumHeight(COLLAPSIBLE_TOGGLE_MIN_HEIGHT)
+    set_size_policy(toggle, horizontal="expanding", vertical="preferred")
 
     body = qtwidgets.QFrame()
     if hasattr(body, "setObjectName"):
@@ -399,7 +413,7 @@ def build_collapsible_section(
     *,
     expanded: bool = True,
     spacing: int = SPACE_2,
-    margins: tuple[int, int, int, int] = (0, SPACE_1, 0, 0),
+    margins: tuple[int, int, int, int] = (0, SECTION_VERTICAL_MARGIN, 0, SECTION_VERTICAL_MARGIN),
 ) -> tuple[Any, Any, Any]:
     return create_collapsible_section_widget(
         qtwidgets,
@@ -490,7 +504,7 @@ def create_compact_header_widget(
 ) -> Any:
     widget = qtwidgets.QWidget()
     row = qtwidgets.QHBoxLayout(widget)
-    configure_layout(row, margins=(0, 0, 0, 0), spacing=spacing)
+    configure_layout(row, margins=(0, SPACE_2, 0, SPACE_2), spacing=spacing)
     _set_min_and_max_size_constraint(row, qtwidgets)
     details_layout = qtwidgets.QVBoxLayout()
     configure_layout(details_layout, margins=(0, 0, 0, 0), spacing=detail_spacing)
@@ -502,6 +516,8 @@ def create_compact_header_widget(
         add_layout_content(row, trailing)
     if hasattr(widget, "setMinimumSize"):
         widget.setMinimumSize(0, 0)
+    if hasattr(widget, "setMinimumHeight"):
+        widget.setMinimumHeight(HEADER_MIN_HEIGHT + SPACE_1)
     set_size_policy(widget, horizontal="expanding", vertical="preferred")
     return widget
 

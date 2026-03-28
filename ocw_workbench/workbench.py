@@ -1281,7 +1281,8 @@ QToolButton#OCWCollapsibleToggle {
     border: none;
     border-bottom: 1px solid #1b2433;
     border-radius: 0px;
-    padding: 6px 1px 5px 1px;
+    min-height: 34px;
+    padding: 8px 2px 8px 2px;
     font-weight: 600;
     text-align: left;
 }
@@ -1360,14 +1361,14 @@ QGroupBox#OCWSectionGroup, QGroupBox {
     font-size: 10px;
     font-weight: 700;
     border: none;
-    margin-top: 16px;
-    padding-top: 6px;
+    margin-top: 18px;
+    padding-top: 8px;
     background: transparent;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 0px;
-    padding: 0 0 3px 0;
+    padding: 0 0 5px 0;
     color: #8798ac;
 }
 QGroupBox#OCWQuickAddSection {

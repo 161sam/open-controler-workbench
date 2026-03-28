@@ -308,9 +308,17 @@ def test_wrap_widget_in_scroll_area_sets_resizable_container_and_layout_constrai
             self.widget = None
             self.minimum_size = None
             self.size_policy = None
+            self.contents_margins = None
+            self.viewport_margins = None
 
         def setWidgetResizable(self, value: bool) -> None:
             self.resizable = value
+
+        def setContentsMargins(self, *margins) -> None:
+            self.contents_margins = margins
+
+        def setViewportMargins(self, *margins) -> None:
+            self.viewport_margins = margins
 
         def setHorizontalScrollBarPolicy(self, *_args) -> None:
             return
@@ -354,6 +362,13 @@ def test_wrap_widget_in_scroll_area_sets_resizable_container_and_layout_constrai
 
     assert scroll_area.resizable is True
     assert scroll_area.widget is content
+    assert scroll_area.contents_margins == (0, 0, 0, 0)
+    assert scroll_area.viewport_margins == (
+        0,
+        _common.SCROLL_VIEWPORT_TOP_PADDING,
+        0,
+        _common.SCROLL_VIEWPORT_BOTTOM_PADDING,
+    )
     assert content._layout.constraint == FakeLayout.SetMinAndMaxSize
 
 
@@ -388,6 +403,7 @@ def test_build_group_box_uses_layout_margin_and_minimum_expanding_policy(monkeyp
             self.flat = None
             self.layout_ref = None
             self.minimum_size = None
+            self.minimum_height = None
             self.size_policy = None
 
         def setObjectName(self, name: str) -> None:
@@ -401,6 +417,9 @@ def test_build_group_box_uses_layout_margin_and_minimum_expanding_policy(monkeyp
 
         def setMinimumSize(self, width: int, height: int) -> None:
             self.minimum_size = (width, height)
+
+        def setMinimumHeight(self, value: int) -> None:
+            self.minimum_height = value
 
         def setSizePolicy(self, horizontal, vertical) -> None:
             self.size_policy = (horizontal, vertical)
@@ -431,14 +450,15 @@ def test_build_group_box_uses_layout_margin_and_minimum_expanding_policy(monkeyp
     assert group.object_name == "OCWSectionGroup"
     assert group.flat is True
     assert group.minimum_size == (0, 0)
+    assert group.minimum_height == _common.HEADER_MIN_HEIGHT + _common.SPACE_4
     assert group.size_policy == (FakeSizePolicy.Expanding, FakeSizePolicy.MinimumExpanding)
-    assert layout.margins == (0, _common.SPACE_1, 0, 0)
+    assert layout.margins == (0, _common.SECTION_VERTICAL_MARGIN, 0, _common.SECTION_VERTICAL_MARGIN)
     assert layout.constraint == FakeQLayout.SetMinAndMaxSize
     assert layout.vertical_spacing == _common.SPACE_2
     assert layout.horizontal_spacing == _common.SPACE_2
 
 
-def test_create_compact_header_widget_returns_widget_shell_with_safe_layout(monkeypatch):
+def test_create_panel_widget_uses_roomier_vertical_defaults(monkeypatch):
     class FakeWidget:
         def __init__(self, *_args, **_kwargs) -> None:
             self.layout_ref = None
@@ -450,6 +470,69 @@ def test_create_compact_header_widget_returns_widget_shell_with_safe_layout(monk
 
         def setMinimumSize(self, width: int, height: int) -> None:
             self.minimum_size = (width, height)
+
+        def setSizePolicy(self, horizontal, vertical) -> None:
+            self.size_policy = (horizontal, vertical)
+
+    class FakeLayout:
+        def __init__(self, parent=None) -> None:
+            self.margins = None
+            self.spacing = None
+            self.constraint = None
+            if parent is not None and hasattr(parent, "setLayout"):
+                parent.setLayout(self)
+
+        def setContentsMargins(self, *margins) -> None:
+            self.margins = margins
+
+        def setSpacing(self, spacing) -> None:
+            self.spacing = spacing
+
+        def setSizeConstraint(self, value) -> None:
+            self.constraint = value
+
+    class FakeQLayout:
+        SetMinAndMaxSize = 9
+
+    class FakeSizePolicy:
+        Fixed = 0
+        Minimum = 1
+        Preferred = 2
+        MinimumExpanding = 3
+        Expanding = 4
+
+    qtwidgets = types.SimpleNamespace(
+        QWidget=FakeWidget,
+        QVBoxLayout=FakeLayout,
+        QLayout=FakeQLayout,
+        QSizePolicy=FakeSizePolicy,
+    )
+
+    widget, layout = _common.create_panel_widget(qtwidgets)
+
+    assert widget.minimum_size == (0, 0)
+    assert widget.size_policy == (FakeSizePolicy.Expanding, FakeSizePolicy.Expanding)
+    assert layout.margins == (0, _common.PANEL_TOP_MARGIN, 0, _common.PANEL_BOTTOM_MARGIN)
+    assert layout.spacing == _common.SPACE_3
+    assert layout.constraint == FakeQLayout.SetMinAndMaxSize
+
+
+def test_create_compact_header_widget_returns_widget_shell_with_safe_layout(monkeypatch):
+    class FakeWidget:
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.layout_ref = None
+            self.minimum_size = None
+            self.minimum_height = None
+            self.size_policy = None
+
+        def setLayout(self, layout) -> None:
+            self.layout_ref = layout
+
+        def setMinimumSize(self, width: int, height: int) -> None:
+            self.minimum_size = (width, height)
+
+        def setMinimumHeight(self, value: int) -> None:
+            self.minimum_height = value
 
         def setSizePolicy(self, horizontal, vertical) -> None:
             self.size_policy = (horizontal, vertical)
@@ -504,7 +587,9 @@ def test_create_compact_header_widget_returns_widget_shell_with_safe_layout(monk
     header = _common.create_compact_header_widget(qtwidgets, primary, secondary=secondary, trailing=trailing)
 
     assert header.minimum_size == (0, 0)
+    assert header.minimum_height == _common.HEADER_MIN_HEIGHT + _common.SPACE_1
     assert header.size_policy == (FakeSizePolicy.Expanding, FakeSizePolicy.Preferred)
+    assert header.layout_ref.margins == (0, _common.SPACE_2, 0, _common.SPACE_2)
     assert trailing in header.layout_ref.widgets
     assert len(header.layout_ref.widgets) + len(header.layout_ref.layouts) >= 2
 
@@ -914,7 +999,7 @@ def test_create_panel_build_wraps_nested_form_inside_selection_form(monkeypatch)
             (FakeWidget("action-section"), action_layout),
         ]
     )
-    geometry_layout = FakeFormLayout()
+    geometry_layout = FakeLayout()
 
     def _fake_collapsible(_qtwidgets, title, **_kwargs):
         if title == "Geometry":
@@ -967,8 +1052,8 @@ def test_create_panel_build_wraps_nested_form_inside_selection_form(monkeypatch)
     assert wrapped_forms[1][0] is not selection_form
     assert len(template_layout.rows) == 3
     assert template_layout.rows[0][0].text == "wrapped-form"
-    assert len(geometry_layout.rows) == 4
-    assert geometry_layout.rows[0][0] is form["geometry_summary"]
+    assert len(geometry_layout.widgets) == 4
+    assert geometry_layout.widgets[0] is form["geometry_summary"]
     assert len(action_layout.rows) == 2
     assert action_layout.rows[0][0].text == "wrapped-form"
 
@@ -1415,6 +1500,7 @@ def test_create_collapsible_section_widget_returns_widget_body_and_toggle(monkey
             self.text_value = ""
             self.checked = False
             self.arrow = None
+            self.minimum_height = None
             self.toggled = FakeSignal()
 
         def setText(self, text: str) -> None:
@@ -1432,19 +1518,24 @@ def test_create_collapsible_section_widget_returns_widget_body_and_toggle(monkey
         def setArrowType(self, arrow) -> None:
             self.arrow = arrow
 
+        def setMinimumHeight(self, value: int) -> None:
+            self.minimum_height = value
+
     class FakeLayout:
         def __init__(self, parent=None) -> None:
             self.widgets = []
             self.layouts = []
             self.constraint = None
+            self.margins = None
+            self.spacing = None
             if parent is not None and hasattr(parent, "setLayout"):
                 parent.setLayout(self)
 
-        def setContentsMargins(self, *_args) -> None:
-            return
+        def setContentsMargins(self, *margins) -> None:
+            self.margins = margins
 
-        def setSpacing(self, *_args) -> None:
-            return
+        def setSpacing(self, spacing) -> None:
+            self.spacing = spacing
 
         def setSizeConstraint(self, value) -> None:
             self.constraint = value
@@ -1480,9 +1571,12 @@ def test_create_collapsible_section_widget_returns_widget_body_and_toggle(monkey
     widget, body_layout, toggle = _common.create_collapsible_section_widget(qtwidgets, "Helpers", expanded=False)
 
     assert widget.minimum_size == (0, 0)
+    assert widget.layout_ref.margins == (0, _common.SECTION_VERTICAL_MARGIN, 0, _common.SECTION_VERTICAL_MARGIN)
     assert body_layout.constraint == FakeQLayout.SetMinAndMaxSize
+    assert body_layout.margins == (0, _common.SECTION_VERTICAL_MARGIN, 0, _common.SECTION_VERTICAL_MARGIN)
     assert toggle.text_value == "Helpers"
     assert toggle.arrow == qtcore.Qt.RightArrow
+    assert toggle.minimum_height == _common.COLLAPSIBLE_TOGGLE_MIN_HEIGHT
     body = widget.layout_ref.widgets[1]
     assert body.visible is False
 
