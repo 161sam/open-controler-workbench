@@ -43,6 +43,7 @@ DEFAULT_META = {
     "layout": {},
     "validation": None,
     "ui": {
+        "active_interaction": None,
         "overlay_enabled": True,
         "show_constraints": True,
         "grid_mm": 1.0,

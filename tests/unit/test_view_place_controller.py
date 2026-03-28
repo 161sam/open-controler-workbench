@@ -142,6 +142,41 @@ def test_view_place_controller_commit_creates_single_transaction_after_multiple_
     controller.commit()
 
     assert doc.transactions == [("open", "OCW Place Component"), ("commit", None)]
+    assert controller.doc is doc
+    assert controller.active_template_id == "omron_b3f_1000"
+    assert load_preview_state(doc) is None
+
+
+def test_view_place_controller_continues_after_commit_for_multiple_clicks():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    controller = ViewPlaceController(
+        controller_service=controller_service,
+        interaction_service=interaction_service,
+    )
+    view = FakeView()
+    controller._active_view = lambda _doc: view
+
+    assert controller.start(doc, "omron_b3f_1000") is True
+    controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "DOWN", "Button": "BUTTON1", "Position": (12, 19)})
+    controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "DOWN", "Button": "BUTTON1", "Position": (30, 41)})
+
+    state = controller_service.get_state(doc)
+    settings = interaction_service.get_settings(doc)
+
+    assert len(state["components"]) == 2
+    assert doc.transactions == [
+        ("open", "OCW Place Component"),
+        ("commit", None),
+        ("open", "OCW Place Component"),
+        ("commit", None),
+    ]
+    assert controller.doc is doc
+    assert controller.active_template_id == "omron_b3f_1000"
+    assert settings["active_interaction"] == "place"
+    assert load_preview_state(doc) is None
 
 
 def test_view_place_controller_blocks_commit_for_invalid_preview():
@@ -167,6 +202,30 @@ def test_view_place_controller_blocks_commit_for_invalid_preview():
     with pytest.raises(ValueError, match="invalid"):
         controller.commit()
     assert controller_service.get_state(doc)["components"] == []
+
+
+def test_view_place_controller_escape_cancels_and_clears_interaction_state():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    controller = ViewPlaceController(
+        controller_service=controller_service,
+        interaction_service=interaction_service,
+    )
+    view = FakeView()
+    controller._active_view = lambda _doc: view
+
+    assert controller.start(doc, "omron_b3f_1000") is True
+    controller.handle_view_event({"Type": "SoLocation2Event", "Position": (12, 18)})
+    assert load_preview_state(doc) is not None
+
+    controller.handle_view_event({"Type": "SoKeyboardEvent", "State": "DOWN", "Key": "ESCAPE"})
+
+    settings = interaction_service.get_settings(doc)
+    assert load_preview_state(doc) is None
+    assert settings["active_interaction"] is None
+    assert controller.doc is None
 
 
 def test_overlay_service_includes_drag_preview_ghost():

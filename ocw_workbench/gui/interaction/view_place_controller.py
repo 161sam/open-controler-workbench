@@ -66,17 +66,22 @@ class ViewPlaceController:
         self.active_template_id = template_id
         self.preview_active = True
         self._last_preview_status = None
+        self.interaction_service.begin_interaction(doc, "place", template_id=template_id)
         if not self._view_callbacks.attach(view, self.handle_view_event):
             self.cancel(reason="error", publish_status=False)
             self._publish_status("Interaction error")
             return False
-        self._publish_status("Placing ...")
+        self._publish_status(f"Click to place '{template_id}'. ESC cancels.")
         return self._view_callbacks.is_registered
 
     def cancel(self, reason: str = "cancel", publish_status: bool = True) -> None:
         doc = self.doc
         self._view_callbacks.detach()
         if doc is not None:
+            try:
+                self.interaction_service.end_interaction(doc)
+            except Exception as exc:
+                log_exception("Failed to clear placement interaction state", exc)
             try:
                 self.interaction_service.clear_component_preview(doc)
             except Exception as exc:
@@ -102,9 +107,11 @@ class ViewPlaceController:
             raise ValueError("No preview position available")
         if not self._preview_allows_commit(preview):
             raise ValueError("Preview position is invalid")
+        doc = self.doc
         try:
+            template_id = self.active_template_id
             state = self.controller_service.add_component(
-                self.doc,
+                doc,
                 library_ref=self.active_template_id,
                 x=float(preview["x"]),
                 y=float(preview["y"]),
@@ -113,8 +120,8 @@ class ViewPlaceController:
         except Exception as exc:
             self._handle_interaction_error(exc)
             raise
-        self.cancel(reason="finish", publish_status=False)
-        self._publish_status("Committed")
+        self._continue_after_commit(doc)
+        self._publish_status(f"Placed '{template_id}'. Click to place another or ESC to cancel.")
         return state
 
     def update_preview_from_screen(self, screen_x: float, screen_y: float) -> dict[str, Any] | None:
@@ -259,6 +266,18 @@ class ViewPlaceController:
         log_exception("Placement interaction failed", exc)
         self.cancel(reason="error")
 
+    def _continue_after_commit(self, doc: Any) -> None:
+        try:
+            self.interaction_service.clear_component_preview(doc)
+        except Exception as exc:
+            log_exception("Failed to clear placement preview after commit", exc)
+        try:
+            self.overlay_renderer.refresh(doc)
+        except Exception as exc:
+            log_exception("Failed to refresh overlay after placement commit", exc)
+        self.preview_active = True
+        self._last_preview_status = None
+
     def _notify_finished(self) -> None:
         if self.on_finished is not None:
             try:
@@ -285,5 +304,9 @@ class ViewPlaceController:
         if reason == "error":
             return "Interaction error"
         if reason == "finish":
-            return "Committed"
-        return "Cancelled"
+            return "Placement finished."
+        if reason == "switch":
+            return "Placement mode switched."
+        if reason == "view_unavailable":
+            return "Placement mode stopped because the 3D view is no longer available."
+        return "Placement cancelled."

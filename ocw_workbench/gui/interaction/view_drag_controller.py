@@ -55,11 +55,12 @@ class ViewDragController:
         self.view = view
         self.armed = True
         self._last_preview_status = None
+        self.interaction_service.begin_interaction(doc, "drag")
         if not self._view_callbacks.attach(view, self.handle_view_event):
             self.cancel(reason="error", publish_status=False)
             self._publish_status("Interaction error")
             return False
-        self._publish_status("Dragging ...")
+        self._publish_status("Drag in 3D. Pick a component, release to commit, ESC to cancel.")
         return self._view_callbacks.is_registered
 
     def cancel(self, reason: str = "cancel", publish_status: bool = True) -> None:
@@ -68,10 +69,14 @@ class ViewDragController:
         self._view_callbacks.detach()
         if doc is not None:
             try:
+                self.interaction_service.end_interaction(doc)
+            except Exception as exc:
+                log_exception("Failed to clear drag interaction state", exc)
+            try:
                 self.interaction_service.clear_component_preview(doc)
             except Exception as exc:
                 log_exception("Failed to clear drag preview state", exc)
-            if session is not None:
+            if session is not None and reason != "finish":
                 try:
                     self.controller_service.select_component(doc, session.previous_selection)
                 except Exception as exc:
@@ -151,7 +156,7 @@ class ViewDragController:
             snap_enabled=bool(self.interaction_service.get_settings(self.doc).get("snap_enabled", True)),
         )
         self.overlay_renderer.refresh(self.doc)
-        self._publish_status("Dragging ...")
+        self._publish_status(f"Dragging '{component_id}'. Release to commit, ESC to cancel.")
         return True
 
     def update_preview_from_screen(self, screen_x: float, screen_y: float) -> dict[str, Any] | None:
@@ -206,7 +211,7 @@ class ViewDragController:
             raise
         component_id = self.session.component_id
         self.cancel(reason="finish", publish_status=False)
-        self._publish_status("Committed")
+        self._publish_status(f"Moved '{component_id}'.")
         return state
 
     def _active_view(self, doc: Any) -> Any | None:
@@ -332,5 +337,9 @@ class ViewDragController:
         if reason == "error":
             return "Interaction error"
         if reason == "finish":
-            return "Committed"
-        return "Cancelled"
+            return "Move finished."
+        if reason == "switch":
+            return "Drag mode switched."
+        if reason == "view_unavailable":
+            return "Drag mode stopped because the 3D view is no longer available."
+        return "Drag cancelled."

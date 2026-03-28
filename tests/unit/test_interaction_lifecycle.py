@@ -122,7 +122,29 @@ def test_place_controller_cleanup_is_idempotent_and_clears_preview():
     assert load_preview_state(doc) is None
     assert controller.doc is None
     assert len(view.callbacks) == 0
-    assert statuses[-1] == "Cancelled"
+    assert statuses[-1] == "Placement cancelled."
+
+
+def test_place_controller_commit_keeps_session_active_until_escape():
+    doc = FakeDocument()
+    view = FakeView()
+    statuses: list[str] = []
+    controller = _build_place_controller(doc, view, statuses)
+
+    assert controller.start(doc, "omron_b3f_1000") is True
+    controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "DOWN", "Button": "BUTTON1", "Position": (12, 18)})
+
+    settings = controller.interaction_service.get_settings(doc)
+
+    assert settings["active_interaction"] == "place"
+    assert controller.doc is doc
+    assert statuses[-1] == "Placed 'omron_b3f_1000'. Click to place another or ESC to cancel."
+
+    controller.handle_view_event({"Type": "SoKeyboardEvent", "State": "DOWN", "Key": "ESCAPE"})
+
+    settings = controller.interaction_service.get_settings(doc)
+    assert settings["active_interaction"] is None
+    assert controller.doc is None
 
 
 def test_place_controller_rebinds_when_view_is_recreated():
@@ -183,7 +205,7 @@ def test_drag_controller_cancel_is_idempotent_and_restores_selection():
     assert load_preview_state(doc) is None
     assert controller.session is None
     assert len(view.callbacks) == 0
-    assert statuses[-1] == "Cancelled"
+    assert statuses[-1] == "Drag cancelled."
 
 
 def test_workbench_second_tool_start_cleans_previous_session():
@@ -224,3 +246,21 @@ def test_workbench_document_change_cleans_active_interaction():
     assert load_preview_state(doc) is None
     assert len(view.callbacks) == 0
     assert workbench.interaction_manager.active_name is None
+
+
+def test_workbench_start_modes_update_compact_interaction_context():
+    doc = FakeDocument("A")
+    service = ControllerService()
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+    place_view = FakeView()
+    drag_view = FakeView()
+    workbench.place_controller._active_view = lambda current_doc: place_view if current_doc is doc else None
+    workbench.drag_controller._active_view = lambda current_doc: drag_view if current_doc is doc else None
+    service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=20.0, y=20.0)
+
+    assert workbench.start_place_mode("omron_b3f_1000") is True
+    assert "place active" in workbench.form["context_summary"].text
+
+    assert workbench.start_drag_mode() is True
+    assert "drag active" in workbench.form["context_summary"].text

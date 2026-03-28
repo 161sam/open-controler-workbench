@@ -935,11 +935,17 @@ class ProductWorkbenchPanel:
         context = self.controller_service.get_ui_context(self.doc)
         validation = context.get("validation")
         summary = validation.get("summary", {}) if isinstance(validation, dict) else {}
+        ui = context.get("ui", {}) if isinstance(context.get("ui"), dict) else {}
         pieces = [
             _panel_title(active_panel or self._active_panel_name()),
             f"{int(context.get('component_count', 0))} components",
             f"grid {context.get('grid_mm', 1.0)} mm",
         ]
+        active_interaction = str(ui.get("active_interaction") or "").strip().lower()
+        if active_interaction == "drag":
+            pieces.append("drag active")
+        elif active_interaction == "place":
+            pieces.append("place active")
         if int(summary.get("error_count", 0)) > 0:
             pieces.append(f"{int(summary.get('error_count', 0))} errors")
         elif int(summary.get("warning_count", 0)) > 0:

@@ -9,6 +9,7 @@ from ocw_workbench.services.controller_service import ControllerService
 from ocw_workbench.services.preview_validation_service import PreviewValidationService
 
 DEFAULT_UI_SETTINGS = {
+    "active_interaction": None,
     "overlay_enabled": True,
     "show_constraints": True,
     "grid_mm": 1.0,
@@ -73,6 +74,25 @@ class InteractionService:
         if template_id is not None:
             self.controller_service.library_service.get(template_id)
         return self.update_settings(doc, {"active_component_template_id": template_id})
+
+    def begin_interaction(self, doc: Any, kind: str, *, template_id: str | None = None) -> dict[str, Any]:
+        updates: dict[str, Any] = {
+            "active_interaction": str(kind),
+            "move_component_id": None,
+        }
+        if template_id is not None:
+            self.controller_service.library_service.get(template_id)
+            updates["active_component_template_id"] = template_id
+        return self.update_settings(doc, updates)
+
+    def end_interaction(self, doc: Any) -> dict[str, Any]:
+        return self.update_settings(
+            doc,
+            {
+                "active_interaction": None,
+                "move_component_id": None,
+            },
+        )
 
     def add_component_preview(
         self,
