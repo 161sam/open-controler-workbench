@@ -715,6 +715,8 @@ def test_panels_expose_tooltips_for_key_workflows():
     constraints_panel = ConstraintsPanel(doc, controller_service=service)
 
     assert "placement strategy" in layout_panel.form["preset"].tooltip
+    assert layout_panel.form["apply_button"].text == "Auto Place"
+    assert layout_panel.form["rerun_button"].text == "Re-run Placement"
     assert layout_panel.form["overlay_button"].text == "Overlay Visibility"
     assert "helper graphics" in layout_panel.form["overlay_button"].tooltip
     assert "Horizontal center position" in components_panel.form["x"].tooltip
@@ -729,6 +731,9 @@ def test_layout_panel_shows_compact_validation_and_overlay_state():
     service.create_controller(doc, {"id": "demo", "width": 160.0, "depth": 100.0, "height": 30.0})
     panel = LayoutPanel(doc, controller_service=service)
 
+    assert panel.form["settings_box"] is not None
+    assert panel.form["helper_box"] is not None
+    assert panel.form["state_box"] is not None
     assert panel.form["validation_status"].text == "Validation has not been run yet."
     assert "Overlay on" in panel.form["overlay_status"].text
 

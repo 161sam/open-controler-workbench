@@ -292,6 +292,9 @@ def _build_form() -> dict[str, Any]:
     if qtwidgets is None:
         return {
             "widget": object(),
+            "settings_box": object(),
+            "helper_box": object(),
+            "state_box": object(),
             "preset": FallbackCombo(["grid", "row", "column", "zone"]),
             "grid_mm": FallbackValue(1.0),
             "spacing_mm": FallbackValue(24.0),
@@ -311,7 +314,7 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, layout = build_panel_container(qtwidgets)
-    intro = create_status_label(qtwidgets, "Step 2 of 5. Apply layout, then hand off to Validate.")
+    intro = create_status_label(qtwidgets, "Place components automatically, then continue with Validate.")
     form = create_form_layout(qtwidgets, spacing=4)
     preset = qtwidgets.QComboBox()
     preset.addItems(["grid", "row", "column", "zone"])
@@ -346,7 +349,8 @@ def _build_form() -> dict[str, Any]:
     set_tooltip(measurements_button, "Show or hide measurement guides.")
     set_tooltip(conflict_lines_button, "Show or hide conflict lines.")
     set_tooltip(constraint_labels_button, "Show or hide issue labels.")
-    primary_actions = create_button_row_layout(qtwidgets, apply_button, rerun_button, spacing=6)
+    primary_action = create_button_row_layout(qtwidgets, apply_button, spacing=6)
+    secondary_actions = create_button_row_layout(qtwidgets, rerun_button, spacing=6)
     button_row = qtwidgets.QGridLayout()
     button_row.setContentsMargins(0, 0, 0, 0)
     button_row.setHorizontalSpacing(8)
@@ -371,27 +375,37 @@ def _build_form() -> dict[str, Any]:
     settings_layout.addRow("Grid (mm)", grid_mm)
     settings_layout.addRow("Spacing (mm)", spacing_mm)
     settings_layout.addRow("Padding (mm)", padding_mm)
-    overlay_box, overlay_layout, _overlay_toggle = create_collapsible_section_widget(
+    helper_box, helper_layout, _helper_toggle = create_collapsible_section_widget(
         qtwidgets,
-        "View Helpers",
+        "Helpers",
         expanded=False,
         spacing=6,
     )
-    overlay_layout.addLayout(button_row)
-    diagnostics_box, diagnostics_layout = create_section_widget(qtwidgets, "Current State", spacing=6)
-    diagnostics_layout.addWidget(summary)
-    diagnostics_layout.addWidget(validation_status)
-    diagnostics_layout.addWidget(overlay_status)
+    helper_layout.addLayout(secondary_actions)
+    helper_layout.addLayout(button_row)
+    state_box, state_layout, _state_toggle = create_collapsible_section_widget(
+        qtwidgets,
+        "Current State",
+        expanded=False,
+        spacing=6,
+        margins=(0, 0, 0, 0),
+    )
+    state_layout.addWidget(summary)
+    state_layout.addWidget(validation_status)
+    state_layout.addWidget(overlay_status)
     layout.addWidget(intro)
     layout.addWidget(settings_box)
-    layout.addLayout(primary_actions)
-    layout.addWidget(overlay_box)
-    layout.addWidget(diagnostics_box)
+    layout.addLayout(primary_action)
+    layout.addWidget(helper_box)
+    layout.addWidget(state_box)
     layout.addWidget(status)
     layout.addStretch(1)
     widget = wrap_widget_in_scroll_area(content)
     return {
         "widget": widget,
+        "settings_box": settings_box,
+        "helper_box": helper_box,
+        "state_box": state_box,
         "preset": preset,
         "grid_mm": grid_mm,
         "spacing_mm": spacing_mm,
