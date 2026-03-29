@@ -225,7 +225,11 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         from ocw_workbench.commands.toggle_measurements import ToggleMeasurementsCommand
         from ocw_workbench.commands.toggle_overlay import ToggleOverlayCommand
         from ocw_workbench.commands.validate_constraints import ValidateConstraintsCommand
-        from ocw_workbench.commands.place_component_type import PlaceComponentTypeCommand
+        from ocw_workbench.commands.place_component_type import (
+            PlaceComponentTypeCommand,
+            component_toolbar_command_ids,
+            iter_component_type_command_specs,
+        )
 
         Gui.addCommand("OCW_CreateController", _LoggedCommand("OCW_CreateController", CreateFromTemplateCommand()))
         Gui.addCommand("OCW_AddComponent", _LoggedCommand("OCW_AddComponent", AddComponentCommand()))
@@ -268,9 +272,11 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         Gui.addCommand("OCW_EnablePlugin", _LoggedCommand("OCW_EnablePlugin", EnablePluginCommand()))
         Gui.addCommand("OCW_DisablePlugin", _LoggedCommand("OCW_DisablePlugin", DisablePluginCommand()))
         Gui.addCommand("OCW_ReloadPlugins", _LoggedCommand("OCW_ReloadPlugins", ReloadPluginsCommand()))
-        for _ctype in ("button", "encoder", "fader", "pad", "display", "rgb_button"):
-            _cmd_id = f"OCW_Place{_ctype.replace('_', ' ').title().replace(' ', '')}"
-            Gui.addCommand(_cmd_id, _LoggedCommand(_cmd_id, PlaceComponentTypeCommand(_ctype)))
+        for _spec in iter_component_type_command_specs():
+            Gui.addCommand(
+                _spec.command_id,
+                _LoggedCommand(_spec.command_id, PlaceComponentTypeCommand(_spec.component_type)),
+            )
         refresh_favorite_component_commands()
         Gui.addCommand(
             _FAVORITE_MORE_COMMAND_ID,
@@ -278,15 +284,7 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         )
 
         project_commands = ["OCW_CreateController", "OCW_ImportTemplateFromFCStd"]
-        place_type_commands = [
-            "OCW_PlaceButton",
-            "OCW_PlaceEncoder",
-            "OCW_PlaceFader",
-            "OCW_PlacePad",
-            "OCW_PlaceDisplay",
-            "OCW_PlaceRgbButton",
-            "OCW_OpenComponentPalette",
-        ]
+        place_type_commands = component_toolbar_command_ids() + ["OCW_OpenComponentPalette"]
         component_commands = [
             "OCW_AddComponent",
             "OCW_OpenComponentPalette",
@@ -1403,6 +1401,16 @@ def _refresh_active_workbench_if_open(doc: Any) -> None:
     _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=False)
 
 
+def _refresh_create_panel_if_open(doc: Any) -> None:
+    """Refresh create-panel state if the workbench dock is already open for this document."""
+    if _ACTIVE_WORKBENCH is not None and _ACTIVE_WORKBENCH.doc is doc:
+        try:
+            _ACTIVE_WORKBENCH.create_panel.refresh()
+            _ACTIVE_WORKBENCH._update_context_summary()
+        except Exception as exc:
+            log_exception("Failed to refresh create panel after direct command", exc)
+
+
 def _sync_active_workbench_if_open(
     doc: Any,
     *,
@@ -1496,6 +1504,15 @@ def toggle_overlay_direct(doc: Any) -> dict[str, Any]:
     settings = InteractionService(ControllerService()).toggle_overlay(doc)
     _sync_active_workbench_if_open(doc, refresh_overlay=True)
     return settings
+
+
+def reload_plugins_direct(doc: Any | None = None) -> list[dict[str, Any]]:
+    from ocw_workbench.services.plugin_manager_service import PluginManagerService
+
+    plugins = PluginManagerService().reload_plugins()
+    if doc is not None:
+        _refresh_active_workbench_if_open(doc)
+    return plugins
 
 
 def toggle_constraint_overlay_direct(doc: Any) -> dict[str, Any]:

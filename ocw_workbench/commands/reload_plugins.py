@@ -17,10 +17,10 @@ class ReloadPluginsCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import reload_plugins_direct
 
             doc = App.ActiveDocument or App.newDocument("Controller")
-            result = ensure_workbench_ui(doc, focus="plugins").reload_plugins()
+            result = reload_plugins_direct(doc)
             show_info("Reload Plugins", f"Discovered {len(result)} plugins.")
         except Exception as exc:
             show_error("Reload Plugins", exc)
