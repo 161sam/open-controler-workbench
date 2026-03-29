@@ -24,15 +24,21 @@
 - `OCW_Generated`: generated model root
 - `OCW_ControllerBody`: visible body solid
 - `OCW_TopPlate` or `OCW_TopPlateCut`: visible plate solid
+- `OCW_PCB`: visible board reference solid inside the enclosure
 - `OCW_Components`: generated component group
 - `OCW_Group_<group_id>`: optional subgroup inside `OCW_Components` for grouped component sets
 - `OCW_Component_<id>`: one visible document object per component instance
+- `OCW_Mounting`: generated mounting support group for PCB bosses / standoffs
 
 Component groups do not create geometry. They exist only as tree structure so grouped template output such as pad matrices remains visible and navigable in the FreeCAD document.
 
 ## Geometry Relationship
 
 - Controller body and top plate remain generated from controller state.
+- The top plate is the interface surface for cutouts and caps, not the primary support plane for the full component body.
+- The PCB now exists as a first-class internal reference plane with explicit `pcb_thickness`, `pcb_inset`, and `pcb_standoff_height` controller parameters.
+- Visible component objects now span from the PCB reference plane toward the top plate so the enclosure model reflects a more realistic mechanical stack-up.
 - Plate cutouts are still derived from component mechanical cutout geometry.
+- PCB bosses / standoffs are generated from controller mounting holes and rise from the body floor to the PCB underside.
 - Visible component objects are derived from the same component mechanical source. Key control types (`button`, `encoder`, `display`, `fader`, `pad`, `rgb_button`) now build type-specific solids from library mechanical metadata; unknown types still fall back to keepout-based extrusion.
 - Component document objects store stable metadata (`OCWComponentId`, `OCWComponentType`, `OCWLibraryRef`, `OCWGroupId`, `OCWGroupRole`, placement fields) to support later editing and selection mapping.

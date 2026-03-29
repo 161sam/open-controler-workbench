@@ -16,6 +16,9 @@ class Controller:
         bottom_thickness: float = 3.0,
         lid_inset: float = 1.5,
         inner_clearance: float = 0.35,
+        pcb_thickness: float = 1.6,
+        pcb_inset: float = 8.0,
+        pcb_standoff_height: float = 8.0,
         surface: dict[str, Any] | None = None,
         mounting_holes: list[dict[str, Any]] | None = None,
         reserved_zones: list[dict[str, Any]] | None = None,
@@ -30,6 +33,9 @@ class Controller:
         self.bottom_thickness = bottom_thickness
         self.lid_inset = lid_inset
         self.inner_clearance = inner_clearance
+        self.pcb_thickness = pcb_thickness
+        self.pcb_inset = pcb_inset
+        self.pcb_standoff_height = pcb_standoff_height
         self.surface = deepcopy(surface) if surface is not None else None
         self.mounting_holes = deepcopy(mounting_holes) if mounting_holes is not None else []
         self.reserved_zones = deepcopy(reserved_zones) if reserved_zones is not None else []

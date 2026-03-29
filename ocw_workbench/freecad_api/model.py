@@ -20,6 +20,10 @@ MODEL_GROUP_NAME = "OpenController"
 PROJECT_JSON_PROPERTY = "ProjectJson"
 OVERLAY_OBJECT_NAME = "OCW_Overlay"
 OVERLAY_OBJECT_LABEL = "OCW Overlay"
+PCB_OBJECT_NAME = "OCW_PCB"
+PCB_OBJECT_LABEL = "OCW PCB"
+MOUNTING_GROUP_NAME = "OCW_Mounting"
+MOUNTING_GROUP_LABEL = "OCW Mounting"
 LEGACY_OVERLAY_OBJECT_NAMES = ("OCF_Overlay",)
 LEGACY_OVERLAY_OBJECT_LABELS = ("OCF Overlay",)
 
@@ -41,6 +45,9 @@ _FLOAT_PROPERTIES = {
     "LidInset": "Lid inset (mm)",
     "InnerClearance": "Inner clearance (mm)",
     "CornerRadius": "Surface corner radius (mm)",
+    "PCBThickness": "PCB thickness (mm)",
+    "PCBInset": "PCB edge inset (mm)",
+    "PCBStandoffHeight": "PCB standoff height (mm)",
 }
 
 _PROPERTY_TO_STATE_PATH = {
@@ -58,6 +65,9 @@ _PROPERTY_TO_STATE_PATH = {
     "InnerClearance": ("controller", "inner_clearance"),
     "SurfaceShape": ("controller", "surface", "shape"),
     "CornerRadius": ("controller", "surface", "corner_radius"),
+    "PCBThickness": ("controller", "pcb_thickness"),
+    "PCBInset": ("controller", "pcb_inset"),
+    "PCBStandoffHeight": ("controller", "pcb_standoff_height"),
 }
 
 
@@ -115,6 +125,23 @@ def get_components_group(doc: Any, create: bool = True) -> Any | None:
         ("App::DocumentObjectGroup", "App::DocumentObjectGroupPython", "App::Feature"),
     )
     _style_components_group(group)
+    group_generated_object(doc, group)
+    return group
+
+
+def get_mounting_group(doc: Any, create: bool = True) -> Any | None:
+    if not hasattr(doc, "addObject"):
+        return None
+    existing = _find_object(doc, (MOUNTING_GROUP_NAME,), (MOUNTING_GROUP_LABEL,))
+    if existing is not None or not create:
+        return existing
+    group = _create_object(
+        doc,
+        MOUNTING_GROUP_NAME,
+        ("App::DocumentObjectGroup", "App::DocumentObjectGroupPython", "App::Feature"),
+    )
+    if hasattr(group, "Label"):
+        group.Label = MOUNTING_GROUP_LABEL
     group_generated_object(doc, group)
     return group
 

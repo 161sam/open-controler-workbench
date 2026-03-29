@@ -72,6 +72,21 @@ class ControllerBuilder:
         top_shape = self._build_top_plate_shape(plan, controller=controller)
         return shapes.create_feature(self.doc, "TopPlate", top_shape)
 
+    def build_pcb(self, controller):
+        pcb_shape = self._build_pcb_shape(controller)
+        return shapes.create_feature(self.doc, "PCB", pcb_shape)
+
+    def build_mounting_support_features(self, controller: Any) -> list[Any]:
+        controller_data = self._controller_to_dict(controller)
+        supports = []
+        for hole in controller_data.get("mounting_holes", []):
+            if not isinstance(hole, dict):
+                continue
+            feature = self._build_mounting_boss_feature(hole, controller_data)
+            if feature is not None:
+                supports.append(feature)
+        return supports
+
     def build_component_feature(self, controller: Any, component: Any):
         component_data = self._component_to_dict(component)
         resolved = self.component_resolver.resolve(component_data)
@@ -427,14 +442,23 @@ class ControllerBuilder:
     def _build_component_shape(self, controller: Any, component: dict[str, Any], resolved: dict[str, Any]):
         visual_height = self._component_visual_height(component)
         top_z = self._body_height(controller) + float(getattr(controller, "top_thickness", 0.0) or 0.0)
+        pcb_top_z = self._pcb_top_z(controller)
         top_keepout = resolved["resolved_mechanical"].keepout_top
         visual_mechanical = self._component_visual_mechanical(component)
         component_type = str(component.get("type") or "component")
         x = float(component["x"])
         y = float(component["y"])
         rotation = float(component.get("rotation", 0.0) or 0.0)
+        mount_core = self._build_component_mount_core(
+            x=x,
+            y=y,
+            z=pcb_top_z,
+            top_z=top_z,
+            rotation=rotation,
+            resolved=resolved,
+        )
         if component_type == "button":
-            return self._build_button_component_shape(
+            top_shape = self._build_button_component_shape(
                 x=x,
                 y=y,
                 z=top_z,
@@ -444,8 +468,9 @@ class ControllerBuilder:
                 visual_mechanical=visual_mechanical,
                 component=component,
             )
+            return self._merge_component_shapes(mount_core, top_shape, rotation=rotation, x=x, y=y, z=pcb_top_z)
         if component_type == "encoder":
-            return self._build_encoder_component_shape(
+            top_shape = self._build_encoder_component_shape(
                 x=x,
                 y=y,
                 z=top_z,
@@ -454,8 +479,9 @@ class ControllerBuilder:
                 top_keepout=top_keepout,
                 visual_mechanical=visual_mechanical,
             )
+            return self._merge_component_shapes(mount_core, top_shape, rotation=rotation, x=x, y=y, z=pcb_top_z)
         if component_type == "display":
-            return self._build_display_component_shape(
+            top_shape = self._build_display_component_shape(
                 x=x,
                 y=y,
                 z=top_z,
@@ -464,8 +490,9 @@ class ControllerBuilder:
                 top_keepout=top_keepout,
                 visual_mechanical=visual_mechanical,
             )
+            return self._merge_component_shapes(mount_core, top_shape, rotation=rotation, x=x, y=y, z=pcb_top_z)
         if component_type == "fader":
-            return self._build_fader_component_shape(
+            top_shape = self._build_fader_component_shape(
                 x=x,
                 y=y,
                 z=top_z,
@@ -475,8 +502,9 @@ class ControllerBuilder:
                 visual_mechanical=visual_mechanical,
                 component=component,
             )
+            return self._merge_component_shapes(mount_core, top_shape, rotation=rotation, x=x, y=y, z=pcb_top_z)
         if component_type == "pad":
-            return self._build_pad_component_shape(
+            top_shape = self._build_pad_component_shape(
                 x=x,
                 y=y,
                 z=top_z,
@@ -485,8 +513,9 @@ class ControllerBuilder:
                 top_keepout=top_keepout,
                 visual_mechanical=visual_mechanical,
             )
+            return self._merge_component_shapes(mount_core, top_shape, rotation=rotation, x=x, y=y, z=pcb_top_z)
         if component_type == "rgb_button":
-            return self._build_rgb_button_component_shape(
+            top_shape = self._build_rgb_button_component_shape(
                 x=x,
                 y=y,
                 z=top_z,
@@ -495,7 +524,8 @@ class ControllerBuilder:
                 top_keepout=top_keepout,
                 visual_mechanical=visual_mechanical,
             )
-        return self._build_generic_component_shape(
+            return self._merge_component_shapes(mount_core, top_shape, rotation=rotation, x=x, y=y, z=pcb_top_z)
+        top_shape = self._build_generic_component_shape(
             x=x,
             y=y,
             z=top_z,
@@ -503,6 +533,7 @@ class ControllerBuilder:
             visual_height=visual_height,
             top_keepout=top_keepout,
         )
+        return self._merge_component_shapes(mount_core, top_shape, rotation=rotation, x=x, y=y, z=pcb_top_z)
 
     def _build_generic_component_shape(
         self,
@@ -784,6 +815,129 @@ class ControllerBuilder:
                 if isinstance(body_size, dict):
                     height = body_size.get("height")
         return max(float(height or 8.0), self.MIN_FEATURE_SIZE)
+
+    def _build_pcb_shape(self, controller: Any):
+        surface = self._pcb_surface(controller)
+        thickness = self._pcb_thickness(controller)
+        z = self._pcb_z(controller)
+        return shapes.translate_shape(
+            shapes.make_surface_prism_shape(surface, thickness),
+            x=self._pcb_surface_offset_x(controller, surface),
+            y=self._pcb_surface_offset_y(controller, surface),
+            z=z,
+        )
+
+    def _build_mounting_boss_feature(self, hole: dict[str, Any], controller_data: dict[str, Any]) -> Any | None:
+        diameter = float(hole.get("diameter", 0.0) or 0.0)
+        x = float(hole.get("x", 0.0) or 0.0)
+        y = float(hole.get("y", 0.0) or 0.0)
+        if diameter <= 0.0:
+            return None
+        outer_diameter = max(diameter + 3.0, 6.0)
+        boss_height = self._pcb_z(controller_data)
+        if boss_height <= self.MIN_FEATURE_SIZE:
+            return None
+        outer = shapes.translate_shape(
+            shapes.make_cylinder_shape(outer_diameter / 2.0, boss_height),
+            x=x - (outer_diameter / 2.0),
+            y=y - (outer_diameter / 2.0),
+            z=0.0,
+        )
+        inner = shapes.translate_shape(
+            shapes.make_cylinder_shape(max(diameter / 2.0, self.MIN_FEATURE_SIZE / 2.0), boss_height),
+            x=x - (diameter / 2.0),
+            y=y - (diameter / 2.0),
+            z=0.0,
+        )
+        shape = outer.cut(inner)
+        hole_id = str(hole.get("id") or "mount")
+        return shapes.create_feature(self.doc, f"OCW_Boss_{hole_id}", shape)
+
+    def _build_component_mount_core(
+        self,
+        *,
+        x: float,
+        y: float,
+        z: float,
+        top_z: float,
+        rotation: float,
+        resolved: dict[str, Any],
+    ):
+        mount_height = max(top_z - z, 0.0)
+        if mount_height <= self.MIN_FEATURE_SIZE:
+            return None
+        cutout = resolved["resolved_mechanical"].cutout
+        if cutout.shape == "circle":
+            diameter = float(cutout.diameter or 0.0)
+            if diameter <= 0.0:
+                return None
+            return shapes.translate_shape(
+                shapes.make_cylinder_shape(radius=diameter / 2.0, height=mount_height),
+                x=x - (diameter / 2.0),
+                y=y - (diameter / 2.0),
+                z=z,
+            )
+        if cutout.shape in {"rect", "slot"}:
+            width = float(cutout.width or 0.0)
+            height = float(cutout.height or 0.0)
+            if width <= 0.0 or height <= 0.0:
+                return None
+            shape_factory = shapes.make_rect_prism_shape if cutout.shape == "rect" else shapes.make_slot_prism_shape
+            mount_shape = shapes.translate_shape(
+                shape_factory(width=width, depth=height, height=mount_height),
+                x=x - (width / 2.0),
+                y=y - (height / 2.0),
+                z=z,
+            )
+            if rotation != 0.0:
+                return shapes.rotate_shape(mount_shape, rotation, center=(x, y, z))
+            return mount_shape
+        return None
+
+    def _merge_component_shapes(self, mount_core: Any | None, top_shape: Any, *, rotation: float, x: float, y: float, z: float):
+        fused = shapes.fuse_shapes([mount_core, top_shape])
+        if fused is None:
+            raise ValueError("Failed to fuse component shape")
+        return fused
+
+    def _pcb_surface(self, controller: Any) -> SurfacePrimitive:
+        controller_data = self._controller_to_dict(controller)
+        surface = self.resolve_surface(controller)
+        inset = self._pcb_inset(controller_data)
+        if self._supports_shell_geometry(surface):
+            inset_surface = self._offset_surface(surface, inset=inset)
+            if inset_surface is not None:
+                return inset_surface
+        width = max(float(controller_data.get("width", surface.width)) - (2.0 * inset), self.MIN_FEATURE_SIZE)
+        depth = max(float(controller_data.get("depth", surface.height)) - (2.0 * inset), self.MIN_FEATURE_SIZE)
+        return SurfacePrimitive(shape="rectangle", width=width, height=depth)
+
+    def _pcb_surface_offset_x(self, controller: Any, pcb_surface: SurfacePrimitive) -> float:
+        surface = self.resolve_surface(controller)
+        return max((float(surface.width) - float(pcb_surface.width)) / 2.0, 0.0)
+
+    def _pcb_surface_offset_y(self, controller: Any, pcb_surface: SurfacePrimitive) -> float:
+        surface = self.resolve_surface(controller)
+        return max((float(surface.height) - float(pcb_surface.height)) / 2.0, 0.0)
+
+    def _pcb_inset(self, controller: Any) -> float:
+        controller_data = self._controller_to_dict(controller)
+        explicit = float(controller_data.get("pcb_inset", 0.0) or 0.0)
+        minimum = float(controller_data.get("wall_thickness", 0.0) or 0.0) + float(controller_data.get("inner_clearance", 0.0) or 0.0) + 1.0
+        return max(explicit, minimum, self.MIN_FEATURE_SIZE)
+
+    def _pcb_thickness(self, controller: Any) -> float:
+        controller_data = self._controller_to_dict(controller)
+        return max(float(controller_data.get("pcb_thickness", 1.6) or 1.6), self.MIN_FEATURE_SIZE)
+
+    def _pcb_z(self, controller: Any) -> float:
+        controller_data = self._controller_to_dict(controller)
+        bottom = max(float(controller_data.get("bottom_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
+        standoff = max(float(controller_data.get("pcb_standoff_height", 0.0) or 0.0), self.MIN_FEATURE_SIZE)
+        return bottom + standoff
+
+    def _pcb_top_z(self, controller: Any) -> float:
+        return self._pcb_z(controller) + self._pcb_thickness(controller)
 
     def _body_height(self, controller: Any) -> float:
         top_thickness = max(float(getattr(controller, "top_thickness", 0.0) or 0.0), self.MIN_FEATURE_SIZE)

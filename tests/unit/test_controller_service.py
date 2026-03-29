@@ -832,6 +832,66 @@ def test_sync_document_materializes_component_groups_under_components_root(monke
     assert btn1.OCWGroupId == ""
 
 
+def test_sync_document_materializes_pcb_and_mounting_supports(monkeypatch):
+    class FakeBuilder:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def build_body(self, _controller):
+            return self.doc.addObject("Part::Feature", "ControllerBody")
+
+        def build_top_plate(self, _controller):
+            top = self.doc.addObject("Part::Feature", "TopPlate")
+            top.Shape = type("Shape", (), {"BoundBox": type("BoundBox", (), {"ZMin": 27.0, "ZLength": 3.0})(), "copy": lambda self: self})()
+            return top
+
+        def build_pcb(self, _controller):
+            return self.doc.addObject("Part::Feature", "PCB")
+
+        def build_mounting_support_features(self, _controller):
+            return [
+                self.doc.addObject("Part::Feature", "OCW_Boss_mh1"),
+                self.doc.addObject("Part::Feature", "OCW_Boss_mh2"),
+            ]
+
+        def apply_cutout_plan(self, top, _plan):
+            top.Shape = "cut"
+            return top
+
+        def plan_cutout_boolean(self, _top, components):
+            return type("CutPlan", (), {"tools": [object() for _ in components], "diagnostics": []})()
+
+        def build_component_feature(self, _controller, component):
+            return self.doc.addObject("Part::Feature", f"OCW_Component_{component['id']}")
+
+        def build_keepouts(self, _components):
+            return []
+
+    monkeypatch.setattr("ocw_workbench.services.document_sync_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocw_workbench.services.controller_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocw_workbench.services.document_sync_service.freecad_gui.reveal_generated_objects", lambda _doc: 0)
+    monkeypatch.setattr("ocw_workbench.services.document_sync_service.freecad_gui.activate_document", lambda _doc: True)
+    monkeypatch.setattr("ocw_workbench.services.document_sync_service.freecad_gui.focus_view", lambda _doc, fit=True: True)
+
+    service = ControllerService()
+    doc = FakeFeatureDocument()
+    service.create_controller(doc, {"id": "demo", "height": 30.0, "top_thickness": 3.0, "mounting_holes": [{"id": "mh1"}, {"id": "mh2"}]})
+    service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=20.0, y=30.0)
+
+    generated = doc.getObject("OCW_Generated")
+    mounting_group = doc.getObject("OCW_Mounting")
+    pcb = doc.getObject("PCB")
+
+    assert generated is not None
+    assert mounting_group is not None
+    assert pcb is not None
+    assert pcb.Label == "OCW_PCB"
+    assert mounting_group in generated.Group
+    assert [obj.Name for obj in mounting_group.Group] == ["OCW_Boss_mh1", "OCW_Boss_mh2"]
+    assert doc.OCWLastSync["pcb_object"] == "PCB"
+    assert doc.OCWLastSync["mounting_feature_count"] == 2
+
+
 def test_repeated_full_sync_keeps_component_group_tree_bounded(monkeypatch):
     class FakeBuilder:
         def __init__(self, doc):

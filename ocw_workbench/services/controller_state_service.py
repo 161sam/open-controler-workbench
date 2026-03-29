@@ -23,6 +23,9 @@ DEFAULT_CONTROLLER = {
     "bottom_thickness": 3.0,
     "lid_inset": 1.5,
     "inner_clearance": 0.35,
+    "pcb_thickness": 1.6,
+    "pcb_inset": 8.0,
+    "pcb_standoff_height": 8.0,
     "surface": None,
     "mounting_holes": [],
     "reserved_zones": [],
@@ -223,7 +226,7 @@ class ControllerStateService:
             raise ValueError("Controller updates must be a mapping")
         state = self.get_state(doc)
         controller = state["controller"]
-        for field in ("width", "depth", "height", "top_thickness", "wall_thickness", "bottom_thickness"):
+        for field in ("width", "depth", "height", "top_thickness", "wall_thickness", "bottom_thickness", "pcb_thickness", "pcb_inset", "pcb_standoff_height"):
             if field in updates and updates[field] is not None:
                 controller[field] = self._positive_float(updates[field], field)
         for field in ("lid_inset", "inner_clearance"):

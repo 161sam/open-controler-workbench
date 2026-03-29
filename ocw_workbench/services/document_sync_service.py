@@ -14,6 +14,7 @@ from ocw_workbench.freecad_api.model import (
     get_components_group,
     get_controller_object,
     get_generated_group,
+    get_mounting_group,
     group_generated_object,
     iter_generated_objects,
 )
@@ -164,6 +165,8 @@ class DocumentSyncService:
         self._set_generated_label(top_cut, "OCW_TopPlateCut" if state["components"] else "OCW_TopPlate")
         self._style_document_object(top_cut, role="top_plate")
         group_generated_object(doc, top_cut)
+        pcb = self._materialize_pcb_object(doc, builder, controller)
+        mounting_feature_count = self._materialize_mounting_supports(doc, builder, controller)
         component_object_count = self._materialize_component_objects(doc, builder, controller, state["components"])
         self._materialize_debug_keepout_markers(doc, builder, components, float(state["controller"]["height"]))
         self._apply_selection_highlight(doc, state["meta"].get("selection"))
@@ -179,6 +182,8 @@ class DocumentSyncService:
                 "generated_object_count": generated_count,
                 "cutout_tool_count": cutout_tool_count,
                 "cutout_diagnostic_count": cutout_diagnostic_count,
+                "pcb_object": getattr(pcb, "Name", None) if pcb is not None else None,
+                "mounting_feature_count": mounting_feature_count,
                 "component_object_count": component_object_count,
                 **phase_timings,
                 "sync_duration_ms": duration_ms,
@@ -194,6 +199,7 @@ class DocumentSyncService:
                 "mode": requested_mode,
                 "actual_mode": SyncMode.FULL,
                 "generated_object_count": generated_count,
+                "mounting_feature_count": mounting_feature_count,
                 "component_object_count": component_object_count,
                 "cutout_tool_count": cutout_tool_count,
                 "cutout_diagnostic_count": cutout_diagnostic_count,
@@ -342,6 +348,27 @@ class DocumentSyncService:
             count += 1
         return count
 
+    def _materialize_pcb_object(self, doc: Any, builder: Any, controller: Any) -> Any | None:
+        if not hasattr(builder, "build_pcb"):
+            return None
+        pcb = builder.build_pcb(controller)
+        self._set_generated_label(pcb, "OCW_PCB")
+        self._style_document_object(pcb, role="pcb")
+        group_generated_object(doc, pcb)
+        return pcb
+
+    def _materialize_mounting_supports(self, doc: Any, builder: Any, controller: Any) -> int:
+        if not hasattr(builder, "build_mounting_support_features"):
+            return 0
+        supports = list(builder.build_mounting_support_features(controller))
+        if not supports:
+            return 0
+        mounting_group = get_mounting_group(doc, create=True)
+        for support in supports:
+            self._style_document_object(support, role="mounting")
+            self._group_component_object(mounting_group, support)
+        return len(supports)
+
     def _clear_generated_objects(self, doc: Any) -> None:
         clear_generated_group(doc)
 
@@ -479,6 +506,18 @@ class DocumentSyncService:
                 view.ShapeColor = (0.88, 0.88, 0.9)
             if hasattr(view, "LineColor"):
                 view.LineColor = (0.25, 0.25, 0.28)
+            return
+        if role == "pcb":
+            if hasattr(view, "ShapeColor"):
+                view.ShapeColor = (0.18, 0.48, 0.22)
+            if hasattr(view, "LineColor"):
+                view.LineColor = (0.08, 0.22, 0.1)
+            return
+        if role == "mounting":
+            if hasattr(view, "ShapeColor"):
+                view.ShapeColor = (0.78, 0.7, 0.52)
+            if hasattr(view, "LineColor"):
+                view.LineColor = (0.38, 0.3, 0.14)
             return
         if role == "component":
             component_type = str((component or {}).get("type") or "component")

@@ -159,6 +159,96 @@ def test_top_plate_build_plan_exposes_lid_tongue_stage():
     assert plan.tongue_height == 2
 
 
+def test_pcb_shape_is_offset_inside_body_and_above_bottom(monkeypatch):
+    monkeypatch.setitem(__import__("sys").modules, "FreeCAD", SimpleNamespace(Vector=FakeVector))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_surface_prism_shape", _fake_make_surface_prism_shape)
+    doc = FakeDoc()
+    builder = ControllerBuilder(doc=doc)
+    controller = Controller(
+        "rect",
+        120,
+        80,
+        30,
+        3,
+        wall_thickness=3,
+        bottom_thickness=3,
+        inner_clearance=0.5,
+        pcb_inset=8.0,
+        pcb_thickness=1.6,
+        pcb_standoff_height=8.0,
+    )
+
+    pcb = builder.build_pcb(controller)
+
+    assert pcb.Name == "PCB"
+    assert pcb.Shape.kind == "rectangle"
+    assert pcb.Shape.data["width"] == 104.0
+    assert pcb.Shape.data["height"] == 64.0
+    assert pcb.Shape.data["prism_height"] == 1.6
+    assert pcb.Shape.translations == [(8.0, 8.0, 11.0)]
+
+
+def test_mounting_supports_create_hollow_bosses():
+    doc = FakeDoc()
+    builder = ControllerBuilder(doc=doc)
+    controller = Controller(
+        "rect",
+        120,
+        80,
+        30,
+        3,
+        bottom_thickness=3,
+        pcb_standoff_height=8.0,
+        mounting_holes=[{"id": "mh1", "x": 15.0, "y": 12.0, "diameter": 3.2}],
+    )
+    import ocw_workbench.generator.controller_builder as builder_module
+
+    original_make_cylinder_shape = builder_module.shapes.make_cylinder_shape
+    original_translate_shape = builder_module.shapes.translate_shape
+    builder_module.shapes.make_cylinder_shape = lambda radius, height: FakeShape("cylinder", radius=radius, height=height)
+    builder_module.shapes.translate_shape = lambda shape, x=0, y=0, z=0: FakeShape("translated", source=shape, x=x, y=y, z=z)
+    try:
+        supports = builder.build_mounting_support_features(controller)
+    finally:
+        builder_module.shapes.make_cylinder_shape = original_make_cylinder_shape
+        builder_module.shapes.translate_shape = original_translate_shape
+
+    assert len(supports) == 1
+    assert supports[0].Name == "OCW_Boss_mh1"
+    assert supports[0].Shape.kind == "cut"
+
+
+def test_component_mount_core_spans_from_pcb_to_top_plate(monkeypatch):
+    builder = ControllerBuilder(doc=None)
+    controller = Controller(
+        "demo",
+        120,
+        80,
+        30,
+        3,
+        bottom_thickness=3.0,
+        pcb_thickness=1.6,
+        pcb_standoff_height=8.0,
+    )
+    component = {
+        "id": "btn1",
+        "type": "button",
+        "x": 25.0,
+        "y": 18.0,
+        "library_ref": "omron_b3f_1000",
+    }
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_box_shape", lambda width, depth, height: FakeShape("box", width=width, depth=depth, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.translate_shape", lambda shape, x=0, y=0, z=0: FakeShape("translated", source=shape, x=x, y=y, z=z))
+
+    shape = builder._build_component_shape(controller, component, builder.component_resolver.resolve(component))
+
+    assert shape.kind == "fuse"
+    mount_core = shape.data["left"]
+    assert mount_core.kind == "translated"
+    assert mount_core.data["z"] == pytest.approx(12.6)
+    assert mount_core.data["source"].data["height"] == pytest.approx(17.4)
+
+
 def test_custom_fcstd_base_geometry_is_used_for_top_plate():
     service_calls = []
 
@@ -376,8 +466,11 @@ def test_encoder_component_shape_adds_shaft_visual(monkeypatch):
     shape = builder._build_component_shape(controller, vars(component), builder.component_resolver.resolve(component))
 
     assert shape.kind == "fuse"
-    body = shape.data["left"]
-    shaft = shape.data["right"]
+    mount_core = shape.data["left"]
+    top_stack = shape.data["right"]
+    body = top_stack.data["left"]
+    shaft = top_stack.data["right"]
+    assert mount_core.kind in {"translated", "rotated"}
     assert body.data["source"].kind == "box"
     assert shaft.data["source"].kind == "cylinder"
     assert shaft.data["z"] > body.data["z"]
@@ -394,13 +487,18 @@ def test_display_component_shape_adds_screen_bezel(monkeypatch):
         library_ref="adafruit_oled_096_i2c_ssd1306",
     )
     monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_box_shape", lambda width, depth, height: FakeShape("box", width=width, depth=depth, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_cylinder_shape", lambda radius, height: FakeShape("cylinder", radius=radius, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_slot_prism_shape", lambda width, depth, height: FakeShape("slot", width=width, depth=depth, height=height))
     monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.translate_shape", lambda shape, x=0, y=0, z=0: FakeShape("translated", source=shape, x=x, y=y, z=z))
 
     shape = builder._build_component_shape(controller, vars(component), builder.component_resolver.resolve(component))
 
     assert shape.kind == "fuse"
-    board = shape.data["left"]
-    screen = shape.data["right"]
+    mount_core = shape.data["left"]
+    top_stack = shape.data["right"]
+    board = top_stack.data["left"]
+    screen = top_stack.data["right"]
+    assert mount_core.kind in {"translated", "rotated"}
     assert board.data["source"].kind == "box"
     assert screen.data["source"].kind == "box"
     assert screen.data["source"].data["width"] < board.data["source"].data["width"]
@@ -418,14 +516,19 @@ def test_fader_component_shape_adds_slider_cap(monkeypatch):
         library_ref="generic_45mm_linear_fader",
     )
     monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_box_shape", lambda width, depth, height: FakeShape("box", width=width, depth=depth, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_cylinder_shape", lambda radius, height: FakeShape("cylinder", radius=radius, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_slot_prism_shape", lambda width, depth, height: FakeShape("slot", width=width, depth=depth, height=height))
     monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.translate_shape", lambda shape, x=0, y=0, z=0: FakeShape("translated", source=shape, x=x, y=y, z=z))
 
     shape = builder._build_component_shape(controller, vars(component), builder.component_resolver.resolve(component))
 
     assert shape.kind == "fuse"
-    assert shape.data["left"].kind == "fuse"
-    rail_and_body = shape.data["left"]
-    cap = shape.data["right"]
+    mount_core = shape.data["left"]
+    top_stack = shape.data["right"]
+    assert mount_core.kind in {"translated", "rotated"}
+    assert top_stack.kind == "fuse"
+    rail_and_body = top_stack.data["left"]
+    cap = top_stack.data["right"]
     assert cap.data["source"].kind == "box"
     assert cap.data["z"] > rail_and_body.data["left"].data["z"]
 
@@ -446,8 +549,11 @@ def test_rgb_button_component_shape_adds_diffuser_cap(monkeypatch):
     shape = builder._build_component_shape(controller, component, builder.component_resolver.resolve(component))
 
     assert shape.kind == "fuse"
-    body = shape.data["left"]
-    diffuser = shape.data["right"]
+    mount_core = shape.data["left"]
+    top_stack = shape.data["right"]
+    body = top_stack.data["left"]
+    diffuser = top_stack.data["right"]
+    assert mount_core.kind in {"translated", "rotated"}
     assert body.data["source"].kind == "cylinder"
     assert diffuser.data["source"].kind == "cylinder"
     assert diffuser.data["source"].data["radius"] < body.data["source"].data["radius"]
@@ -470,7 +576,7 @@ def test_button_component_shape_uses_component_property_cap_width(monkeypatch):
     shape = builder._build_component_shape(controller, component, builder.component_resolver.resolve(component))
 
     assert shape.kind == "fuse"
-    cap = shape.data["right"]
+    cap = shape.data["right"].data["right"]
     assert cap.data["source"].data["width"] == 9.5
 
 
