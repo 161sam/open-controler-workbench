@@ -20,13 +20,12 @@ class SnapToGridCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import snap_selection_to_grid_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            panel = ensure_workbench_ui(doc, focus="components")
-            result = panel.snap_selection_to_grid()
+            result = snap_selection_to_grid_direct(doc)
             show_info("Snap", f"Snapped '{result['component_id']}' to grid.")
         except Exception as exc:
             show_error("Snap", exc)

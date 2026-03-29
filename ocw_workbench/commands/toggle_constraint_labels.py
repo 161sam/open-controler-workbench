@@ -20,13 +20,12 @@ class ToggleConstraintLabelsCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import toggle_constraint_labels_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            panel = ensure_workbench_ui(doc, focus="layout")
-            settings = panel.toggle_constraint_labels()
+            settings = toggle_constraint_labels_direct(doc)
             show_info(
                 "Constraint Labels",
                 f"Constraint labels {'enabled' if settings['constraint_labels_enabled'] else 'disabled'}.",

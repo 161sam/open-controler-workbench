@@ -20,19 +20,15 @@ class ToggleOverlayCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import toggle_overlay_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            panel = ensure_workbench_ui(doc, focus="layout")
-            settings = panel.toggle_overlay()
+            settings = toggle_overlay_direct(doc)
             show_info(
                 "Overlay",
                 f"Overlay {'enabled' if settings['overlay_enabled'] else 'disabled'}.",
-                details=panel.form["overlay_status"].text()
-                if hasattr(panel.form["overlay_status"], "text")
-                else None,
             )
         except Exception as exc:
             show_error("Toggle Overlay", exc)

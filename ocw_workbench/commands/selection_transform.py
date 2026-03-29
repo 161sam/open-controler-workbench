@@ -25,13 +25,12 @@ class SelectionTransformCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import apply_selection_transform_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            panel = ensure_workbench_ui(doc, focus="components")
-            result = panel.apply_selection_transform(self.operation)
+            result = apply_selection_transform_direct(doc, self.operation)
             if result["moved_count"] <= 0:
                 show_info(menu_text, f"{menu_text} left {result['selected_count']} selected components unchanged.")
             else:

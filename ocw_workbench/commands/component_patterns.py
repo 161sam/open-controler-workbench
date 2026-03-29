@@ -24,14 +24,13 @@ class DuplicateSelectionCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import duplicate_selection_once_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            panel = ensure_workbench_ui(doc, focus="components")
             values = _collect_duplicate_values()
-            result = panel.duplicate_selection_once(offset_x=values["offset_x"], offset_y=values["offset_y"])
+            result = duplicate_selection_once_direct(doc, offset_x=values["offset_x"], offset_y=values["offset_y"])
             show_info(title, f"Created {result['created_count']} duplicated components.")
         except Exception as exc:
             show_error(title, exc)
@@ -59,14 +58,13 @@ class LinearArrayCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import array_selection_linear_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            panel = ensure_workbench_ui(doc, focus="components")
             values = _collect_linear_array_values(self.axis)
-            result = panel.array_selection_linear(axis=self.axis, count=values["count"], spacing=values["spacing"])
+            result = array_selection_linear_direct(doc, axis=self.axis, count=values["count"], spacing=values["spacing"])
             show_info(title, f"Created {result['created_count']} array components.")
         except Exception as exc:
             show_error(title, exc)
@@ -89,14 +87,14 @@ class GridArrayCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import array_selection_grid_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            panel = ensure_workbench_ui(doc, focus="components")
             values = _collect_grid_array_values()
-            result = panel.array_selection_grid(
+            result = array_selection_grid_direct(
+                doc,
                 rows=values["rows"],
                 cols=values["cols"],
                 spacing_x=values["spacing_x"],

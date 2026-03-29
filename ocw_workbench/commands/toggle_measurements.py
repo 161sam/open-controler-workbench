@@ -20,13 +20,12 @@ class ToggleMeasurementsCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import toggle_measurements_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            panel = ensure_workbench_ui(doc, focus="layout")
-            settings = panel.toggle_measurements()
+            settings = toggle_measurements_direct(doc)
             show_info("Measurements", f"Measurements {'enabled' if settings['measurements_enabled'] else 'disabled'}.")
         except Exception as exc:
             show_error("Toggle Measurements", exc)

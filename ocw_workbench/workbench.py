@@ -44,6 +44,8 @@ _ACTIVE_WORKBENCH: ProductWorkbenchPanel | None = None
 _ACTIVE_DOCK: Any | None = None
 _ACTIVE_COMPONENT_PALETTE: ComponentPalettePanel | None = None
 _ACTIVE_COMPONENT_PALETTE_DOCK: Any | None = None
+_STANDALONE_PLACE_CONTROLLER: ViewPlaceController | None = None
+_STANDALONE_DRAG_CONTROLLER: ViewDragController | None = None
 _FAVORITE_COMMAND_IDS = [f"OCW_FavoriteComponent_{index + 1}" for index in range(MAX_FAVORITE_COMPONENTS)]
 _FAVORITE_MORE_COMMAND_ID = "OCW_OpenComponentPaletteMore"
 _WORKBENCH_TITLE = "Open Controller Workbench"
@@ -1356,23 +1358,19 @@ def start_place_mode_direct(doc: Any, template_id: str) -> bool:
     if _ACTIVE_WORKBENCH is not None and _ACTIVE_WORKBENCH.doc is doc:
         return _ACTIVE_WORKBENCH.start_place_mode(template_id)
 
+    global _STANDALONE_PLACE_CONTROLLER
+
     # Dock not open: create a minimal placement session without dock.
     try:
-        from ocw_workbench.gui.interaction.view_place_controller import ViewPlaceController
-        from ocw_workbench.gui.overlay.renderer import OverlayRenderer
-        from ocw_workbench.services.controller_service import ControllerService
-        from ocw_workbench.services.interaction_service import InteractionService
-        from ocw_workbench.services.overlay_service import OverlayService
-
         cs = ControllerService()
         interactions = InteractionService(cs)
         overlay = OverlayRenderer(OverlayService(cs))
 
         def _on_committed(state: Any) -> None:
-            _refresh_active_workbench_if_open(doc)
+            _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=True)
 
         def _on_finished(controller: Any) -> None:
-            _refresh_active_workbench_if_open(doc)
+            _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=True)
 
         controller = ViewPlaceController(
             controller_service=cs,
@@ -1381,6 +1379,7 @@ def start_place_mode_direct(doc: Any, template_id: str) -> bool:
             on_committed=_on_committed,
             on_finished=_on_finished,
         )
+        _STANDALONE_PLACE_CONTROLLER = controller
         started = controller.start(doc, template_id)
         if started:
             log_to_console(f"Direct placement mode started for '{template_id}'.")
@@ -1392,11 +1391,23 @@ def start_place_mode_direct(doc: Any, template_id: str) -> bool:
 
 def _refresh_active_workbench_if_open(doc: Any) -> None:
     """Refresh the workbench dock if it is currently open for this document."""
+    _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=False)
+
+
+def _sync_active_workbench_if_open(
+    doc: Any,
+    *,
+    refresh_components: bool = False,
+    refresh_overlay: bool = False,
+) -> None:
+    """Refresh open workbench context for direct-action commands without opening the dock."""
     if _ACTIVE_WORKBENCH is not None and _ACTIVE_WORKBENCH.doc is doc:
         try:
-            _ACTIVE_WORKBENCH.refresh_context_panels(refresh_components=True)
+            _ACTIVE_WORKBENCH.refresh_context_panels(refresh_components=refresh_components)
+            if refresh_overlay:
+                _ACTIVE_WORKBENCH.refresh_overlay()
         except Exception as exc:
-            log_exception("Failed to refresh workbench after direct placement", exc)
+            log_exception("Failed to refresh workbench after direct command", exc)
 
 
 def start_component_drag_mode(doc: Any | None) -> bool:
@@ -1406,3 +1417,181 @@ def start_component_drag_mode(doc: Any | None) -> bool:
         return False
     workbench = ensure_workbench_ui(doc, focus="components")
     return workbench.start_drag_mode()
+
+
+def start_component_drag_mode_direct(doc: Any) -> bool:
+    global _STANDALONE_DRAG_CONTROLLER
+
+    if _ACTIVE_WORKBENCH is not None and _ACTIVE_WORKBENCH.doc is doc:
+        return _ACTIVE_WORKBENCH.start_drag_mode()
+    try:
+        cs = ControllerService()
+        interactions = InteractionService(cs)
+        overlay = OverlayRenderer(OverlayService(cs))
+
+        def _on_finished(controller: Any) -> None:
+            _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=True)
+
+        controller = ViewDragController(
+            controller_service=cs,
+            interaction_service=interactions,
+            overlay_renderer=overlay,
+            on_finished=_on_finished,
+        )
+        _STANDALONE_DRAG_CONTROLLER = controller
+        started = controller.start(doc)
+        if started:
+            log_to_console("Direct drag mode started.")
+        return started
+    except Exception as exc:
+        log_exception("Failed to start direct drag mode", exc)
+        return False
+
+
+def toggle_overlay_direct(doc: Any) -> dict[str, Any]:
+    settings = InteractionService(ControllerService()).toggle_overlay(doc)
+    _sync_active_workbench_if_open(doc, refresh_overlay=True)
+    return settings
+
+
+def toggle_constraint_overlay_direct(doc: Any) -> dict[str, Any]:
+    settings = InteractionService(ControllerService()).toggle_constraint_overlay(doc)
+    _sync_active_workbench_if_open(doc, refresh_overlay=True)
+    return settings
+
+
+def toggle_measurements_direct(doc: Any) -> dict[str, Any]:
+    settings = InteractionService(ControllerService()).toggle_measurements(doc)
+    _sync_active_workbench_if_open(doc, refresh_overlay=True)
+    return settings
+
+
+def toggle_conflict_lines_direct(doc: Any) -> dict[str, Any]:
+    settings = InteractionService(ControllerService()).toggle_conflict_lines(doc)
+    _sync_active_workbench_if_open(doc, refresh_overlay=True)
+    return settings
+
+
+def toggle_constraint_labels_direct(doc: Any) -> dict[str, Any]:
+    settings = InteractionService(ControllerService()).toggle_constraint_labels(doc)
+    _sync_active_workbench_if_open(doc, refresh_overlay=True)
+    return settings
+
+
+def snap_selection_to_grid_direct(doc: Any) -> dict[str, Any]:
+    result = InteractionService(ControllerService()).snap_selected_component(doc)
+    _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=True)
+    return result
+
+
+def apply_selection_arrangement_direct(doc: Any, operation: str) -> dict[str, Any]:
+    controller_service = ControllerService()
+    alignment_service = AlignmentService()
+    state = controller_service.get_state(doc)
+    selected_ids = controller_service.get_selected_component_ids(doc)
+    selected_components = [component for component in state["components"] if component["id"] in selected_ids]
+    plan = alignment_service.build_updates(selected_components, operation)
+    if plan["updates_by_component"]:
+        controller_service.bulk_update_components(
+            doc,
+            plan["updates_by_component"],
+            transaction_name=plan["transaction_name"],
+        )
+    _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=True)
+    return {
+        "operation": operation,
+        "selected_count": len(selected_components),
+        "moved_count": int(plan.get("moved_count", 0)),
+        "plan": plan,
+    }
+
+
+def apply_selection_transform_direct(doc: Any, operation: str) -> dict[str, Any]:
+    controller_service = ControllerService()
+    transform_service = ComponentTransformService()
+    state = controller_service.get_state(doc)
+    selected_ids = controller_service.get_selected_component_ids(doc)
+    selected_components = [component for component in state["components"] if component["id"] in selected_ids]
+    plan = transform_service.build_updates(selected_components, operation)
+    if plan["updates_by_component"]:
+        controller_service.bulk_update_components(
+            doc,
+            plan["updates_by_component"],
+            transaction_name=plan["transaction_name"],
+        )
+    _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=True)
+    return {
+        "operation": operation,
+        "selected_count": len(selected_components),
+        "moved_count": int(plan.get("moved_count", 0)),
+        "plan": plan,
+    }
+
+
+def duplicate_selection_once_direct(doc: Any, *, offset_x: float, offset_y: float) -> dict[str, Any]:
+    controller_service = ControllerService()
+    pattern_service = ComponentPatternService()
+    return _apply_selection_pattern_direct(
+        doc,
+        pattern_service.duplicate_once(
+            _selected_components_in_order_direct(doc, controller_service),
+            controller_service.get_state(doc)["components"],
+            offset_x=offset_x,
+            offset_y=offset_y,
+        ),
+    )
+
+
+def array_selection_linear_direct(doc: Any, *, axis: str, count: int, spacing: float) -> dict[str, Any]:
+    controller_service = ControllerService()
+    pattern_service = ComponentPatternService()
+    return _apply_selection_pattern_direct(
+        doc,
+        pattern_service.linear_array(
+            _selected_components_in_order_direct(doc, controller_service),
+            controller_service.get_state(doc)["components"],
+            axis=axis,
+            count=count,
+            spacing=spacing,
+        ),
+    )
+
+
+def array_selection_grid_direct(doc: Any, *, rows: int, cols: int, spacing_x: float, spacing_y: float) -> dict[str, Any]:
+    controller_service = ControllerService()
+    pattern_service = ComponentPatternService()
+    return _apply_selection_pattern_direct(
+        doc,
+        pattern_service.grid_array(
+            _selected_components_in_order_direct(doc, controller_service),
+            controller_service.get_state(doc)["components"],
+            rows=rows,
+            cols=cols,
+            spacing_x=spacing_x,
+            spacing_y=spacing_y,
+        ),
+    )
+
+
+def _selected_components_in_order_direct(doc: Any, controller_service: ControllerService) -> list[dict[str, Any]]:
+    state = controller_service.get_state(doc)
+    by_id = {component["id"]: component for component in state["components"]}
+    selected_ids = controller_service.get_selected_component_ids(doc)
+    return [by_id[component_id] for component_id in selected_ids if component_id in by_id]
+
+
+def _apply_selection_pattern_direct(doc: Any, plan: dict[str, Any]) -> dict[str, Any]:
+    controller_service = ControllerService()
+    state = controller_service.add_components(
+        doc,
+        plan["new_components"],
+        primary_id=plan["new_ids"][0] if plan["new_ids"] else None,
+        transaction_name=plan["transaction_name"],
+    )
+    _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=True)
+    return {
+        "kind": plan["kind"],
+        "created_count": len(plan["new_ids"]),
+        "new_ids": list(plan["new_ids"]),
+        "state": state,
+    }

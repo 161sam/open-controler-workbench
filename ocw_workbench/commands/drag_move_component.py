@@ -20,13 +20,12 @@ class DragMoveComponentCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui, start_component_drag_mode
+            from ocw_workbench.workbench import start_component_drag_mode_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            ensure_workbench_ui(doc, focus="components")
-            started = start_component_drag_mode(doc)
+            started = start_component_drag_mode_direct(doc)
             if started:
                 show_info("Drag Move Component", "Hover a component, drag to move it, and press ESC to cancel.")
         except Exception as exc:

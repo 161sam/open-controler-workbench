@@ -20,13 +20,12 @@ class ToggleConflictLinesCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import toggle_conflict_lines_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            panel = ensure_workbench_ui(doc, focus="layout")
-            settings = panel.toggle_conflict_lines()
+            settings = toggle_conflict_lines_direct(doc)
             show_info(
                 "Conflict Lines",
                 f"Conflict lines {'enabled' if settings['conflict_lines_enabled'] else 'disabled'}.",

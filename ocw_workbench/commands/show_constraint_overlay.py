@@ -20,13 +20,12 @@ class ShowConstraintOverlayCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import ensure_workbench_ui
+            from ocw_workbench.workbench import toggle_constraint_overlay_direct
 
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            panel = ensure_workbench_ui(doc, focus="constraints")
-            settings = panel.toggle_constraint_overlay()
+            settings = toggle_constraint_overlay_direct(doc)
             show_info(
                 "Constraint Overlay",
                 f"Constraint overlay {'enabled' if settings['show_constraints'] else 'disabled'}.",
