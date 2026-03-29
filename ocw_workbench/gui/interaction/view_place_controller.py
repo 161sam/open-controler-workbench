@@ -12,6 +12,7 @@ from ocw_workbench.gui.interaction.view_event_helpers import (
     is_mouse_move,
 )
 from ocw_workbench.gui.overlay.renderer import OverlayRenderer
+from ocw_workbench.freecad_api.gui import clear_interaction_cursor, set_interaction_cursor
 from ocw_workbench.gui.interaction.view_place_preview import load_preview_state
 from ocw_workbench.gui.panels._common import log_exception, log_to_console
 from ocw_workbench.services.controller_service import ControllerService
@@ -81,11 +82,13 @@ class ViewPlaceController:
             self.cancel(reason="error", publish_status=False)
             self._publish_status("Interaction error")
             return False
-        self._publish_status(f"Move the pointer in 3D, then click to place '{template_id}'. ESC cancels.")
+        set_interaction_cursor(view, "place")
+        self._publish_status(f"Place '{template_id}' in 3D. Move, click to commit, ESC to cancel.")
         return self._view_callbacks.is_registered
 
     def cancel(self, reason: str = "cancel", publish_status: bool = True) -> None:
         doc = self.doc
+        view = self.view
         self._view_callbacks.detach()
         if doc is not None:
             try:
@@ -106,6 +109,7 @@ class ViewPlaceController:
         self.preview_active = False
         self._last_preview_status = None
         self._notify_finished()
+        clear_interaction_cursor(view)
         if publish_status:
             self._publish_status(self._status_for_reason(reason))
 
@@ -132,7 +136,7 @@ class ViewPlaceController:
             raise
         self._continue_after_commit(doc)
         self._notify_committed(state)
-        self._publish_status(f"Placed '{template_id}'. Click to place another or ESC to cancel.")
+        self._publish_status(f"Placed '{template_id}'. Click again to continue or ESC to finish.")
         return state
 
     def update_preview_from_screen(self, screen_x: float, screen_y: float) -> dict[str, Any] | None:
@@ -208,6 +212,7 @@ class ViewPlaceController:
         if not self._view_callbacks.attach(view, self.handle_view_event):
             self.cancel(reason="error")
             return False
+        set_interaction_cursor(view, "place")
         return True
 
     def _handle_interaction_error(self, exc: Exception) -> None:

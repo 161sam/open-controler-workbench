@@ -139,7 +139,7 @@ def test_place_controller_commit_keeps_session_active_until_escape():
 
     assert settings["active_interaction"] == "place"
     assert controller.doc is doc
-    assert statuses[-1] == "Placed 'omron_b3f_1000'. Click to place another or ESC to cancel."
+    assert statuses[-1] == "Placed 'omron_b3f_1000'. Click again to continue or ESC to finish."
 
     controller.handle_view_event({"Type": "SoKeyboardEvent", "State": "DOWN", "Key": "ESCAPE"})
 

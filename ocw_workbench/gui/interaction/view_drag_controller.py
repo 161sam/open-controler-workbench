@@ -17,6 +17,7 @@ from ocw_workbench.gui.interaction.view_event_helpers import (
 from ocw_workbench.gui.interaction.view_place_controller import map_view_point_to_controller_xy
 from ocw_workbench.gui.interaction.view_place_preview import load_preview_state
 from ocw_workbench.gui.overlay.renderer import OverlayRenderer
+from ocw_workbench.freecad_api.gui import clear_interaction_cursor, set_interaction_cursor
 from ocw_workbench.gui.panels._common import log_exception, log_to_console
 from ocw_workbench.services.controller_service import ControllerService
 from ocw_workbench.services.interaction_service import InteractionService
@@ -71,12 +72,14 @@ class ViewDragController:
             self.cancel(reason="error", publish_status=False)
             self._publish_status("Interaction error")
             return False
-        self._publish_status("Drag in 3D. Hover to highlight, press and hold to move, release to commit, ESC to cancel.")
+        set_interaction_cursor(view, "drag_ready")
+        self._publish_status("Drag in 3D. Hover to target, hold to move, release to commit, ESC to cancel.")
         return self._view_callbacks.is_registered
 
     def cancel(self, reason: str = "cancel", publish_status: bool = True) -> None:
         doc = self.doc
         session = self.session
+        view = self.view
         self._view_callbacks.detach()
         if doc is not None:
             try:
@@ -107,6 +110,7 @@ class ViewDragController:
         self._last_preview_status = None
         self._last_hover_component_id = None
         self._notify_finished()
+        clear_interaction_cursor(view)
         if publish_status:
             self._publish_status(self._status_for_reason(reason))
 
@@ -176,7 +180,8 @@ class ViewDragController:
             snap_enabled=bool(self.interaction_service.get_settings(self.doc).get("snap_enabled", True)),
         )
         self.overlay_renderer.refresh(self.doc)
-        self._publish_status(f"Dragging '{component_id}'. Move the pointer, release to commit, ESC to cancel.")
+        set_interaction_cursor(self.view, "drag_active")
+        self._publish_status(f"Dragging '{component_id}'. Move now, release to commit, ESC to cancel.")
         return True
 
     def update_hover_from_screen(self, screen_x: float, screen_y: float) -> str | None:
@@ -268,6 +273,7 @@ class ViewDragController:
         if not self._view_callbacks.attach(view, self.handle_view_event):
             self.cancel(reason="error")
             return False
+        set_interaction_cursor(view, "drag_active" if self.session is not None and self.session.dragging else "drag_ready")
         return True
 
     def _handle_interaction_error(self, exc: Exception) -> None:
@@ -317,8 +323,10 @@ class ViewDragController:
         if not announce:
             return
         if component_id is None:
-            self._publish_status("Drag in 3D. Hover to highlight, press and hold to move, release to commit, ESC to cancel.")
+            set_interaction_cursor(self.view, "drag_ready")
+            self._publish_status("Drag in 3D. Hover to target, hold to move, release to commit, ESC to cancel.")
             return
         component = self.controller_service.get_component(self.doc, component_id)
         label = component.get("label") or component_id
-        self._publish_status(f"Ready to drag '{label}'. Press and hold the left mouse button, then release to commit.")
+        set_interaction_cursor(self.view, "pick")
+        self._publish_status(f"Ready to drag '{label}'. Hold the left mouse button to move it.")

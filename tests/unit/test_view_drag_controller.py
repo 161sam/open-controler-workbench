@@ -26,6 +26,8 @@ class FakeDocument:
 class FakeView:
     def __init__(self) -> None:
         self.callbacks = []
+        self.cursor = None
+        self.cursor_history = []
 
     def addEventCallback(self, event_type, callback):
         handle = (event_type, callback, len(self.callbacks))
@@ -37,6 +39,14 @@ class FakeView:
 
     def getPoint(self, x, y):
         return (float(x), float(y), 0.0)
+
+    def setCursor(self, cursor):
+        self.cursor = cursor
+        self.cursor_history.append(cursor)
+
+    def unsetCursor(self):
+        self.cursor = None
+        self.cursor_history.append(None)
 
 
 class RecordingOverlayRenderer:
@@ -181,7 +191,7 @@ def test_view_drag_controller_hover_highlights_hit_target_before_drag():
 
     settings = interaction_service.get_settings(doc)
     assert settings["hovered_component_id"] == "btn1"
-    assert statuses[-1] == "Ready to drag 'btn1'. Press and hold the left mouse button, then release to commit."
+    assert statuses[-1] == "Ready to drag 'btn1'. Hold the left mouse button to move it."
 
 
 def test_view_drag_controller_clamps_and_snaps_to_bounds():
@@ -270,6 +280,44 @@ def test_view_drag_controller_commit_keeps_dragged_component_selected():
 
     assert context["selection"] == "btn1"
     assert settings["active_interaction"] is None
+
+
+def test_view_drag_controller_updates_cursor_during_hover_drag_and_cancel():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=20.0, y=20.0)
+    overlay = RecordingOverlayRenderer(
+        items=[
+            {
+                "id": "component:btn1",
+                "type": "rect",
+                "geometry": {"x": 20.0, "y": 20.0, "width": 14.0, "height": 14.0, "rotation": 0.0},
+                "source_component_id": "btn1",
+            }
+        ]
+    )
+    controller = ViewDragController(
+        controller_service=controller_service,
+        interaction_service=interaction_service,
+        overlay_renderer=overlay,
+    )
+    view = FakeView()
+    controller._active_view = lambda _doc: view
+
+    assert controller.start(doc) is True
+    ready_cursor = view.cursor
+    controller.handle_view_event({"Type": "SoLocation2Event", "Position": (20, 20)})
+    hover_cursor = view.cursor
+    controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "DOWN", "Button": "BUTTON1", "Position": (20, 20)})
+    drag_cursor = view.cursor
+    controller.cancel()
+
+    assert ready_cursor is not None
+    assert hover_cursor is not None
+    assert drag_cursor is not None
+    assert view.cursor is None
 
 
 def test_view_drag_controller_miss_publishes_hint_status():

@@ -33,6 +33,8 @@ class FakeDocument:
 class FakeView:
     def __init__(self) -> None:
         self.callbacks = []
+        self.cursor = None
+        self.cursor_history = []
 
     def addEventCallback(self, event_type, callback):
         handle = (event_type, callback, len(self.callbacks))
@@ -44,6 +46,14 @@ class FakeView:
 
     def getPoint(self, x, y):
         return (float(x), float(y), 0.0)
+
+    def setCursor(self, cursor):
+        self.cursor = cursor
+        self.cursor_history.append(cursor)
+
+    def unsetCursor(self):
+        self.cursor = None
+        self.cursor_history.append(None)
 
 
 def test_map_view_point_to_controller_xy_clamps_and_snaps():
@@ -226,6 +236,23 @@ def test_view_place_controller_escape_cancels_and_clears_interaction_state():
     assert load_preview_state(doc) is None
     assert settings["active_interaction"] is None
     assert controller.doc is None
+    assert view.cursor is None
+
+
+def test_view_place_controller_sets_cursor_for_active_place_mode():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    controller = ViewPlaceController(
+        controller_service=controller_service,
+        interaction_service=interaction_service,
+    )
+    view = FakeView()
+    controller._active_view = lambda _doc: view
+
+    assert controller.start(doc, "omron_b3f_1000") is True
+    assert view.cursor is not None
 
 
 def test_overlay_service_includes_drag_preview_ghost():

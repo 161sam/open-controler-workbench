@@ -7,6 +7,19 @@ try:
 except ImportError:
     Gui = None
 
+try:
+    from ocw_workbench.gui.panels._common import load_qt
+except Exception:
+    load_qt = None
+
+_CURSOR_BY_ROLE = {
+    "default": "ArrowCursor",
+    "place": "CrossCursor",
+    "pick": "PointingHandCursor",
+    "drag_ready": "OpenHandCursor",
+    "drag_active": "ClosedHandCursor",
+}
+
 
 def activate_document(doc: Any) -> bool:
     if Gui is None:
@@ -70,3 +83,46 @@ def focus_view(doc: Any, fit: bool = True) -> bool:
         return True
     except Exception:
         return False
+
+
+def set_interaction_cursor(view: Any, role: str) -> bool:
+    if view is None or not hasattr(view, "setCursor"):
+        return False
+    try:
+        view.setCursor(_resolve_qt_cursor(_CURSOR_BY_ROLE.get(role, _CURSOR_BY_ROLE["default"])))
+        return True
+    except Exception:
+        return False
+
+
+def clear_interaction_cursor(view: Any) -> bool:
+    if view is None:
+        return False
+    try:
+        if hasattr(view, "unsetCursor"):
+            view.unsetCursor()
+            return True
+        if hasattr(view, "setCursor"):
+            view.setCursor(_resolve_qt_cursor(_CURSOR_BY_ROLE["default"]))
+            return True
+    except Exception:
+        return False
+    return False
+
+
+def _resolve_qt_cursor(cursor_name: str) -> Any:
+    if load_qt is None:
+        return cursor_name
+    try:
+        qtcore, qtgui, _qtwidgets = load_qt()
+    except Exception:
+        return cursor_name
+    if qtcore is None or qtgui is None:
+        return cursor_name
+    cursor_shape = getattr(getattr(qtcore, "Qt", object()), cursor_name, None)
+    if cursor_shape is None:
+        return cursor_name
+    try:
+        return qtgui.QCursor(cursor_shape)
+    except Exception:
+        return cursor_name

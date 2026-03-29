@@ -12,6 +12,7 @@ from ocw_workbench.gui.interaction.view_event_helpers import (
     is_left_click_down,
 )
 from ocw_workbench.gui.overlay.renderer import OverlayRenderer
+from ocw_workbench.freecad_api.gui import clear_interaction_cursor, set_interaction_cursor
 from ocw_workbench.gui.panels._common import log_exception, log_to_console
 from ocw_workbench.services.controller_service import ControllerService
 
@@ -52,12 +53,15 @@ class ViewPickController:
             self.doc = None
             self.view = None
             return False
+        set_interaction_cursor(view, "pick")
         return True
 
     def cancel(self, reason: str = "cancel", publish_status: bool = True) -> None:
+        view = self.view
         self._view_callbacks.detach()
         self.doc = None
         self.view = None
+        clear_interaction_cursor(view)
         self._notify_finished()
 
     def handle_view_event(self, info: Any) -> None:
@@ -105,7 +109,7 @@ class ViewPickController:
             return None
         component = self.controller_service.get_component(self.doc, component_id)
         label = component.get("label") or component_id
-        self._publish_status(f"Selected '{label}'. Direct actions now target this component.")
+        self._publish_status(f"Selected '{label}'. Direct actions now target it.")
         self._notify_selected(component_id)
         return component_id
 
@@ -125,6 +129,7 @@ class ViewPickController:
         if not self._view_callbacks.attach(view, self.handle_view_event):
             self.cancel(publish_status=False)
             return False
+        set_interaction_cursor(view, "pick")
         return True
 
     def _publish_status(self, message: str) -> None:

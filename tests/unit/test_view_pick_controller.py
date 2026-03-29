@@ -24,6 +24,8 @@ class FakeDocument:
 class FakeView:
     def __init__(self) -> None:
         self.callbacks = []
+        self.cursor = None
+        self.cursor_history = []
 
     def addEventCallback(self, event_type, callback):
         handle = (event_type, callback, len(self.callbacks))
@@ -35,6 +37,14 @@ class FakeView:
 
     def getPoint(self, x, y):
         return (float(x), float(y), 0.0)
+
+    def setCursor(self, cursor):
+        self.cursor = cursor
+        self.cursor_history.append(cursor)
+
+    def unsetCursor(self):
+        self.cursor = None
+        self.cursor_history.append(None)
 
 
 class RecordingOverlayRenderer:
@@ -79,7 +89,7 @@ def test_view_pick_controller_selects_component_on_click():
     context = controller_service.get_ui_context(doc)
     assert context["selection"] == "btn1"
     assert selected == ["btn1"]
-    assert any("Direct actions now target this component." in s for s in statuses)
+    assert any("Direct actions now target it." in s for s in statuses)
 
 
 def test_view_pick_controller_miss_does_not_change_selection():
@@ -134,6 +144,23 @@ def test_view_pick_controller_cancel_detaches_callbacks():
 
     assert len(view.callbacks) == 0
     assert controller.doc is None
+    assert view.cursor is None
+
+
+def test_view_pick_controller_sets_cursor_while_active():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    controller_service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    overlay = RecordingOverlayRenderer()
+    controller = ViewPickController(
+        controller_service=controller_service,
+        overlay_renderer=overlay,
+    )
+    view = FakeView()
+    controller._active_view = lambda _doc: view
+
+    assert controller.start(doc) is True
+    assert view.cursor is not None
 
 
 def test_view_pick_controller_mouse_move_does_not_select():
