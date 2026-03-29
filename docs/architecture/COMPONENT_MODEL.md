@@ -31,5 +31,5 @@
 
 - Controller body and top plate remain generated from controller state.
 - Plate cutouts are still derived from component mechanical cutout geometry.
-- Visible component objects are derived from the same component mechanical source, currently from the resolved top keepout footprint plus component height metadata.
+- Visible component objects are derived from the same component mechanical source. Key control types (`button`, `encoder`, `display`, `fader`, `pad`, `rgb_button`) now build type-specific solids from library mechanical metadata; unknown types still fall back to keepout-based extrusion.
 - Component document objects store stable metadata (`OCWComponentId`, `OCWComponentType`, `OCWLibraryRef`, placement fields) to support later editing and selection mapping.

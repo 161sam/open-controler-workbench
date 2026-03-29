@@ -744,6 +744,49 @@ def test_sync_document_materializes_component_objects_in_components_group(monkey
     assert doc.OCWLastSync["component_object_count"] == 2
 
 
+def test_component_tree_label_prefers_component_label_when_present(monkeypatch):
+    class FakeBuilder:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def build_body(self, _controller):
+            return self.doc.addObject("Part::Feature", "ControllerBody")
+
+        def build_top_plate(self, _controller):
+            top = self.doc.addObject("Part::Feature", "TopPlate")
+            top.Shape = type("Shape", (), {"BoundBox": type("BoundBox", (), {"ZMin": 27.0, "ZLength": 3.0})(), "copy": lambda self: self})()
+            return top
+
+        def apply_cutout_plan(self, top, _plan):
+            top.Shape = "cut"
+            return top
+
+        def plan_cutout_boolean(self, _top, components):
+            return type("CutPlan", (), {"tools": [object() for _ in components], "diagnostics": []})()
+
+        def build_component_feature(self, _controller, component):
+            return self.doc.addObject("Part::Feature", f"OCW_Component_{component['id']}")
+
+        def build_keepouts(self, _components):
+            return []
+
+    monkeypatch.setattr("ocw_workbench.services.document_sync_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocw_workbench.services.controller_service.ControllerBuilder", FakeBuilder)
+    monkeypatch.setattr("ocw_workbench.services.document_sync_service.freecad_gui.reveal_generated_objects", lambda _doc: 0)
+    monkeypatch.setattr("ocw_workbench.services.document_sync_service.freecad_gui.activate_document", lambda _doc: True)
+    monkeypatch.setattr("ocw_workbench.services.document_sync_service.freecad_gui.focus_view", lambda _doc, fit=True: True)
+
+    service = ControllerService()
+    doc = FakeFeatureDocument()
+    service.create_controller(doc, {"id": "demo", "height": 30.0, "top_thickness": 3.0})
+    service.add_component(doc, "generic_45mm_linear_fader", component_id="f1", x=20.0, y=30.0)
+    service.update_component(doc, "f1", {"label": "Deck A"})
+
+    fader = doc.getObject("OCW_Component_f1")
+
+    assert fader.Label == "Deck A [fader]"
+
+
 def test_component_selection_highlight_uses_component_metadata(monkeypatch):
     class FakeBuilder:
         def __init__(self, doc):

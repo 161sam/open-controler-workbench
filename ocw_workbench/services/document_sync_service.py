@@ -17,6 +17,7 @@ from ocw_workbench.freecad_api.model import (
     iter_generated_objects,
 )
 from ocw_workbench.freecad_api.performance import record_profile_metric
+from ocw_workbench.freecad_api.state import read_state
 from ocw_workbench.generator.controller_builder import ControllerBuilder
 from ocw_workbench.services._logging import log_to_console
 
@@ -73,6 +74,7 @@ class DocumentSyncService:
         selection: str | None,
     ) -> None:
         started_at = perf_counter()
+        self._refresh_component_document_metadata(doc)
         self._set_last_sync(
             doc,
             {
@@ -253,6 +255,29 @@ class DocumentSyncService:
         self._set_last_sync(doc, {"sync_duration_ms": duration_ms})
         record_profile_metric(doc, "sync", "visual_refresh", duration_ms, details={"mode": SyncMode.VISUAL_ONLY})
 
+    def _refresh_component_document_metadata(self, doc: Any) -> None:
+        state = read_state(doc)
+        if not isinstance(state, dict):
+            return
+        components = state.get("components")
+        if not isinstance(components, list):
+            return
+        component_by_id = {
+            str(component.get("id")): component
+            for component in components
+            if isinstance(component, dict) and component.get("id") is not None
+        }
+        if not component_by_id:
+            return
+        for obj in iter_generated_objects(doc):
+            component_id = getattr(obj, "OCWComponentId", None)
+            if not isinstance(component_id, str):
+                continue
+            component_data = component_by_id.get(component_id)
+            if component_data is None:
+                continue
+            self._set_component_label(obj, component_data)
+
     def _materialize_debug_keepout_markers(self, doc: Any, builder: Any, components: list[Any], z_height: float) -> None:
         if not self._should_materialize_component_markers(doc):
             return
@@ -403,6 +428,10 @@ class DocumentSyncService:
     def _set_component_label(self, obj: Any, component_data: dict[str, Any]) -> None:
         component_id = str(component_data.get("id") or getattr(obj, "Name", "component"))
         component_type = str(component_data.get("type") or "component")
+        component_label = component_data.get("label")
+        if isinstance(component_label, str) and component_label.strip():
+            self._set_generated_label(obj, f"{component_label.strip()} [{component_type}]")
+            return
         self._set_generated_label(obj, f"{component_id} [{component_type}]")
 
     def _style_document_object(self, obj: Any, role: str, component: dict[str, Any] | None = None) -> None:

@@ -428,15 +428,98 @@ class ControllerBuilder:
         visual_height = self._component_visual_height(component)
         top_z = self._body_height(controller) + float(getattr(controller, "top_thickness", 0.0) or 0.0)
         top_keepout = resolved["resolved_mechanical"].keepout_top
+        visual_mechanical = self._component_visual_mechanical(component)
+        component_type = str(component.get("type") or "component")
         x = float(component["x"])
         y = float(component["y"])
         rotation = float(component.get("rotation", 0.0) or 0.0)
+        if component_type == "button":
+            return self._build_button_component_shape(
+                x=x,
+                y=y,
+                z=top_z,
+                rotation=rotation,
+                visual_height=visual_height,
+                top_keepout=top_keepout,
+                visual_mechanical=visual_mechanical,
+                component=component,
+            )
+        if component_type == "encoder":
+            return self._build_encoder_component_shape(
+                x=x,
+                y=y,
+                z=top_z,
+                rotation=rotation,
+                visual_height=visual_height,
+                top_keepout=top_keepout,
+                visual_mechanical=visual_mechanical,
+            )
+        if component_type == "display":
+            return self._build_display_component_shape(
+                x=x,
+                y=y,
+                z=top_z,
+                rotation=rotation,
+                visual_height=visual_height,
+                top_keepout=top_keepout,
+                visual_mechanical=visual_mechanical,
+            )
+        if component_type == "fader":
+            return self._build_fader_component_shape(
+                x=x,
+                y=y,
+                z=top_z,
+                rotation=rotation,
+                visual_height=visual_height,
+                top_keepout=top_keepout,
+                visual_mechanical=visual_mechanical,
+                component=component,
+            )
+        if component_type == "pad":
+            return self._build_pad_component_shape(
+                x=x,
+                y=y,
+                z=top_z,
+                rotation=rotation,
+                visual_height=visual_height,
+                top_keepout=top_keepout,
+                visual_mechanical=visual_mechanical,
+            )
+        if component_type == "rgb_button":
+            return self._build_rgb_button_component_shape(
+                x=x,
+                y=y,
+                z=top_z,
+                rotation=rotation,
+                visual_height=visual_height,
+                top_keepout=top_keepout,
+                visual_mechanical=visual_mechanical,
+            )
+        return self._build_generic_component_shape(
+            x=x,
+            y=y,
+            z=top_z,
+            rotation=rotation,
+            visual_height=visual_height,
+            top_keepout=top_keepout,
+        )
+
+    def _build_generic_component_shape(
+        self,
+        *,
+        x: float,
+        y: float,
+        z: float,
+        rotation: float,
+        visual_height: float,
+        top_keepout: ShapePrimitive,
+    ):
         if top_keepout.shape == "circle":
             return shapes.translate_shape(
                 shapes.make_cylinder_shape(radius=float(top_keepout.diameter or 0.0) / 2.0, height=visual_height),
                 x=x,
                 y=y,
-                z=top_z,
+                z=z,
             )
         if top_keepout.shape in {"rect", "slot"}:
             shape_factory = shapes.make_rect_prism_shape if top_keepout.shape == "rect" else shapes.make_slot_prism_shape
@@ -448,12 +531,241 @@ class ControllerBuilder:
                 ),
                 x=x - (float(top_keepout.width or 0.0) / 2.0),
                 y=y - (float(top_keepout.height or 0.0) / 2.0),
-                z=top_z,
+                z=z,
             )
             if rotation != 0.0:
-                placed_shape = shapes.rotate_shape(placed_shape, rotation, center=(x, y, top_z))
+                placed_shape = shapes.rotate_shape(placed_shape, rotation, center=(x, y, z))
             return placed_shape
         raise ValueError(f"Unsupported component keepout shape: {top_keepout.shape}")
+
+    def _build_button_component_shape(
+        self,
+        *,
+        x: float,
+        y: float,
+        z: float,
+        rotation: float,
+        visual_height: float,
+        top_keepout: ShapePrimitive,
+        visual_mechanical: dict[str, Any],
+        component: dict[str, Any],
+    ):
+        body_size = self._mapping(visual_mechanical.get("body_size_mm"))
+        panel = self._mapping(visual_mechanical.get("panel"))
+        cap_opening = self._mapping(panel.get("recommended_cap_opening_mm"))
+        properties = self._mapping(component.get("properties"))
+        body_width = self._coalesce_number(body_size.get("width"), top_keepout.width, top_keepout.diameter, default=12.0)
+        body_depth = self._coalesce_number(body_size.get("depth"), top_keepout.height, top_keepout.diameter, default=12.0)
+        body_height = self._clamp_positive(body_size.get("height"), default=visual_height)
+        cap_width = self._clamp_positive(
+            properties.get("cap_width"),
+            cap_opening.get("width"),
+            body_width * 0.7,
+            default=max(body_width * 0.7, 4.0),
+        )
+        cap_depth = self._clamp_positive(
+            properties.get("cap_depth"),
+            cap_opening.get("height"),
+            body_depth * 0.7,
+            default=max(body_depth * 0.7, 4.0),
+        )
+        cap_height = self._clamp_positive(properties.get("cap_height"), body_height * 0.22, default=1.6)
+        body = self._make_box_centered(body_width, body_depth, body_height, x=x, y=y, z=z)
+        cap = self._make_box_centered(cap_width, cap_depth, cap_height, x=x, y=y, z=z + body_height)
+        return self._finalize_component_shape([body, cap], rotation=rotation, x=x, y=y, z=z)
+
+    def _build_pad_component_shape(
+        self,
+        *,
+        x: float,
+        y: float,
+        z: float,
+        rotation: float,
+        visual_height: float,
+        top_keepout: ShapePrimitive,
+        visual_mechanical: dict[str, Any],
+    ):
+        body_size = self._mapping(visual_mechanical.get("body_size_mm"))
+        diffuser = self._mapping(visual_mechanical.get("diffuser_light_area_mm"))
+        body_width = self._coalesce_number(body_size.get("width"), top_keepout.width, top_keepout.diameter, default=18.0)
+        body_depth = self._coalesce_number(body_size.get("depth"), top_keepout.height, top_keepout.diameter, default=18.0)
+        body_height = self._clamp_positive(body_size.get("height"), default=visual_height)
+        pad_width = self._clamp_positive(diffuser.get("width"), body_width * 0.7, default=max(body_width * 0.7, 6.0))
+        pad_depth = self._clamp_positive(diffuser.get("height"), body_depth * 0.7, default=max(body_depth * 0.7, 6.0))
+        pad_height = self._clamp_positive(diffuser.get("thickness"), body_height * 0.18, default=1.4)
+        body = self._make_box_centered(body_width, body_depth, body_height, x=x, y=y, z=z)
+        pad = self._make_box_centered(pad_width, pad_depth, pad_height, x=x, y=y, z=z + body_height)
+        return self._finalize_component_shape([body, pad], rotation=rotation, x=x, y=y, z=z)
+
+    def _build_encoder_component_shape(
+        self,
+        *,
+        x: float,
+        y: float,
+        z: float,
+        rotation: float,
+        visual_height: float,
+        top_keepout: ShapePrimitive,
+        visual_mechanical: dict[str, Any],
+    ):
+        body_size = self._mapping(visual_mechanical.get("body_size_mm"))
+        shaft = self._mapping(visual_mechanical.get("shaft"))
+        body_width = self._coalesce_number(body_size.get("width"), top_keepout.diameter, top_keepout.width, default=14.0)
+        body_depth = self._coalesce_number(body_size.get("depth"), top_keepout.diameter, top_keepout.height, default=14.0)
+        body_height = self._clamp_positive(body_size.get("height"), default=visual_height)
+        shaft_diameter = self._clamp_positive(
+            shaft.get("diameter_mm"),
+            body_width * 0.4,
+            body_depth * 0.4,
+            default=max(min(body_width, body_depth) * 0.4, 3.0),
+        )
+        shaft_height = self._clamp_positive(shaft.get("length_mm"), body_height * 0.65, default=max(body_height * 0.65, 4.0))
+        body = self._make_box_centered(body_width, body_depth, body_height, x=x, y=y, z=z)
+        shaft_shape = self._make_cylinder_centered(shaft_diameter, shaft_height, x=x, y=y, z=z + body_height)
+        return self._finalize_component_shape([body, shaft_shape], rotation=rotation, x=x, y=y, z=z)
+
+    def _build_display_component_shape(
+        self,
+        *,
+        x: float,
+        y: float,
+        z: float,
+        rotation: float,
+        visual_height: float,
+        top_keepout: ShapePrimitive,
+        visual_mechanical: dict[str, Any],
+    ):
+        breakout = self._mapping(visual_mechanical.get("breakout_size_mm"))
+        screen_window = self._mapping(visual_mechanical.get("screen_window_mm"))
+        body_width = self._coalesce_number(breakout.get("width"), top_keepout.width, default=30.0)
+        body_depth = self._coalesce_number(breakout.get("depth"), top_keepout.height, default=15.0)
+        body_height = self._clamp_positive(breakout.get("thickness"), default=visual_height)
+        screen_width = self._clamp_positive(screen_window.get("width"), body_width * 0.72, default=max(body_width * 0.72, 8.0))
+        screen_depth = self._clamp_positive(screen_window.get("height"), body_depth * 0.5, default=max(body_depth * 0.5, 4.0))
+        bezel_height = self._clamp_positive(screen_window.get("thickness"), body_height * 0.18, default=1.2)
+        board = self._make_box_centered(body_width, body_depth, body_height, x=x, y=y, z=z)
+        screen = self._make_box_centered(screen_width, screen_depth, bezel_height, x=x, y=y, z=z + body_height)
+        return self._finalize_component_shape([board, screen], rotation=rotation, x=x, y=y, z=z)
+
+    def _build_fader_component_shape(
+        self,
+        *,
+        x: float,
+        y: float,
+        z: float,
+        rotation: float,
+        visual_height: float,
+        top_keepout: ShapePrimitive,
+        visual_mechanical: dict[str, Any],
+        component: dict[str, Any],
+    ):
+        body_size = self._mapping(visual_mechanical.get("body_size_mm"))
+        slot_cutout = self._mapping(visual_mechanical.get("slot_cutout"))
+        properties = self._mapping(component.get("properties"))
+        body_width = self._coalesce_number(body_size.get("width"), top_keepout.width, default=65.0)
+        body_depth = self._coalesce_number(body_size.get("depth"), top_keepout.height, default=12.0)
+        body_height = self._clamp_positive(body_size.get("height"), default=visual_height)
+        cap_width = self._clamp_positive(
+            properties.get("cap_width"),
+            slot_cutout.get("width_mm"),
+            body_depth * 0.55,
+            default=max(body_depth * 0.55, 4.0),
+        )
+        cap_depth = self._clamp_positive(properties.get("cap_depth"), body_depth * 0.7, default=max(body_depth * 0.7, 4.0))
+        cap_height = self._clamp_positive(properties.get("cap_height"), body_height * 0.4, default=max(body_height * 0.4, 3.0))
+        cap_length = self._clamp_positive(properties.get("cap_length"), body_width * 0.16, default=max(body_width * 0.16, 8.0))
+        rail_height = self._clamp_positive(slot_cutout.get("width_mm"), body_height * 0.12, default=0.8)
+        rail = self._make_box_centered(body_width * 0.82, rail_height, rail_height, x=x, y=y, z=z + body_height)
+        body = self._make_box_centered(body_width, body_depth, body_height, x=x, y=y, z=z)
+        cap = self._make_box_centered(cap_length, cap_depth, cap_height, x=x, y=y, z=z + body_height + rail_height)
+        return self._finalize_component_shape([body, rail, cap], rotation=rotation, x=x, y=y, z=z)
+
+    def _build_rgb_button_component_shape(
+        self,
+        *,
+        x: float,
+        y: float,
+        z: float,
+        rotation: float,
+        visual_height: float,
+        top_keepout: ShapePrimitive,
+        visual_mechanical: dict[str, Any],
+    ):
+        body_size = self._mapping(visual_mechanical.get("body_size_mm"))
+        diffuser_diameter = self._clamp_positive(
+            visual_mechanical.get("diffuser_light_area_diameter_mm"),
+            body_size.get("width"),
+            top_keepout.diameter * 0.65 if top_keepout.diameter is not None else None,
+            default=8.0,
+        )
+        body_diameter = self._coalesce_number(body_size.get("width"), top_keepout.diameter, default=14.0)
+        body_height = self._clamp_positive(body_size.get("height"), default=visual_height)
+        diffuser_height = self._clamp_positive(body_height * 0.2, default=1.4)
+        body = self._make_cylinder_centered(body_diameter, body_height, x=x, y=y, z=z)
+        diffuser = self._make_cylinder_centered(diffuser_diameter, diffuser_height, x=x, y=y, z=z + body_height)
+        return self._finalize_component_shape([body, diffuser], rotation=rotation, x=x, y=y, z=z)
+
+    def _component_visual_mechanical(self, component: dict[str, Any]) -> dict[str, Any]:
+        merged: dict[str, Any] = {}
+        library_ref = component.get("library_ref")
+        if isinstance(library_ref, str) and library_ref:
+            library_component = self.component_resolver.mechanical_resolver.library_service.get(library_ref)
+            mechanical = library_component.get("mechanical", {})
+            if isinstance(mechanical, dict):
+                merged = deepcopy(mechanical)
+        instance_mechanical = component.get("mechanical", {})
+        if isinstance(instance_mechanical, dict):
+            merged = self._deep_merge(merged, instance_mechanical)
+        return merged
+
+    def _deep_merge(self, base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+        result = deepcopy(base)
+        for key, value in override.items():
+            if isinstance(result.get(key), dict) and isinstance(value, dict):
+                result[key] = self._deep_merge(result[key], value)
+            else:
+                result[key] = deepcopy(value)
+        return result
+
+    def _make_box_centered(self, width: float, depth: float, height: float, *, x: float, y: float, z: float):
+        return shapes.translate_shape(
+            shapes.make_box_shape(width, depth, height),
+            x=x - (width / 2.0),
+            y=y - (depth / 2.0),
+            z=z,
+        )
+
+    def _make_cylinder_centered(self, diameter: float, height: float, *, x: float, y: float, z: float):
+        radius = diameter / 2.0
+        return shapes.translate_shape(
+            shapes.make_cylinder_shape(radius, height),
+            x=x - radius,
+            y=y - radius,
+            z=z,
+        )
+
+    def _finalize_component_shape(self, parts: list[Any], *, rotation: float, x: float, y: float, z: float):
+        fused = shapes.fuse_shapes(parts)
+        if fused is None:
+            raise ValueError("Failed to build component shape")
+        if rotation != 0.0:
+            return shapes.rotate_shape(fused, rotation, center=(x, y, z))
+        return fused
+
+    def _mapping(self, value: Any) -> dict[str, Any]:
+        return value if isinstance(value, dict) else {}
+
+    def _coalesce_number(self, *values: Any, default: float) -> float:
+        for value in values:
+            if isinstance(value, (int, float)) and float(value) > 0.0:
+                return float(value)
+        return float(default)
+
+    def _clamp_positive(self, *values: Any, default: float) -> float:
+        for value in values:
+            if isinstance(value, (int, float)) and float(value) > self.MIN_FEATURE_SIZE:
+                return float(value)
+        return max(float(default), self.MIN_FEATURE_SIZE)
 
     def _component_visual_height(self, component: dict[str, Any]) -> float:
         library_ref = component.get("library_ref")

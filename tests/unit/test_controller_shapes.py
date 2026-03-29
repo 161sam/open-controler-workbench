@@ -359,6 +359,121 @@ def test_polygon_surface_falls_back_to_solid_prism(monkeypatch):
     assert body.Shape.data["prism_height"] == 27
 
 
+def test_encoder_component_shape_adds_shaft_visual(monkeypatch):
+    builder = ControllerBuilder(doc=None)
+    controller = Controller("demo", 120, 80, 30, 3)
+    component = Component(
+        id="enc1",
+        type="encoder",
+        x=40,
+        y=30,
+        library_ref="alps_ec11e15204a3",
+    )
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_box_shape", lambda width, depth, height: FakeShape("box", width=width, depth=depth, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_cylinder_shape", lambda radius, height: FakeShape("cylinder", radius=radius, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.translate_shape", lambda shape, x=0, y=0, z=0: FakeShape("translated", source=shape, x=x, y=y, z=z))
+
+    shape = builder._build_component_shape(controller, vars(component), builder.component_resolver.resolve(component))
+
+    assert shape.kind == "fuse"
+    body = shape.data["left"]
+    shaft = shape.data["right"]
+    assert body.data["source"].kind == "box"
+    assert shaft.data["source"].kind == "cylinder"
+    assert shaft.data["z"] > body.data["z"]
+
+
+def test_display_component_shape_adds_screen_bezel(monkeypatch):
+    builder = ControllerBuilder(doc=None)
+    controller = Controller("demo", 120, 80, 30, 3)
+    component = Component(
+        id="disp1",
+        type="display",
+        x=60,
+        y=25,
+        library_ref="adafruit_oled_096_i2c_ssd1306",
+    )
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_box_shape", lambda width, depth, height: FakeShape("box", width=width, depth=depth, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.translate_shape", lambda shape, x=0, y=0, z=0: FakeShape("translated", source=shape, x=x, y=y, z=z))
+
+    shape = builder._build_component_shape(controller, vars(component), builder.component_resolver.resolve(component))
+
+    assert shape.kind == "fuse"
+    board = shape.data["left"]
+    screen = shape.data["right"]
+    assert board.data["source"].kind == "box"
+    assert screen.data["source"].kind == "box"
+    assert screen.data["source"].data["width"] < board.data["source"].data["width"]
+    assert screen.data["z"] > board.data["z"]
+
+
+def test_fader_component_shape_adds_slider_cap(monkeypatch):
+    builder = ControllerBuilder(doc=None)
+    controller = Controller("demo", 120, 80, 30, 3)
+    component = Component(
+        id="f1",
+        type="fader",
+        x=50,
+        y=35,
+        library_ref="generic_45mm_linear_fader",
+    )
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_box_shape", lambda width, depth, height: FakeShape("box", width=width, depth=depth, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.translate_shape", lambda shape, x=0, y=0, z=0: FakeShape("translated", source=shape, x=x, y=y, z=z))
+
+    shape = builder._build_component_shape(controller, vars(component), builder.component_resolver.resolve(component))
+
+    assert shape.kind == "fuse"
+    assert shape.data["left"].kind == "fuse"
+    rail_and_body = shape.data["left"]
+    cap = shape.data["right"]
+    assert cap.data["source"].kind == "box"
+    assert cap.data["z"] > rail_and_body.data["left"].data["z"]
+
+
+def test_rgb_button_component_shape_adds_diffuser_cap(monkeypatch):
+    builder = ControllerBuilder(doc=None)
+    controller = Controller("demo", 120, 80, 30, 3)
+    component = {
+        "id": "rgb1",
+        "type": "rgb_button",
+        "x": 20.0,
+        "y": 20.0,
+        "library_ref": "generic_rgb_arcade_button_24mm",
+    }
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_cylinder_shape", lambda radius, height: FakeShape("cylinder", radius=radius, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.translate_shape", lambda shape, x=0, y=0, z=0: FakeShape("translated", source=shape, x=x, y=y, z=z))
+
+    shape = builder._build_component_shape(controller, component, builder.component_resolver.resolve(component))
+
+    assert shape.kind == "fuse"
+    body = shape.data["left"]
+    diffuser = shape.data["right"]
+    assert body.data["source"].kind == "cylinder"
+    assert diffuser.data["source"].kind == "cylinder"
+    assert diffuser.data["source"].data["radius"] < body.data["source"].data["radius"]
+
+
+def test_button_component_shape_uses_component_property_cap_width(monkeypatch):
+    builder = ControllerBuilder(doc=None)
+    controller = Controller("demo", 120, 80, 30, 3)
+    component = {
+        "id": "btn1",
+        "type": "button",
+        "x": 25.0,
+        "y": 18.0,
+        "library_ref": "omron_b3f_1000",
+        "properties": {"cap_width": 9.5},
+    }
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.make_box_shape", lambda width, depth, height: FakeShape("box", width=width, depth=depth, height=height))
+    monkeypatch.setattr("ocw_workbench.generator.controller_builder.shapes.translate_shape", lambda shape, x=0, y=0, z=0: FakeShape("translated", source=shape, x=x, y=y, z=z))
+
+    shape = builder._build_component_shape(controller, component, builder.component_resolver.resolve(component))
+
+    assert shape.kind == "fuse"
+    cap = shape.data["right"]
+    assert cap.data["source"].data["width"] == 9.5
+
+
 def _fake_make_surface_prism_shape(surface, height):
     data = surface.to_dict()
     data["prism_height"] = height
