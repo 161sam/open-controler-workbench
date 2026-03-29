@@ -108,6 +108,9 @@ def test_write_state_creates_controller_object_with_persistent_properties():
             },
             "components": [],
             "meta": {
+                "plugin_id": "bike_trailer",
+                "plugin_version": "0.1.0",
+                "document_type": "generator_workbench_project",
                 "template_id": "encoder_module",
                 "variant_id": "encoder_compact",
                 "selection": "enc1",
@@ -121,6 +124,9 @@ def test_write_state_creates_controller_object_with_persistent_properties():
     assert controller.ViewObject.Visibility is True
     assert json.loads(controller.ProjectJson)["controller"]["id"] == "demo"
     assert controller.ControllerId == "demo"
+    assert controller.PluginId == "bike_trailer"
+    assert controller.PluginVersion == "0.1.0"
+    assert controller.DocumentType == "generator_workbench_project"
     assert controller.TemplateId == "encoder_module"
     assert controller.VariantId == "encoder_compact"
     assert controller.SelectionId == "enc1"

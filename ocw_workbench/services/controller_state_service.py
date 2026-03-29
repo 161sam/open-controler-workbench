@@ -7,6 +7,12 @@ from ocw_workbench.freecad_api.state import read_state, write_state
 from ocw_workbench.domain.component import Component
 from ocw_workbench.domain.controller import Controller
 from ocw_workbench.layout.engine import LayoutEngine
+from ocw_workbench.plugins.document_lifecycle import (
+    activate_plugin_for_document,
+    get_document_plugin_binding,
+    merge_document_plugin_binding,
+)
+from ocw_workbench.services.plugin_service import get_plugin_service
 from ocw_workbench.services._logging import log_to_console
 from ocw_workbench.services.constraint_service import ConstraintService
 from ocw_workbench.services.library_service import LibraryService
@@ -34,6 +40,9 @@ DEFAULT_CONTROLLER = {
 }
 
 DEFAULT_META = {
+    "plugin_id": None,
+    "plugin_version": None,
+    "document_type": None,
     "template_id": None,
     "variant_id": None,
     "selection": None,
@@ -80,6 +89,7 @@ class ControllerStateService:
         self.constraint_service = constraint_service or ConstraintService()
 
     def create_controller(self, doc: Any, controller_data: dict[str, Any] | None = None) -> dict[str, Any]:
+        binding = activate_plugin_for_document(doc)
         state = {
             "controller": deepcopy(DEFAULT_CONTROLLER),
             "components": [],
@@ -87,6 +97,7 @@ class ControllerStateService:
         }
         if controller_data is not None:
             state["controller"].update(deepcopy(controller_data))
+        state = merge_document_plugin_binding(state, binding)
         self.save_state(doc, state)
         log_to_console(
             f"Creating controller in document '{getattr(doc, 'Name', '<unnamed>')}' "
@@ -100,6 +111,7 @@ class ControllerStateService:
         template_id: str,
         overrides: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        binding = activate_plugin_for_document(doc, requested_plugin_id=self._plugin_id_for_template(doc, template_id))
         project = self.template_service.generate_from_template(template_id, overrides=overrides)
         return self._apply_generated_project(
             doc,
@@ -107,6 +119,7 @@ class ControllerStateService:
             template_id=template_id,
             variant_id=None,
             overrides=overrides,
+            binding=binding,
         )
 
     def create_from_variant(
@@ -115,6 +128,7 @@ class ControllerStateService:
         variant_id: str,
         overrides: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        binding = activate_plugin_for_document(doc, requested_plugin_id=self._plugin_id_for_variant(doc, variant_id))
         project = self.variant_service.generate_from_variant(variant_id, overrides=overrides)
         template_id = project.get("template", {}).get("id")
         return self._apply_generated_project(
@@ -123,6 +137,7 @@ class ControllerStateService:
             template_id=template_id if isinstance(template_id, str) else None,
             variant_id=variant_id,
             overrides=overrides,
+            binding=binding,
         )
 
     def get_state(self, doc: Any) -> dict[str, Any]:
@@ -425,6 +440,7 @@ class ControllerStateService:
         template_id: str | None,
         variant_id: str | None,
         overrides: dict[str, Any] | None,
+        binding: dict[str, Any] | None,
     ) -> dict[str, Any]:
         state = {
             "controller": deepcopy(project["controller"]),
@@ -443,6 +459,7 @@ class ControllerStateService:
         if state["components"]:
             state["meta"]["selection"] = state["components"][0]["id"]
             state["meta"]["selected_ids"] = [state["components"][0]["id"]]
+        state = merge_document_plugin_binding(state, binding or get_document_plugin_binding(doc))
         layout_spec = deepcopy(project.get("layout", {})) if isinstance(project.get("layout"), dict) else {}
         log_to_console(
             f"Generated project loaded for document '{getattr(doc, 'Name', '<unnamed>')}': "
@@ -701,6 +718,33 @@ class ControllerStateService:
         normalized["meta"]["selection"] = primary_id
         normalized["meta"]["selected_ids"] = deduped_ids
         return normalized
+
+    def _plugin_id_for_template(self, doc: Any, template_id: str) -> str | None:
+        return self._plugin_id_for_source_entry(doc, str(template_id), root_kind="templates")
+
+    def _plugin_id_for_variant(self, doc: Any, variant_id: str) -> str | None:
+        return self._plugin_id_for_source_entry(doc, str(variant_id), root_kind="variants")
+
+    def _plugin_id_for_source_entry(self, doc: Any, identifier: str, *, root_kind: str) -> str | None:
+        value = str(identifier or "").strip()
+        if not value:
+            return None
+        if "." in value:
+            prefix = value.split(".", 1)[0]
+            registry = get_plugin_service().registry()
+            if registry.has_plugin(prefix):
+                return prefix
+        filename = f"{value}.yaml"
+        registry = get_plugin_service().registry()
+        for plugin in registry.get_domain_plugins():
+            root = {
+                "templates": plugin.template_root(),
+                "variants": plugin.variant_root(),
+            }.get(root_kind)
+            if root is not None and (root / filename).exists():
+                return plugin.plugin_id
+        binding = get_document_plugin_binding(doc)
+        return None if binding is None else binding["plugin_id"]
 
     def _positive_float(self, value: Any, field_name: str) -> float:
         number = float(value)

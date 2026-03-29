@@ -34,6 +34,7 @@ from ocw_workbench.gui.panels.plugin_manager_panel import PluginManagerPanel
 from ocw_workbench.gui.runtime import component_icon_path, icon_path
 from ocw_workbench.freecad_api.metadata import get_document_data
 from ocw_workbench.freecad_api.state import has_persisted_state
+from ocw_workbench.plugins.document_lifecycle import activate_plugin_for_document
 from ocw_workbench.services.alignment_service import AlignmentService
 from ocw_workbench.services.component_pattern_service import ComponentPatternService
 from ocw_workbench.services.component_transform_service import ComponentTransformService
@@ -1329,6 +1330,10 @@ def _workbench_shell_stylesheet() -> str:
 
 
 def _bootstrap_document_if_needed(doc: Any) -> None:
+    binding = activate_plugin_for_document(doc)
+    log_to_console(
+        f"Document '{getattr(doc, 'Name', '<unnamed>')}' using domain plugin '{binding['plugin_id']}'."
+    )
     if not _document_needs_bootstrap(doc):
         return
     service = ControllerService()

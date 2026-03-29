@@ -56,6 +56,12 @@ def get_plugin_service_revision() -> int:
     return _PLUGIN_SERVICE_REVISION
 
 
+def bump_plugin_service_revision() -> int:
+    global _PLUGIN_SERVICE_REVISION
+    _PLUGIN_SERVICE_REVISION += 1
+    return _PLUGIN_SERVICE_REVISION
+
+
 def get_plugin_service() -> PluginService:
     global _PLUGIN_SERVICE
     if _PLUGIN_SERVICE is None:

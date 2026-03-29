@@ -151,6 +151,7 @@ def test_registry_returns_commands_for_active_plugin(tmp_path: Path) -> None:
 
 def test_adapters_prefer_midicontroller_shadow_data_from_repo() -> None:
     registry = PluginLoader().load_all()
+    activate_plugin("midicontroller")
     active_plugin = registry.get_active_plugin()
 
     template_sources = get_template_source_entries()
@@ -168,6 +169,7 @@ def test_adapters_prefer_midicontroller_shadow_data_from_repo() -> None:
 
 
 def test_strict_mode_uses_only_plugin_roots(monkeypatch) -> None:
+    activate_plugin("midicontroller")
     monkeypatch.setattr(template_adapter_module, "OCW_STRICT_PLUGIN_MODE", True)
     monkeypatch.setattr(component_adapter_module, "OCW_STRICT_PLUGIN_MODE", True)
     monkeypatch.setattr(variant_adapter_module, "OCW_STRICT_PLUGIN_MODE", True)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from ocw_workbench.plugins.registry import ExtensionRegistry, Plugin
-from ocw_workbench.services.plugin_service import get_plugin_service
+from ocw_workbench.services.plugin_service import bump_plugin_service_revision, get_plugin_service
 
 LOGGER = logging.getLogger(__name__)
 
@@ -17,4 +17,7 @@ def activate_plugin(plugin_id: str, registry: ExtensionRegistry | None = None) -
         raise ValueError(f"Plugin '{plugin_id}' is not a domain plugin")
     for dependency in plugin.dependencies:
         LOGGER.info("Plugin activation dependency stub for '%s': %s", plugin_id, dependency)
-    return active_registry.set_active_plugin(plugin_id)
+    active = active_registry.set_active_plugin(plugin_id)
+    if registry is None:
+        bump_plugin_service_revision()
+    return active

@@ -32,6 +32,9 @@ _STRING_PROPERTIES = {
     "TemplateId": "Template id",
     "VariantId": "Variant id",
     "SelectionId": "Selected component id",
+    "PluginId": "Document plugin id",
+    "PluginVersion": "Document plugin version",
+    "DocumentType": "Document type",
     "SurfaceShape": "Controller surface shape",
 }
 
@@ -55,6 +58,9 @@ _PROPERTY_TO_STATE_PATH = {
     "TemplateId": ("meta", "template_id"),
     "VariantId": ("meta", "variant_id"),
     "SelectionId": ("meta", "selection"),
+    "PluginId": ("meta", "plugin_id"),
+    "PluginVersion": ("meta", "plugin_version"),
+    "DocumentType": ("meta", "document_type"),
     "Width": ("controller", "width"),
     "Depth": ("controller", "depth"),
     "Height": ("controller", "height"),
@@ -393,6 +399,9 @@ def _sync_controller_properties(controller: Any, state: dict[str, Any]) -> None:
     setattr(controller, "TemplateId", str(meta.get("template_id") or ""))
     setattr(controller, "VariantId", str(meta.get("variant_id") or ""))
     setattr(controller, "SelectionId", str(meta.get("selection") or ""))
+    setattr(controller, "PluginId", str(meta.get("plugin_id") or ""))
+    setattr(controller, "PluginVersion", str(meta.get("plugin_version") or ""))
+    setattr(controller, "DocumentType", str(meta.get("document_type") or ""))
     setattr(controller, "Width", float(controller_state.get("width", 0.0) or 0.0))
     setattr(controller, "Depth", float(controller_state.get("depth", 0.0) or 0.0))
     setattr(controller, "Height", float(controller_state.get("height", 0.0) or 0.0))
@@ -426,7 +435,7 @@ def _state_with_controller_properties(
 def _normalized_property_value(property_name: str, value: Any) -> Any:
     if property_name in _STRING_PROPERTIES:
         text = str(value or "")
-        if property_name in {"TemplateId", "VariantId", "SelectionId"} and not text.strip():
+        if property_name in {"TemplateId", "VariantId", "SelectionId", "PluginId", "PluginVersion"} and not text.strip():
             return None
         return text
     return float(value or 0.0)
