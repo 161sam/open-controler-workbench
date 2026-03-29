@@ -15,6 +15,7 @@
 - `OCW_CreateController` remains available, but no longer occupies the primary project toolbar.
 - `EnablePlugin` / `DisablePlugin` now behave as explicit plugin-selection actions: they no longer open the dock implicitly and are only active when a plugin is already selected in the open Plugin Manager.
 - `Create Controller`, `Open Plugin Manager`, and `Open Components` are now treated explicitly as UI/navigation commands via the dock-opening helper rather than as pseudo-tools.
+- The dock-opening API is now expressed via `open_workbench_dock(...)`; `ensure_workbench_ui(...)` remains only as a compatibility alias for older call sites.
 
 ---
 

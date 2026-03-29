@@ -972,7 +972,7 @@ def test_workbench_activated_logs_instead_of_raising(monkeypatch):
     logged = []
 
     monkeypatch.setattr("ocw_workbench.workbench.App", fake_app)
-    monkeypatch.setattr("ocw_workbench.workbench.ensure_workbench_ui", lambda *_args, **_kwargs: (_ for _ in ()).throw(NameError("_init_pyside_extension is not defined")))
+    monkeypatch.setattr("ocw_workbench.workbench.open_workbench_dock", lambda *_args, **_kwargs: (_ for _ in ()).throw(NameError("_init_pyside_extension is not defined")))
     monkeypatch.setattr("ocw_workbench.workbench.log_exception", lambda context, exc: logged.append((context, str(exc))))
     monkeypatch.setattr("ocw_workbench.workbench.ControllerService", lambda: types.SimpleNamespace(create_controller=lambda *_args, **_kwargs: None))
 

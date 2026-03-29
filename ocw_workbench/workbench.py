@@ -359,7 +359,7 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         try:
             doc = App.ActiveDocument or App.newDocument("Controller")
             _bootstrap_document_if_needed(doc)
-            ensure_workbench_ui(doc, focus="create")
+            open_workbench_dock(doc, focus="create")
             log_to_console("Workbench activated.")
         except Exception as exc:
             log_exception("Workbench activation failed", exc)
@@ -1138,7 +1138,8 @@ class ProductWorkbenchPanel:
                 marker.update()
 
 
-def ensure_workbench_ui(doc: Any | None = None, focus: str = "create") -> ProductWorkbenchPanel:
+def open_workbench_dock(doc: Any | None = None, focus: str = "create") -> ProductWorkbenchPanel:
+    """Open or focus the OCW workbench dock for the given document and step."""
     global _ACTIVE_DOCK
     global _ACTIVE_WORKBENCH
 
@@ -1170,9 +1171,13 @@ def ensure_workbench_ui(doc: Any | None = None, focus: str = "create") -> Produc
         raise RuntimeError(f"Open Controller Workbench UI setup failed: {exc}") from exc
 
 
-def open_workbench_dock(doc: Any | None = None, focus: str = "create") -> ProductWorkbenchPanel:
-    """Explicit UI/navigation entry point for opening or focusing the workbench dock."""
-    return ensure_workbench_ui(doc, focus=focus)
+def ensure_workbench_ui(doc: Any | None = None, focus: str = "create") -> ProductWorkbenchPanel:
+    """Compatibility alias for legacy UI-opening call sites.
+
+    New code should prefer `open_workbench_dock()` to make the dock-opening
+    side effect explicit and avoid implying that every workflow needs the dock.
+    """
+    return open_workbench_dock(doc, focus=focus)
 
 
 def has_selected_plugin_in_open_manager(doc: Any | None = None) -> bool:
@@ -1386,7 +1391,7 @@ def start_component_place_mode(doc: Any | None, template_id: str) -> bool:
         doc = App.ActiveDocument or App.newDocument("Controller")
     if doc is None:
         return False
-    workbench = ensure_workbench_ui(doc, focus="components")
+    workbench = open_workbench_dock(doc, focus="components")
     return workbench.start_place_mode(template_id)
 
 
@@ -1471,7 +1476,7 @@ def start_component_drag_mode(doc: Any | None) -> bool:
         doc = App.ActiveDocument or App.newDocument("Controller")
     if doc is None:
         return False
-    workbench = ensure_workbench_ui(doc, focus="components")
+    workbench = open_workbench_dock(doc, focus="components")
     return workbench.start_drag_mode()
 
 

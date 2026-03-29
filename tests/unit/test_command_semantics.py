@@ -120,3 +120,20 @@ def test_navigation_commands_use_explicit_open_workbench_dock_helper() -> None:
         (doc, "plugins"),
         (doc, "components"),
     ]
+
+
+def test_ensure_workbench_ui_remains_alias_to_open_workbench_dock(monkeypatch) -> None:
+    from ocw_workbench import workbench as workbench_module
+
+    calls: list[tuple[object | None, str]] = []
+
+    monkeypatch.setattr(
+        workbench_module,
+        "open_workbench_dock",
+        lambda current_doc=None, focus="create": calls.append((current_doc, focus)) or object(),
+    )
+
+    result = workbench_module.ensure_workbench_ui("doc-ref", focus="plugins")
+
+    assert result is not None
+    assert calls == [("doc-ref", "plugins")]

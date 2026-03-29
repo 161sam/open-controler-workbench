@@ -14,6 +14,7 @@
 - Remaining dock-reduced cleanup is concentrated in navigation-oriented commands and plugin-selection commands rather than the main direct-action workflow.
 - Plugin enable/disable is now constrained to the already-open Plugin Manager selection state instead of opening the dock implicitly; this keeps the commands action-oriented but no longer dock-opening.
 - The remaining dock-coupled commands are now intentionally explicit UI/navigation entry points rather than mixed-semantics tool commands.
+- The old `ensure_workbench_ui(...)` name is now deprecated in practice in favor of `open_workbench_dock(...)`, which makes the dock-opening side effect explicit.
 
 ---
 
