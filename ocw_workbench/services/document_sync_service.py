@@ -170,6 +170,9 @@ class DocumentSyncService:
         component_object_count = self._materialize_component_objects(doc, builder, controller, state["components"])
         self._materialize_debug_keepout_markers(doc, builder, components, float(state["controller"]["height"]))
         self._apply_selection_highlight(doc, state["meta"].get("selection"))
+        sync_selection = getattr(self.gui_module, "sync_selection", None)
+        if callable(sync_selection):
+            sync_selection(doc, state["meta"].get("selection"))
         recompute_started_at = perf_counter()
         if hasattr(doc, "recompute"):
             doc.recompute()
@@ -252,6 +255,9 @@ class DocumentSyncService:
         if not hasattr(doc, "addObject"):
             return
         self._apply_selection_highlight(doc, selection)
+        sync_selection = getattr(self.gui_module, "sync_selection", None)
+        if callable(sync_selection):
+            sync_selection(doc, selection)
         if recompute and hasattr(doc, "recompute"):
             recompute_started_at = perf_counter()
             doc.recompute()

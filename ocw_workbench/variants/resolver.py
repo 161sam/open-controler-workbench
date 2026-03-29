@@ -43,7 +43,6 @@ class VariantResolver:
             raise KeyError(f"Unknown template id for variant '{variant_id}': {template_id}") from exc
 
         resolved = self._apply_overrides(resolved, variant.get("overrides"), context=f"variant '{variant_id}'")
-        resolved = self._apply_overrides(resolved, runtime_overrides, context=f"runtime overrides for '{variant_id}'")
         resolved["variant"] = deepcopy(variant_meta)
         variant_values = (
             variant.get("overrides", {}).get("parameters")
@@ -59,11 +58,13 @@ class VariantResolver:
             if isinstance(runtime_overrides, dict) and runtime_overrides.get("parameter_preset_id") is not None
             else None
         )
-        return self.parameter_resolver.apply(
+        resolved = self.parameter_resolver.apply(
             resolved,
             values=resolved_values or None,
             preset_id=runtime_preset_id,
         )
+        resolved = self._apply_overrides(resolved, runtime_overrides, context=f"runtime overrides for '{variant_id}'")
+        return resolved
 
     def _apply_overrides(
         self,

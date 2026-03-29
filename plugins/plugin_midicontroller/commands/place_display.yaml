@@ -1,0 +1,9 @@
+id: place_display
+type: place_component
+component: display
+category: Displays
+icon: display.svg
+label: Place Display
+tooltip: Start 3D placement for a Display. Click in the 3D view to position it.
+library_ref: adafruit_oled_096_i2c_ssd1306
+command_id: OCW_PlaceDisplay

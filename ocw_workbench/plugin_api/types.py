@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 PluginType = Literal[
+    "domain",
     "component_pack",
     "template_pack",
     "variant_pack",
@@ -23,6 +24,7 @@ RegistryName = Literal[
     "layout_strategies",
     "constraints",
     "ui_extensions",
+    "commands",
 ]
 
 
@@ -34,6 +36,7 @@ class PluginEntrypoints:
     exporters: str | None = None
     layouts: str | None = None
     constraints: str | None = None
+    commands: str | None = None
     module: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -44,6 +47,7 @@ class PluginEntrypoints:
             "exporters": self.exporters,
             "layouts": self.layouts,
             "constraints": self.constraints,
+            "commands": self.commands,
             "module": self.module,
         }
 
@@ -60,6 +64,10 @@ class PluginDescriptor:
     capabilities: list[str] = field(default_factory=list)
     dependencies: list[str] = field(default_factory=list)
     entrypoints: PluginEntrypoints = field(default_factory=PluginEntrypoints)
+    domain_type: str | None = None
+    provides_templates: bool = False
+    provides_components: bool = False
+    provides_commands: bool = False
     non_disableable: bool = False
     is_internal: bool = False
     root_path: Path | None = None
@@ -76,6 +84,10 @@ class PluginDescriptor:
             "capabilities": list(self.capabilities),
             "dependencies": list(self.dependencies),
             "entrypoints": self.entrypoints.to_dict(),
+            "domain_type": self.domain_type,
+            "provides_templates": self.provides_templates,
+            "provides_components": self.provides_components,
+            "provides_commands": self.provides_commands,
             "non_disableable": self.non_disableable,
             "is_internal": self.is_internal,
             "root_path": str(self.root_path) if self.root_path is not None else None,

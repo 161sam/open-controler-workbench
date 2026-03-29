@@ -30,6 +30,18 @@ class PluginService:
     def variant_sources(self) -> list[Path]:
         return self.registry().variant_sources()
 
+    def template_roots(self) -> list[Path]:
+        return self.registry().get_template_roots()
+
+    def component_registries(self) -> list[Path]:
+        return self.registry().get_component_registries()
+
+    def get_commands_for_active_plugin(self) -> dict[str, object]:
+        return self.registry().get_commands_for_active_plugin()
+
+    def command_plugin_mapping(self) -> dict[str, str]:
+        return self.registry().command_plugin_mapping()
+
     def exporters(self) -> dict[str, object]:
         return self.registry().exporters()
 

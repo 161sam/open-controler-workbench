@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+
 from ocw_workbench.commands.base import BaseCommand
 from ocw_workbench.gui.panels._common import log_to_console
 from ocw_workbench.gui.runtime import show_error, show_info
@@ -21,7 +23,7 @@ class ValidateConstraintsCommand(BaseCommand):
         try:
             import FreeCAD as App
             from ocw_workbench.services.controller_service import ControllerService
-            from ocw_workbench.workbench import _refresh_active_workbench_if_open, ensure_constraint_overlay_visible_direct
+            workbench_module = importlib.import_module("ocw_workbench.workbench")
 
             doc = App.ActiveDocument
             if doc is None:
@@ -29,8 +31,12 @@ class ValidateConstraintsCommand(BaseCommand):
 
             cs = ControllerService()
             report = cs.validate_layout(doc)
-            ensure_constraint_overlay_visible_direct(doc, True)
-            _refresh_active_workbench_if_open(doc)
+            ensure_overlay_visible = getattr(workbench_module, "ensure_constraint_overlay_visible_direct", None)
+            if callable(ensure_overlay_visible):
+                ensure_overlay_visible(doc, True)
+            refresh_workbench = getattr(workbench_module, "_refresh_active_workbench_if_open", None)
+            if callable(refresh_workbench):
+                refresh_workbench(doc)
 
             summary = report.get("summary", {})
             error_count = summary.get("error_count", 0)

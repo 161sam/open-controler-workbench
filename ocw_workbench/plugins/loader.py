@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 from pathlib import Path
 from types import ModuleType
 from typing import Callable
 
+from ocw_workbench.plugins.registry import ExtensionRegistry, Plugin
 from ocw_workbench.plugin_api.types import PluginDescriptor
 from ocw_workbench.plugins.context import PluginContext
 from ocw_workbench.plugins.hooks import run_module_hooks
 from ocw_workbench.plugins.manifest import load_plugin_manifest
-from ocw_workbench.plugins.registry import ExtensionRegistry
+from ocw_workbench.utils.yaml_io import load_yaml
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PluginLoader:
@@ -17,11 +21,13 @@ class PluginLoader:
         self,
         internal_root: str | Path | None = None,
         external_root: str | Path | None = None,
+        domain_root: str | Path | None = None,
         enabled_resolver: Callable[[PluginDescriptor], bool] | None = None,
     ) -> None:
         base = Path(__file__).resolve().parent
         self.internal_root = Path(internal_root or (base / "internal"))
         self.external_root = Path(external_root or (base / "external"))
+        self.domain_root = Path(domain_root or (base.parent.parent / "plugins"))
         self.enabled_resolver = enabled_resolver
         self.registry = ExtensionRegistry()
         self.warnings: list[str] = []
@@ -30,6 +36,12 @@ class PluginLoader:
     def load_all(self) -> ExtensionRegistry:
         if self._loaded:
             return self.registry
+
+        for plugin in self.scan_plugins():
+            if self.registry.has_plugin(plugin.plugin_id):
+                self.warnings.append(f"Skipping duplicate plugin id '{plugin.plugin_id}'")
+                continue
+            self.registry.register_plugin(plugin)
 
         pending: list[PluginDescriptor] = []
         pending.extend(self._discover_from_root(self.internal_root))
@@ -71,8 +83,24 @@ class PluginLoader:
                 break
             pending = remaining
 
+        self._ensure_default_active_plugin()
         self._loaded = True
         return self.registry
+
+    def scan_plugins(self) -> list[Plugin]:
+        if not self.domain_root.exists():
+            return []
+
+        plugins: list[Plugin] = []
+        for plugin_dir in sorted(item for item in self.domain_root.iterdir() if item.is_dir()):
+            manifest_path = plugin_dir / "plugin.yaml"
+            if not manifest_path.exists():
+                continue
+            try:
+                plugins.append(self._load_scanned_plugin(manifest_path))
+            except Exception as exc:
+                self.warnings.append(f"Failed to scan plugin manifest '{manifest_path}': {exc}")
+        return plugins
 
     def _is_enabled(self, descriptor: PluginDescriptor) -> bool:
         if descriptor.non_disableable:
@@ -155,3 +183,58 @@ class PluginLoader:
             if path.exists():
                 return path
         return plugin_dir / "manifest.yaml"
+
+    def _load_scanned_plugin(self, manifest_path: Path) -> Plugin:
+        payload = load_yaml(manifest_path)
+        plugin_data = payload.get("plugin") if isinstance(payload.get("plugin"), dict) else payload
+        if not isinstance(plugin_data, dict):
+            raise ValueError("Plugin manifest must be a mapping")
+
+        plugin_id = self._require_str(plugin_data.get("id"), "id", manifest_path)
+        plugin_type = self._require_str(plugin_data.get("type"), "type", manifest_path)
+        name = self._require_str(plugin_data.get("name"), "name", manifest_path)
+        version = self._require_str(plugin_data.get("version"), "version", manifest_path)
+        raw_dependencies = plugin_data.get("depends_on", plugin_data.get("dependencies", []))
+        if raw_dependencies is None:
+            raw_dependencies = []
+        if not isinstance(raw_dependencies, list):
+            raise ValueError("depends_on must be a list")
+        root_path = manifest_path.parent
+
+        return Plugin(
+            plugin_id=plugin_id,
+            plugin_type=plugin_type,
+            name=name,
+            version=version,
+            dependencies=tuple(str(item) for item in raw_dependencies),
+            domain_type=str(plugin_data.get("domain_type") or plugin_id) if plugin_type == "domain" else None,
+            provides_templates=self._capability_flag(plugin_data, "provides_templates", root_path / "templates"),
+            provides_components=self._capability_flag(plugin_data, "provides_components", root_path / "components"),
+            provides_commands=self._capability_flag(plugin_data, "provides_commands", root_path / "commands"),
+            root_path=root_path,
+            manifest_path=manifest_path,
+            raw_manifest=payload if isinstance(payload, dict) else {"plugin": plugin_data},
+        )
+
+    def _require_str(self, value: object, field: str, manifest_path: Path) -> str:
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"Missing required field '{field}' in {manifest_path}")
+        return value
+
+    def _capability_flag(self, plugin_data: dict[str, object], field: str, default_path: Path) -> bool:
+        if field in plugin_data:
+            return bool(plugin_data[field])
+        return default_path.exists()
+
+    def _ensure_default_active_plugin(self) -> None:
+        if self.registry.get_active_plugin() is not None:
+            return
+        preferred_plugin = self.registry.plugin("midicontroller") if self.registry.has_plugin("midicontroller") else None
+        if preferred_plugin is not None and preferred_plugin.plugin_type == "domain":
+            self.registry.set_active_plugin(preferred_plugin.plugin_id)
+            LOGGER.debug("Soft-activated default domain plugin '%s'.", preferred_plugin.plugin_id)
+            return
+        domain_plugins = self.registry.get_domain_plugins()
+        if len(domain_plugins) == 1:
+            self.registry.set_active_plugin(domain_plugins[0].plugin_id)
+            LOGGER.debug("Soft-activated sole domain plugin '%s'.", domain_plugins[0].plugin_id)

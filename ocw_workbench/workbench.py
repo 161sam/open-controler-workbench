@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import traceback
+import warnings
 from typing import Any
 
 try:
@@ -17,6 +18,7 @@ from ocw_workbench.gui.interaction.lifecycle import InteractionSessionManager
 from ocw_workbench.gui.interaction.view_drag_controller import ViewDragController
 from ocw_workbench.gui.interaction.view_pick_controller import ViewPickController
 from ocw_workbench.gui.interaction.view_place_controller import ViewPlaceController
+from ocw_workbench.gui.interaction.tool_manager import get_tool_manager
 from ocw_workbench.gui.docking import create_or_reuse_dock, focus_dock, remove_dock
 from ocw_workbench.gui.feedback import apply_status_message, format_toggle_message, format_validation_message
 from ocw_workbench.gui.overlay.renderer import OverlayRenderer
@@ -38,6 +40,7 @@ from ocw_workbench.services.component_transform_service import ComponentTransfor
 from ocw_workbench.services.controller_service import ControllerService
 from ocw_workbench.services.interaction_service import InteractionService
 from ocw_workbench.services.overlay_service import OverlayService
+from ocw_workbench.services.plugin_service import get_plugin_service
 from ocw_workbench.services.userdata_service import MAX_FAVORITE_COMPONENTS, UserDataService
 
 _ACTIVE_WORKBENCH: ProductWorkbenchPanel | None = None
@@ -215,6 +218,7 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         from ocw_workbench.commands.import_template_from_fcstd import ImportTemplateFromFCStdCommand
         from ocw_workbench.commands.open_plugin_manager import OpenPluginManagerCommand
         from ocw_workbench.commands.open_component_palette import OpenComponentPaletteCommand
+        from ocw_workbench.commands.factory import build_plugin_commands
         from ocw_workbench.commands.reload_plugins import ReloadPluginsCommand
         from ocw_workbench.commands.select_component import SelectComponentCommand
         from ocw_workbench.commands.selection_transform import SelectionTransformCommand
@@ -230,6 +234,7 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
             component_toolbar_command_ids,
             iter_component_type_command_specs,
         )
+        from ocw_workbench.gui.toolbar_builder import append_plugin_toolbars, build_primary_component_toolbar
 
         Gui.addCommand("OCW_CreateController", _LoggedCommand("OCW_CreateController", CreateFromTemplateCommand()))
         Gui.addCommand("OCW_AddComponent", _LoggedCommand("OCW_AddComponent", AddComponentCommand()))
@@ -272,11 +277,16 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         Gui.addCommand("OCW_EnablePlugin", _LoggedCommand("OCW_EnablePlugin", EnablePluginCommand()))
         Gui.addCommand("OCW_DisablePlugin", _LoggedCommand("OCW_DisablePlugin", DisablePluginCommand()))
         Gui.addCommand("OCW_ReloadPlugins", _LoggedCommand("OCW_ReloadPlugins", ReloadPluginsCommand()))
-        for _spec in iter_component_type_command_specs():
-            Gui.addCommand(
-                _spec.command_id,
-                _LoggedCommand(_spec.command_id, PlaceComponentTypeCommand(_spec.component_type)),
-            )
+        plugin_commands = build_plugin_commands()
+        if plugin_commands:
+            for command_id, command in plugin_commands.items():
+                Gui.addCommand(command_id, _LoggedCommand(command_id, command))
+        else:
+            for _spec in iter_component_type_command_specs():
+                Gui.addCommand(
+                    _spec.command_id,
+                    _LoggedCommand(_spec.command_id, PlaceComponentTypeCommand(_spec.component_type)),
+                )
         refresh_favorite_component_commands()
         Gui.addCommand(
             _FAVORITE_MORE_COMMAND_ID,
@@ -285,7 +295,9 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
 
         project_toolbar_commands = ["OCW_ImportTemplateFromFCStd"]
         project_menu_commands = ["OCW_CreateController", "OCW_ImportTemplateFromFCStd"]
-        place_type_commands = component_toolbar_command_ids() + ["OCW_OpenComponentPalette"]
+        place_type_commands = build_primary_component_toolbar()
+        active_plugin = get_plugin_service().registry().get_active_plugin()
+        active_plugin_id = active_plugin.plugin_id if active_plugin is not None else None
         layout_commands = [
             "OCW_ApplyLayout",
             "OCW_DragMoveComponent",
@@ -332,6 +344,7 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         ]
         self.appendToolbar("OCW Project", project_toolbar_commands)
         self.appendToolbar("OCW Components", place_type_commands)
+        append_plugin_toolbars(self, active_plugin_id=active_plugin_id)
         self.appendToolbar("OCW Layout", layout_commands)
         self.appendToolbar("OCW Validate", [validate_commands[0], validate_commands[2]])
         self.appendToolbar("OCW View", view_commands)
@@ -355,8 +368,7 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
         try:
             doc = App.ActiveDocument or App.newDocument("Controller")
             _bootstrap_document_if_needed(doc)
-            open_workbench_dock(doc, focus="create")
-            log_to_console("Workbench activated.")
+            log_to_console("Workbench activated in toolbar-first mode. Dock panels remain optional.")
         except Exception as exc:
             log_exception("Workbench activation failed", exc)
 
@@ -977,6 +989,10 @@ class ProductWorkbenchPanel:
 
     def _handle_interaction_finished(self, controller: Any) -> None:
         self.interaction_manager.clear(controller.cancel)
+        if controller is self.place_controller:
+            get_tool_manager().clear_active_tool()
+        if controller is self.drag_controller:
+            get_tool_manager().clear_active_tool("drag")
         try:
             self.refresh_context_panels(refresh_components=True)
         except Exception as exc:
@@ -1173,6 +1189,11 @@ def ensure_workbench_ui(doc: Any | None = None, focus: str = "create") -> Produc
     New code should prefer `open_workbench_dock()` to make the dock-opening
     side effect explicit and avoid implying that every workflow needs the dock.
     """
+    warnings.warn(
+        "ensure_workbench_ui() is deprecated; use open_workbench_dock() explicitly for optional dock UI.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return open_workbench_dock(doc, focus=focus)
 
 
@@ -1383,12 +1404,16 @@ def refresh_favorite_component_commands() -> None:
 
 
 def start_component_place_mode(doc: Any | None, template_id: str) -> bool:
+    warnings.warn(
+        "start_component_place_mode() is deprecated; use direct placement tools instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if doc is None and App is not None:
         doc = App.ActiveDocument or App.newDocument("Controller")
     if doc is None:
         return False
-    workbench = open_workbench_dock(doc, focus="components")
-    return workbench.start_place_mode(template_id)
+    return start_place_mode_direct(doc, template_id)
 
 
 def start_place_mode_direct(doc: Any, template_id: str) -> bool:
@@ -1417,6 +1442,7 @@ def start_place_mode_direct(doc: Any, template_id: str) -> bool:
 
         def _on_finished(controller: Any) -> None:
             _clear_standalone_place_controller(controller)
+            get_tool_manager().clear_active_tool(f"place:{template_id}")
             _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=True)
 
         controller = ViewPlaceController(
@@ -1468,12 +1494,16 @@ def _sync_active_workbench_if_open(
 
 
 def start_component_drag_mode(doc: Any | None) -> bool:
+    warnings.warn(
+        "start_component_drag_mode() is deprecated; use direct drag tools instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if doc is None and App is not None:
         doc = App.ActiveDocument or App.newDocument("Controller")
     if doc is None:
         return False
-    workbench = open_workbench_dock(doc, focus="components")
-    return workbench.start_drag_mode()
+    return start_component_drag_mode_direct(doc)
 
 
 def start_component_drag_mode_direct(doc: Any) -> bool:
@@ -1489,6 +1519,7 @@ def start_component_drag_mode_direct(doc: Any) -> bool:
 
         def _on_finished(controller: Any) -> None:
             _clear_standalone_drag_controller(controller)
+            get_tool_manager().clear_active_tool("drag")
             _sync_active_workbench_if_open(doc, refresh_components=True, refresh_overlay=True)
 
         controller = ViewDragController(
@@ -1538,6 +1569,12 @@ def _cancel_standalone_direct_interactions(
             controller.cancel(reason=reason, publish_status=publish_status)
         finally:
             clear(controller)
+
+
+def cancel_active_tool(doc: Any | None = None) -> None:
+    if _ACTIVE_WORKBENCH is not None and (doc is None or _ACTIVE_WORKBENCH.doc is doc):
+        _ACTIVE_WORKBENCH.reject()
+    _cancel_standalone_direct_interactions(doc, reason="cancel", publish_status=False)
 
 
 def toggle_overlay_direct(doc: Any) -> dict[str, Any]:

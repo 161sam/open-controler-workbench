@@ -110,6 +110,32 @@ def clear_interaction_cursor(view: Any) -> bool:
     return False
 
 
+def sync_selection(doc: Any, component_id: str | None) -> bool:
+    if Gui is None or doc is None or not hasattr(Gui, "Selection"):
+        return False
+    selection = getattr(Gui, "Selection", None)
+    if selection is None:
+        return False
+    try:
+        if hasattr(selection, "clearSelection"):
+            selection.clearSelection()
+        if component_id is None:
+            return True
+        target = _find_component_object(doc, component_id)
+        if target is None:
+            return False
+        doc_name = getattr(doc, "Name", None)
+        object_name = getattr(target, "Name", None)
+        if hasattr(selection, "addSelection"):
+            if isinstance(doc_name, str) and doc_name and isinstance(object_name, str) and object_name:
+                selection.addSelection(doc_name, object_name)
+            else:
+                selection.addSelection(target)
+        return True
+    except Exception:
+        return False
+
+
 def _resolve_qt_cursor(cursor_name: str) -> Any:
     if load_qt is None:
         return cursor_name
@@ -126,3 +152,10 @@ def _resolve_qt_cursor(cursor_name: str) -> Any:
         return qtgui.QCursor(cursor_shape)
     except Exception:
         return cursor_name
+
+
+def _find_component_object(doc: Any, component_id: str) -> Any | None:
+    for obj in getattr(doc, "Objects", []):
+        if getattr(obj, "OCWComponentId", None) == component_id:
+            return obj
+    return None

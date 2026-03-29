@@ -1,0 +1,9 @@
+id: place_fader
+type: place_component
+component: fader
+category: Faders
+icon: fader.svg
+label: Place Fader
+tooltip: Start 3D placement for a Fader. Click in the 3D view to position it.
+library_ref: generic_45mm_linear_fader
+command_id: OCW_PlaceFader

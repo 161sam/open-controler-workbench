@@ -7,6 +7,7 @@ from typing import Any
 from ocw_workbench.plugins.data import alias_candidates
 from ocw_workbench.plugins.registry import PluginSource
 from ocw_workbench.services.plugin_service import get_plugin_service_revision
+from ocw_workbench.templates.adapter import get_template_source_entries
 from ocw_workbench.templates.loader import TemplateLoader
 from ocw_workbench.userdata.persistence import UserDataPersistence
 
@@ -47,19 +48,7 @@ class TemplateRegistry:
         self._loaded_revision = self._current_revision()
 
     def _source_entries(self) -> list[PluginSource]:
-        if self.base_path is not None:
-            if not self.base_path.exists():
-                raise FileNotFoundError(f"Template library path not found: {self.base_path}")
-            return [PluginSource(plugin_id=None, path=self.base_path)]
-
-        from ocw_workbench.services.plugin_service import get_plugin_service
-
-        sources = list(get_plugin_service().registry().source_entries("templates"))
-        if not sources:
-            fallback = Path(__file__).resolve().parent / "library"
-            if not fallback.exists():
-                raise FileNotFoundError(f"Template library path not found: {fallback}")
-            sources = [PluginSource(plugin_id=None, path=fallback)]
+        sources = list(get_template_source_entries(self.base_path))
         user_path = UserDataPersistence().templates_dir
         if user_path.exists():
             sources.append(PluginSource(plugin_id=None, path=user_path))

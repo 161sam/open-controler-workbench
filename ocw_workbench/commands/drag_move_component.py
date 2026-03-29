@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ocw_workbench.commands.base import BaseCommand
+from ocw_workbench.gui.interaction.placement_controller import PlacementController
 from ocw_workbench.gui.runtime import show_error, show_info
 
 
@@ -20,12 +21,10 @@ class DragMoveComponentCommand(BaseCommand):
         try:
             import FreeCAD as App
 
-            from ocw_workbench.workbench import start_component_drag_mode_direct
-
             doc = App.ActiveDocument
             if doc is None:
                 raise RuntimeError("No active FreeCAD document")
-            started = start_component_drag_mode_direct(doc)
+            started = PlacementController().start_move_mode(doc)
             if started:
                 show_info("Drag Move Component", "Hover a component, drag to move it, and press ESC to cancel.")
         except Exception as exc:

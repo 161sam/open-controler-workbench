@@ -4,6 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from ocw_workbench.components.adapter import get_component_source_entries
 from ocw_workbench.plugins.data import alias_candidates, normalize_component_payload
 from ocw_workbench.plugins.registry import PluginSource
 from ocw_workbench.services.plugin_service import get_plugin_service_revision
@@ -55,21 +56,7 @@ class ComponentLibraryManager:
         self._loaded_revision = 0 if self.base_path is not None else get_plugin_service_revision()
 
     def _source_entries(self) -> list[PluginSource]:
-        if self.base_path is not None:
-            if not self.base_path.exists():
-                raise FileNotFoundError(f"Component library path not found: {self.base_path}")
-            return [PluginSource(plugin_id=None, path=self.base_path)]
-
-        from ocw_workbench.services.plugin_service import get_plugin_service
-
-        sources = get_plugin_service().registry().source_entries("components")
-        if sources:
-            return sources
-
-        fallback = Path(__file__).resolve().parent / "components"
-        if not fallback.exists():
-            raise FileNotFoundError(f"Component library path not found: {fallback}")
-        return [PluginSource(plugin_id=None, path=fallback)]
+        return list(get_component_source_entries(self.base_path))
 
     def _validate_component_shape(self, component: dict[str, Any], source: Path) -> None:
         required = [

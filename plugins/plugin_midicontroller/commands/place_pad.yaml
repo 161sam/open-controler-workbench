@@ -1,0 +1,9 @@
+id: place_pad
+type: place_component
+component: pad
+category: Pads
+icon: pad.svg
+label: Place Pad
+tooltip: Start 3D placement for a Pad. Click in the 3D view to position it.
+library_ref: generic_mpc_pad_30mm
+command_id: OCW_PlacePad

@@ -7,6 +7,7 @@ from typing import Any
 from ocw_workbench.plugins.data import alias_candidates
 from ocw_workbench.plugins.registry import PluginSource
 from ocw_workbench.services.plugin_service import get_plugin_service_revision
+from ocw_workbench.variants.adapter import get_variant_source_entries
 from ocw_workbench.variants.loader import VariantLoader
 
 
@@ -45,21 +46,7 @@ class VariantRegistry:
         self._loaded_revision = 0 if self.base_path is not None else get_plugin_service_revision()
 
     def _source_entries(self) -> list[PluginSource]:
-        if self.base_path is not None:
-            if not self.base_path.exists():
-                raise FileNotFoundError(f"Variant library path not found: {self.base_path}")
-            return [PluginSource(plugin_id=None, path=self.base_path)]
-
-        from ocw_workbench.services.plugin_service import get_plugin_service
-
-        sources = get_plugin_service().registry().source_entries("variants")
-        if sources:
-            return sources
-
-        fallback = Path(__file__).resolve().parent / "library"
-        if not fallback.exists():
-            raise FileNotFoundError(f"Variant library path not found: {fallback}")
-        return [PluginSource(plugin_id=None, path=fallback)]
+        return list(get_variant_source_entries(self.base_path))
 
     def _ensure_loaded(self) -> None:
         current_revision = 0 if self.base_path is not None else get_plugin_service_revision()

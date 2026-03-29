@@ -1,0 +1,9 @@
+id: place_rgb_button
+type: place_component
+component: rgb_button
+category: Buttons
+icon: generic.svg
+label: Place RGB Button
+tooltip: Start 3D placement for a RGB Button. Click in the 3D view to position it.
+library_ref: generic_rgb_arcade_button_24mm
+command_id: OCW_PlaceRgbButton

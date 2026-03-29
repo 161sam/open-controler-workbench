@@ -24,6 +24,10 @@ def test_plugin_manifest_loads_internal_template_pack() -> None:
 
     assert manifest.plugin_id == "default_templates"
     assert manifest.plugin_type == "template_pack"
+    assert manifest.domain_type is None
+    assert manifest.provides_templates is True
+    assert manifest.provides_components is False
+    assert manifest.provides_commands is False
     assert manifest.entrypoints.templates == "../../../templates/library"
 
 

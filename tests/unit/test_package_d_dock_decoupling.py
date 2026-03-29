@@ -54,6 +54,7 @@ def test_reload_plugins_uses_direct_helper_without_workbench() -> None:
     fake_wb.ensure_workbench_ui = lambda *a, **kw: ensure_called.append(True)
     fake_wb.reload_plugins_direct = lambda current_doc: reload_calls.append(current_doc) or [{"id": "demo"}]
     fake_runtime = types.ModuleType("ocw_workbench.gui.runtime")
+    fake_runtime.icon_path = lambda name="default": f"/tmp/{name}.svg"
     fake_runtime.show_info = lambda title, message: None
     fake_runtime.show_error = lambda title, exc: (_ for _ in ()).throw(AssertionError(f"Unexpected error: {title}: {exc}"))
 
@@ -88,6 +89,7 @@ def test_import_template_followup_refreshes_open_workbench_without_ensuring_dock
     fake_wb._refresh_create_panel_if_open = lambda current_doc: refresh_calls.append(current_doc)
     fake_wb._ACTIVE_WORKBENCH = types.SimpleNamespace(doc=doc, set_status=lambda message, level="info": status_calls.append((message, level)))
     fake_runtime = types.ModuleType("ocw_workbench.gui.runtime")
+    fake_runtime.icon_path = lambda name="default": f"/tmp/{name}.svg"
     fake_runtime.show_error = lambda title, exc: (_ for _ in ()).throw(AssertionError(f"Unexpected error: {title}: {exc}"))
     fake_runtime.open_dialog = lambda title, panel, **kwargs: None
 
@@ -132,3 +134,34 @@ def test_import_template_followup_refreshes_open_workbench_without_ensuring_dock
     assert inspector_calls[0]["on_status"] is fake_wb._ACTIVE_WORKBENCH.set_status
     inspector_calls[0]["on_saved"]("/tmp/saved-template.yaml")
     assert refresh_calls == [doc, doc]
+
+
+def test_legacy_place_and_drag_helpers_use_direct_tools_without_opening_dock() -> None:
+    import ocw_workbench.workbench as workbench_module
+
+    doc = FakeDocument()
+    dock_calls: list[tuple[object, str]] = []
+    place_calls: list[tuple[object, str]] = []
+    drag_calls: list[object] = []
+
+    original_app = workbench_module.App
+    original_open = workbench_module.open_workbench_dock
+    original_place = workbench_module.start_place_mode_direct
+    original_drag = workbench_module.start_component_drag_mode_direct
+    try:
+        workbench_module.App = _make_fake_freecad(doc)
+        workbench_module.open_workbench_dock = lambda current_doc=None, focus="create": dock_calls.append((current_doc, focus)) or object()
+        workbench_module.start_place_mode_direct = lambda current_doc, template_id: place_calls.append((current_doc, template_id)) or True
+        workbench_module.start_component_drag_mode_direct = lambda current_doc: drag_calls.append(current_doc) or True
+
+        assert workbench_module.start_component_place_mode(doc, "generic_mpc_pad_30mm") is True
+        assert workbench_module.start_component_drag_mode(doc) is True
+    finally:
+        workbench_module.App = original_app
+        workbench_module.open_workbench_dock = original_open
+        workbench_module.start_place_mode_direct = original_place
+        workbench_module.start_component_drag_mode_direct = original_drag
+
+    assert dock_calls == []
+    assert place_calls == [(doc, "generic_mpc_pad_30mm")]
+    assert drag_calls == [doc]

@@ -1,0 +1,11 @@
+id: midicontroller
+type: domain
+name: MIDI Controller
+version: 0.1.0
+domain_type: midicontroller
+provides_templates: true
+provides_components: true
+provides_commands: true
+
+depends_on:
+  - ocw_kicad

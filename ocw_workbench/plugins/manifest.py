@@ -8,6 +8,7 @@ from ocw_workbench.plugin_api.versioning import PLUGIN_API_VERSION, is_api_compa
 from ocw_workbench.utils.yaml_io import load_yaml
 
 PLUGIN_TYPES: set[str] = {
+    "domain",
     "component_pack",
     "template_pack",
     "variant_pack",
@@ -64,8 +65,13 @@ def load_plugin_manifest(path: str | Path) -> PluginDescriptor:
             exporters=_optional_str(entrypoints.get("exporters")),
             layouts=_optional_str(entrypoints.get("layouts")),
             constraints=_optional_str(entrypoints.get("constraints")),
+            commands=_optional_str(entrypoints.get("commands")),
             module=_optional_str(entrypoints.get("module")),
         ),
+        domain_type=_domain_type(plugin_id, plugin_type, plugin),
+        provides_templates=_provides_templates(capabilities, entrypoints),
+        provides_components=_provides_components(capabilities, entrypoints),
+        provides_commands=_provides_commands(capabilities, entrypoints),
         non_disableable=bool(plugin.get("non_disableable", False)),
         is_internal="plugins/internal" in str(file_path.parent).replace("\\", "/"),
         root_path=file_path.parent,
@@ -82,3 +88,23 @@ def _optional_str(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _domain_type(plugin_id: str, plugin_type: str, plugin: dict[str, Any]) -> str | None:
+    if plugin.get("domain_type") is not None:
+        return str(plugin.get("domain_type"))
+    if plugin_type == "domain":
+        return plugin_id
+    return None
+
+
+def _provides_templates(capabilities: list[Any], entrypoints: dict[str, Any]) -> bool:
+    return "templates" in capabilities or bool(entrypoints.get("templates"))
+
+
+def _provides_components(capabilities: list[Any], entrypoints: dict[str, Any]) -> bool:
+    return "components" in capabilities or bool(entrypoints.get("components"))
+
+
+def _provides_commands(capabilities: list[Any], entrypoints: dict[str, Any]) -> bool:
+    return "commands" in capabilities or bool(entrypoints.get("commands"))
