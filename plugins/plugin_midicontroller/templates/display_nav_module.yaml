@@ -1,8 +1,8 @@
 template:
   id: "display_nav_module"
-  name: "Display Navigation Module"
-  description: "Status display with two encoders and two buttons"
-  category: "module"
+  name: "Display And Navigation Module"
+  description: "Status screen with two push encoders plus back and enter buttons for menu-driven controllers."
+  category: "navigation"
   tags:
     - "display"
     - "navigation"
@@ -88,12 +88,14 @@ parameters:
     help: "Select the encoder knob clearance profile."
 parameter_presets:
   - id: "compact_encoder_strip"
-    name: "Compact Encoder Strip"
+    name: "Compact Status Module"
+    description: "Small OLED and tight knob clearance for compact desktop enclosures."
     values:
       display_size_inch: "0.96"
       knob_diameter: 18
   - id: "wide_large_display"
-    name: "Wide Large Display"
+    name: "Large Display Navigation"
+    description: "Wider visual emphasis with larger knobs around a 1.3 inch display."
     values:
       display_size_inch: "1.3"
       knob_diameter: 24

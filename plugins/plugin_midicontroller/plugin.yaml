@@ -3,6 +3,7 @@ type: domain
 name: MIDI Controller
 version: 0.1.0
 domain_type: midicontroller
+description: Compact MIDI control-surface workflows for pads, channel strips, transport, and display-driven navigation.
 provides_templates: true
 provides_components: true
 provides_commands: true

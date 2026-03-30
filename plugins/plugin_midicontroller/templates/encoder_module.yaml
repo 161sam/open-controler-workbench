@@ -1,8 +1,8 @@
 template:
   id: "encoder_module"
-  name: "4 Encoder Module"
-  description: "Basic encoder control module"
-  category: "module"
+  name: "Macro Encoder Bank"
+  description: "Four-knob starter for synth macros, effects, or DAW parameter control."
+  category: "macro_controls"
   tags:
     - "encoder"
     - "controls"
@@ -30,19 +30,19 @@ zones:
 components:
   - id: "enc1"
     type: "encoder"
-    library_ref: "alps_ec11e15204a3"
+    library_ref: "generic_ec11_encoder_with_push"
     zone: "main_controls"
   - id: "enc2"
     type: "encoder"
-    library_ref: "alps_ec11e15204a3"
+    library_ref: "generic_ec11_encoder_with_push"
     zone: "main_controls"
   - id: "enc3"
     type: "encoder"
-    library_ref: "alps_ec11e15204a3"
+    library_ref: "generic_ec11_encoder_with_push"
     zone: "main_controls"
   - id: "enc4"
     type: "encoder"
-    library_ref: "alps_ec11e15204a3"
+    library_ref: "generic_ec11_encoder_with_push"
     zone: "main_controls"
 layout:
   strategy: "grid"
@@ -62,3 +62,4 @@ defaults:
       encoder:
         tags:
           - "encoder-bank"
+          - "macro"

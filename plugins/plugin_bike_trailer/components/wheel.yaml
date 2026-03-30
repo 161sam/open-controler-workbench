@@ -27,9 +27,10 @@ pcb: {}
 ocf:
   control_type: wheel
 ui:
-  label: Trailer Wheel
-  category: running_gear
+  label: 20 in Trailer Wheel
+  category: Rolling Gear
   icon: generic.svg
   tags:
     - wheel
     - trailer
+    - running-gear

@@ -10,12 +10,13 @@ components:
       - "performance"
       - "square"
     ui:
-      label: "Pad 30 mm"
+      label: "Performance Pad 30 mm"
       icon: "pad.svg"
-      category: "performance"
+      category: "Performance Pads"
       tags:
         - "trigger"
         - "drum"
+        - "finger-drumming"
     mechanical:
       body_size_mm:
         width: 32.0

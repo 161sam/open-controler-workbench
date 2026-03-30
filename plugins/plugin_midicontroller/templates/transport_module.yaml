@@ -1,8 +1,8 @@
 template:
   id: "transport_module"
-  name: "Transport Module"
-  description: "Six-button transport control strip"
-  category: "module"
+  name: "Transport Control Strip"
+  description: "DAW transport starter with play, stop, record, loop, rewind, and fast-forward buttons."
+  category: "transport"
   tags:
     - "transport"
     - "button"
@@ -55,8 +55,8 @@ components:
 layout:
   strategy: "row"
   config:
-    grid_mm: 1
-    padding_mm: 10
+    grid_mm: 2
+    padding_mm: 12
     spacing_mm: 22
 constraints:
   profile: "default"
@@ -67,3 +67,4 @@ defaults:
       transport_buttons:
         tags:
           - "transport"
+          - "daw-control"

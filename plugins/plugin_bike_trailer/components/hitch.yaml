@@ -26,9 +26,10 @@ pcb: {}
 ocf:
   control_type: hitch
 ui:
-  label: Trailer Hitch
-  category: running_gear
+  label: Drawbar Hitch
+  category: Rolling Gear
   icon: generic.svg
   tags:
     - hitch
     - trailer
+    - tow

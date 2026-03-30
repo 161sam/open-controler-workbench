@@ -21,16 +21,22 @@ def test_plugin_command_specs_include_pad_and_encoder() -> None:
 def test_component_toolbar_groups_are_plugin_driven() -> None:
     groups = dict(component_toolbar_groups(active_plugin_id="midicontroller"))
 
-    assert groups["OCW Pads"] == ["OCW_PlacePad"]
-    assert groups["OCW Encoders"] == ["OCW_PlaceEncoder"]
+    assert list(groups) == [
+        "OCW Performance Surface",
+        "OCW Mixing",
+        "OCW Navigation & Feedback",
+        "OCW Buttons & Utility",
+    ]
+    assert groups["OCW Performance Surface"] == ["OCW_PlacePad", "OCW_PlaceRgbButton"]
+    assert groups["OCW Navigation & Feedback"] == ["OCW_PlaceDisplay", "OCW_PlaceEncoder"]
 
 
 def test_command_spec_lookup_exposes_command_metadata() -> None:
     specs = command_specs_by_command_id()
 
     assert specs["OCW_PlacePad"].icon == "pad.svg"
-    assert specs["OCW_PlacePad"].category == "Pads"
-    assert "Place Pad" in specs["OCW_PlacePad"].tooltip
+    assert specs["OCW_PlacePad"].category == "Performance Surface"
+    assert "Place Performance Pad" in specs["OCW_PlacePad"].tooltip
     assert "OCW_PlaceEncoder" in component_toolbar_command_ids()
 
 

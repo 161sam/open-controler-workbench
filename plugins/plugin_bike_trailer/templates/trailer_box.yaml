@@ -1,14 +1,14 @@
 template:
   id: bike_trailer.trailer_box
-  name: Box Trailer
-  description: Cargo trailer with frame, hitch and a mounted box module
-  category: bike_trailer
+  name: Cargo Box Trailer
+  description: "Starter cargo hauler with box module, running gear, and front / rear frame crossbars."
+  category: cargo
   tags:
     - trailer
     - cargo
 controller:
-  width: 240.0
-  depth: 140.0
+  width: "${parameters.platform_width_mm}"
+  depth: "${parameters.platform_length_mm}"
   height: 32.0
   top_thickness: 3.0
   wall_thickness: 3.0
@@ -18,9 +18,122 @@ controller:
   surface:
     type: rounded_rect
     shape: rounded_rect
-    width: 240.0
-    height: 140.0
+    width: "${parameters.platform_width_mm}"
+    height: "${parameters.platform_length_mm}"
     corner_radius: 10.0
+parameters:
+  - id: cargo_profile
+    label: Cargo Profile
+    type: enum
+    default: daily_cargo
+    control: button_group
+    options:
+      - value: compact_box
+        label: Compact
+      - value: daily_cargo
+        label: Daily Cargo
+    help: "Choose a first-use cargo footprint before fine-tuning the box and running gear."
+  - id: platform_width_mm
+    label: Platform Width
+    type: float
+    default: 240.0
+    min: 210.0
+    max: 280.0
+    step: 10.0
+    unit: mm
+  - id: platform_length_mm
+    label: Platform Length
+    type: float
+    default: 140.0
+    min: 120.0
+    max: 190.0
+    step: 10.0
+    unit: mm
+parameter_presets:
+  - id: compact_box_run
+    name: Compact Box Run
+    description: "Smaller cargo trailer for short city runs and light loads."
+    values:
+      cargo_profile: compact_box
+      platform_width_mm: 220.0
+      platform_length_mm: 130.0
+  - id: daily_cargo_hauler
+    name: Daily Cargo Hauler
+    description: "General-purpose boxed trailer with a stable cargo bay and wider wheel stance."
+    values:
+      cargo_profile: daily_cargo
+      platform_width_mm: 240.0
+      platform_length_mm: 140.0
+parameter_bindings:
+  values:
+    - target: controller.width
+      parameter: platform_width_mm
+    - target: controller.depth
+      parameter: platform_length_mm
+    - target: controller.surface.width
+      parameter: platform_width_mm
+    - target: controller.surface.height
+      parameter: platform_length_mm
+    - target: components[wheel_left].x
+      parameter: cargo_profile
+      value_map:
+        compact_box: 42.0
+        daily_cargo: 46.0
+    - target: components[wheel_left].y
+      parameter: cargo_profile
+      value_map:
+        compact_box: 100.0
+        daily_cargo: 108.0
+    - target: components[wheel_right].x
+      parameter: cargo_profile
+      value_map:
+        compact_box: 178.0
+        daily_cargo: 194.0
+    - target: components[wheel_right].y
+      parameter: cargo_profile
+      value_map:
+        compact_box: 100.0
+        daily_cargo: 108.0
+    - target: components[hitch_front].x
+      parameter: cargo_profile
+      value_map:
+        compact_box: 110.0
+        daily_cargo: 120.0
+    - target: components[hitch_front].y
+      parameter: cargo_profile
+      value_map:
+        compact_box: 16.0
+        daily_cargo: 18.0
+    - target: components[crossbar_front].x
+      parameter: cargo_profile
+      value_map:
+        compact_box: 110.0
+        daily_cargo: 120.0
+    - target: components[crossbar_front].y
+      parameter: cargo_profile
+      value_map:
+        compact_box: 46.0
+        daily_cargo: 52.0
+    - target: components[crossbar_rear].x
+      parameter: cargo_profile
+      value_map:
+        compact_box: 110.0
+        daily_cargo: 120.0
+    - target: components[crossbar_rear].y
+      parameter: cargo_profile
+      value_map:
+        compact_box: 84.0
+        daily_cargo: 92.0
+    - target: components[cargo_box].x
+      parameter: cargo_profile
+      value_map:
+        compact_box: 110.0
+        daily_cargo: 120.0
+    - target: components[cargo_box].y
+      parameter: cargo_profile
+      value_map:
+        compact_box: 66.0
+        daily_cargo: 74.0
 components:
   - id: wheel_left
     type: wheel
@@ -79,11 +192,24 @@ components:
 layout:
   strategy: manual
   config:
-    grid_mm: 5.0
-    padding_mm: 12.0
+    grid_mm: 10.0
+    padding_mm: 18.0
 defaults:
   component_defaults:
     by_type:
+      wheel:
+        tags:
+          - running_gear
+          - cargo
+      hitch:
+        tags:
+          - running_gear
+          - tow
+      frame_connector:
+        tags:
+          - frame
+          - cargo
       cargo_box_module:
         tags:
           - cargo
+          - storage

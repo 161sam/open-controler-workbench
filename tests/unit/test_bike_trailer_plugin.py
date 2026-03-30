@@ -125,9 +125,11 @@ def test_bike_trailer_command_metadata_is_plugin_driven() -> None:
 
     assert specs["OCW_PlaceWheel"].component == "wheel"
     assert specs["OCW_PlaceHitch"].plugin_id == "bike_trailer"
-    assert specs["OCW_PlaceFrameConnector"].category == "Frame"
+    assert specs["OCW_PlaceFrameConnector"].category == "Frame Setup"
     groups = dict(component_toolbar_groups(active_plugin_id="bike_trailer"))
-    assert groups["OCW Running Gear"] == ["OCW_PlaceHitch", "OCW_PlaceWheel"]
+    assert list(groups) == ["OCW Frame Setup", "OCW Rolling Gear", "OCW Cargo Modules"]
+    assert groups["OCW Frame Setup"] == ["OCW_PlaceFrameConnector", "OCW_PlaceAxleMount"]
+    assert groups["OCW Rolling Gear"] == ["OCW_PlaceWheel", "OCW_PlaceHitch"]
 
 
 def test_bike_trailer_template_builds_non_midi_project() -> None:

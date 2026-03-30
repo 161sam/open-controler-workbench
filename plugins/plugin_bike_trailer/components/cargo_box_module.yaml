@@ -27,9 +27,10 @@ pcb: {}
 ocf:
   control_type: cargo_box_module
 ui:
-  label: Cargo Box
-  category: cargo
+  label: Cargo Box Module
+  category: Storage Modules
   icon: generic.svg
   tags:
     - cargo
     - module
+    - storage

@@ -89,12 +89,12 @@ def test_template_generator_preserves_pad_grid_layout_config():
     project = TemplateGenerator().generate_from_template("pad_grid_4x4")
 
     assert project["layout"]["strategy"] == "grid"
-    assert project["layout"]["config"]["grid_mm"] == 1
-    assert project["layout"]["config"]["padding_mm"] == 10
+    assert project["layout"]["config"]["grid_mm"] == 2
+    assert project["layout"]["config"]["padding_mm"] == 14
     assert project["layout"]["config"]["rows"] == 4
     assert project["layout"]["config"]["cols"] == 4
-    assert project["layout"]["config"]["spacing_x_mm"] == 36
-    assert project["layout"]["config"]["spacing_y_mm"] == 36
+    assert project["layout"]["config"]["spacing_x_mm"] == 34
+    assert project["layout"]["config"]["spacing_y_mm"] == 34
 
 
 def test_parameterized_pad_grid_template_changes_component_count_and_case_size():
@@ -111,7 +111,7 @@ def test_parameterized_pad_grid_template_changes_component_count_and_case_size()
     assert project["components"][0]["group_id"] == "pad_matrix"
     assert project["components"][0]["group_role"] == "performance_pad_matrix"
     assert project["components"][0]["label"] == "Pad 1,1"
-    assert project["components"][0]["tags"] == ["performance", "grid"]
+    assert project["components"][0]["tags"] == ["performance", "grid", "finger-drumming"]
     assert project["components"][-1]["label"] == "Pad 2,8"
 
 

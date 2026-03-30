@@ -28,6 +28,11 @@
 - Validate-Schritt prüfen
 - Export
 
+## Domain Quickstarts
+
+- MIDI Controller: `docs/workflows/midicontroller_quickstart.md`
+- Bike Trailer: `docs/workflows/bike_trailer_quickstart.md`
+
 ## Workflow 5 – Schema Export
 
 - controller.hw.yaml erzeugen

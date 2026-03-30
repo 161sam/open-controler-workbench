@@ -10,9 +10,9 @@ components:
       - "potentiometer"
       - "45mm"
     ui:
-      label: "Fader 45 mm"
+      label: "Channel Fader 45 mm"
       icon: "fader.svg"
-      category: "mixing"
+      category: "Mixing & Levels"
       tags:
         - "slider"
         - "level"
@@ -74,9 +74,9 @@ components:
       - "potentiometer"
       - "60mm"
     ui:
-      label: "Fader 60 mm"
+      label: "Channel Fader 60 mm"
       icon: "fader.svg"
-      category: "mixing"
+      category: "Mixing & Levels"
       tags:
         - "slider"
         - "level"

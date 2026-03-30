@@ -27,9 +27,10 @@ pcb: {}
 ocf:
   control_type: frame_connector
 ui:
-  label: Frame Connector
-  category: frame
+  label: Crossbar Connector
+  category: Frame Setup
   icon: generic.svg
   tags:
     - frame
     - connector
+    - crossbar

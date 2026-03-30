@@ -1,8 +1,8 @@
 template:
   id: "fader_strip"
-  name: "Fader Strip"
-  description: "Single fader with three utility buttons"
-  category: "module"
+  name: "Channel Strip"
+  description: "Mixer-style starter strip with one channel fader plus solo, mute, and select utility buttons."
+  category: "mixing"
   tags:
     - "fader"
     - "strip"
@@ -56,9 +56,9 @@ components:
 layout:
   strategy: "zone"
   config:
-    grid_mm: 1
-    padding_mm: 10
-    spacing_mm: 24
+    grid_mm: 2
+    padding_mm: 12
+    spacing_mm: 22
 parameters:
   - id: "fader_length"
     label: "Fader Length"
@@ -70,7 +70,7 @@ parameters:
         label: "45 mm"
       - value: 60
         label: "60 mm"
-    help: "Select the fader travel and matching component footprint."
+    help: "Select the travel and matching panel / PCB footprint for the channel strip."
   - id: "case_width"
     label: "Case Width"
     type: "float"
@@ -79,6 +79,7 @@ parameters:
     max: 120.0
     step: 5.0
     unit: "mm"
+    help: "Overall strip width including sidewall clearance."
   - id: "case_depth"
     label: "Case Depth"
     type: "float"
@@ -87,15 +88,18 @@ parameters:
     max: 180.0
     step: 5.0
     unit: "mm"
+    help: "Overall strip depth from fader lane to utility button row."
 parameter_presets:
   - id: "long_fader"
-    name: "Long Fader"
+    name: "Long Throw Mixer Strip"
+    description: "Default mixer lane with a 60 mm throw and comfortable bottom button spacing."
     values:
       fader_length: 60
       case_width: 80.0
       case_depth: 140.0
   - id: "compact_fader"
-    name: "Compact Fader"
+    name: "Compact Utility Strip"
+    description: "Shorter 45 mm travel for tight desktop controllers."
     values:
       fader_length: 45
       case_width: 78.0
@@ -116,6 +120,8 @@ defaults:
       button_row:
         tags:
           - "utility"
+          - "channel-actions"
       fader_lane:
         tags:
           - "mix"
+          - "channel-level"

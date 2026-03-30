@@ -11,12 +11,13 @@ components:
       - "6x6"
       - "omron"
     ui:
-      label: "Button"
+      label: "Utility Button 6 mm"
       icon: "button.svg"
-      category: "controls"
+      category: "Buttons & Utility"
       tags:
         - "press"
         - "trigger"
+        - "menu"
     mechanical:
       body_size_mm:
         width: 6.0

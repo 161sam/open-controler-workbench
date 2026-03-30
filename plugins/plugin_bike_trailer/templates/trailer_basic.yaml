@@ -1,14 +1,14 @@
 template:
   id: bike_trailer.trailer_basic
-  name: Basic Trailer Frame
-  description: Minimal two-wheel bike trailer with frame rails and hitch
-  category: bike_trailer
+  name: Starter Flatbed Trailer
+  description: Quick start for a two-wheel utility trailer with hitch, axle mounts, and two frame crossbars.
+  category: starter
   tags:
     - trailer
     - frame
 controller:
-  width: 220.0
-  depth: 120.0
+  width: "${parameters.frame_width_mm}"
+  depth: "${parameters.frame_length_mm}"
   height: 28.0
   top_thickness: 3.0
   wall_thickness: 3.0
@@ -18,9 +18,134 @@ controller:
   surface:
     type: rounded_rect
     shape: rounded_rect
-    width: 220.0
-    height: 120.0
+    width: "${parameters.frame_width_mm}"
+    height: "${parameters.frame_length_mm}"
     corner_radius: 8.0
+parameters:
+  - id: frame_size
+    label: Frame Size
+    type: enum
+    default: utility
+    control: button_group
+    options:
+      - value: compact
+        label: Compact
+      - value: utility
+        label: Utility
+    help: "Pick a starter footprint before refining wheel and hitch placement."
+  - id: frame_width_mm
+    label: Frame Width
+    type: float
+    default: 220.0
+    min: 180.0
+    max: 260.0
+    step: 10.0
+    unit: mm
+    help: "Outer trailer width used for the flatbed frame concept."
+  - id: frame_length_mm
+    label: Frame Length
+    type: float
+    default: 120.0
+    min: 100.0
+    max: 170.0
+    step: 10.0
+    unit: mm
+    help: "Outer trailer length from hitch side to rear frame edge."
+parameter_presets:
+  - id: compact_city_trailer
+    name: Compact City Trailer
+    description: "Shorter footprint for daily groceries or light urban cargo."
+    values:
+      frame_size: compact
+      frame_width_mm: 200.0
+      frame_length_mm: 110.0
+  - id: utility_flatbed
+    name: Utility Flatbed
+    description: "Balanced starter for a general-purpose flatbed trailer."
+    values:
+      frame_size: utility
+      frame_width_mm: 220.0
+      frame_length_mm: 120.0
+parameter_bindings:
+  values:
+    - target: controller.width
+      parameter: frame_width_mm
+    - target: controller.depth
+      parameter: frame_length_mm
+    - target: controller.surface.width
+      parameter: frame_width_mm
+    - target: controller.surface.height
+      parameter: frame_length_mm
+    - target: components[wheel_left].x
+      parameter: frame_size
+      value_map:
+        compact: 40.0
+        utility: 42.0
+    - target: components[wheel_left].y
+      parameter: frame_size
+      value_map:
+        compact: 86.0
+        utility: 92.0
+    - target: components[wheel_right].x
+      parameter: frame_size
+      value_map:
+        compact: 160.0
+        utility: 178.0
+    - target: components[wheel_right].y
+      parameter: frame_size
+      value_map:
+        compact: 86.0
+        utility: 92.0
+    - target: components[hitch_front].x
+      parameter: frame_size
+      value_map:
+        compact: 100.0
+        utility: 110.0
+    - target: components[hitch_front].y
+      parameter: frame_size
+      value_map:
+        compact: 15.0
+        utility: 16.0
+    - target: components[axle_left].x
+      parameter: frame_size
+      value_map:
+        compact: 58.0
+        utility: 62.0
+    - target: components[axle_left].y
+      parameter: frame_size
+      value_map:
+        compact: 82.0
+        utility: 88.0
+    - target: components[axle_right].x
+      parameter: frame_size
+      value_map:
+        compact: 142.0
+        utility: 158.0
+    - target: components[axle_right].y
+      parameter: frame_size
+      value_map:
+        compact: 82.0
+        utility: 88.0
+    - target: components[crossbar_front].x
+      parameter: frame_size
+      value_map:
+        compact: 100.0
+        utility: 110.0
+    - target: components[crossbar_front].y
+      parameter: frame_size
+      value_map:
+        compact: 38.0
+        utility: 42.0
+    - target: components[crossbar_rear].x
+      parameter: frame_size
+      value_map:
+        compact: 100.0
+        utility: 110.0
+    - target: components[crossbar_rear].y
+      parameter: frame_size
+      value_map:
+        compact: 70.0
+        utility: 78.0
 components:
   - id: wheel_left
     type: wheel
@@ -88,17 +213,24 @@ components:
 layout:
   strategy: manual
   config:
-    grid_mm: 5.0
-    padding_mm: 10.0
+    grid_mm: 10.0
+    padding_mm: 16.0
 defaults:
   component_defaults:
     by_type:
+      axle_mount:
+        tags:
+          - frame
+          - axle
       wheel:
         tags:
           - running_gear
+          - starter
       hitch:
         tags:
           - running_gear
+          - tow
       frame_connector:
         tags:
           - frame
+          - starter

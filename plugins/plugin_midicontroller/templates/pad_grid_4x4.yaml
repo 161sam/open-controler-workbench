@@ -1,8 +1,8 @@
 template:
   id: "pad_grid_4x4"
-  name: "4x4 Pad Grid"
-  description: "Sixteen performance pads in a 4x4 matrix"
-  category: "module"
+  name: "Finger Drum Pad Grid"
+  description: "Fast start for a 16-pad finger-drumming controller with enough edge space for later transport or display additions."
+  category: "performance"
   tags:
     - "pad"
     - "grid"
@@ -34,12 +34,12 @@ components: []
 layout:
   strategy: "grid"
   config:
-    grid_mm: 1
-    padding_mm: 10
+    grid_mm: 2
+    padding_mm: 14
     rows: "${parameters.pad_count_y}"
     cols: "${parameters.pad_count_x}"
-    spacing_x_mm: 36
-    spacing_y_mm: 36
+    spacing_x_mm: 34
+    spacing_y_mm: 34
 parameters:
   - id: "pad_count_x"
     label: "Pad Count X"
@@ -79,14 +79,16 @@ parameters:
     help: "Overall controller depth."
 parameter_presets:
   - id: "pad_grid_4x4"
-    name: "4x4 Pad Grid"
+    name: "Performance 4x4"
+    description: "Balanced 16-pad layout for finger drumming and clip launching."
     values:
       pad_count_x: 4
       pad_count_y: 4
       case_width: 180.0
       case_depth: 180.0
   - id: "pad_grid_8x2"
-    name: "8x2 Pad Grid"
+    name: "Wide 8x2 Launch Strip"
+    description: "Shallow controller for clip launches, scene triggers, or transport-adjacent pad work."
     values:
       pad_count_x: 8
       pad_count_y: 2
@@ -114,3 +116,4 @@ defaults:
         tags:
           - "performance"
           - "grid"
+          - "finger-drumming"

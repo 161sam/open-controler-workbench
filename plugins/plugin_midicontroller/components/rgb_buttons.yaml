@@ -9,6 +9,14 @@ components:
       - "rgb"
       - "arcade"
       - "24mm"
+    ui:
+      label: "RGB Performance Button"
+      icon: "generic.svg"
+      category: "Performance Pads"
+      tags:
+        - "rgb"
+        - "illuminated"
+        - "performance"
     mechanical:
       body_size_mm:
         width: 28.0

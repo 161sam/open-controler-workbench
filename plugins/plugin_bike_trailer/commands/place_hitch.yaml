@@ -1,9 +1,0 @@
-id: place_hitch
-type: place_component
-component: hitch
-category: Running Gear
-icon: generic.svg
-label: Place Hitch
-tooltip: Start 3D placement for a trailer hitch.
-library_ref: bike_trailer.drawbar_hitch_standard
-command_id: OCW_PlaceHitch

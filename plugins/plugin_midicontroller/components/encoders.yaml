@@ -11,9 +11,9 @@ components:
       - "11mm"
       - "alps"
     ui:
-      label: "Encoder"
+      label: "Rotary Encoder"
       icon: "encoder.svg"
-      category: "controls"
+      category: "Rotary Controls"
       tags:
         - "knob"
         - "rotate"
@@ -78,9 +78,9 @@ components:
       - "push"
       - "ec11"
     ui:
-      label: "Encoder Push"
+      label: "Push Encoder"
       icon: "encoder.svg"
-      category: "controls"
+      category: "Rotary Controls"
       tags:
         - "knob"
         - "press"
@@ -143,9 +143,9 @@ components:
       - "ec11"
       - "large_knob"
     ui:
-      label: "Encoder Push Large Knob"
+      label: "Push Encoder Large Knob"
       icon: "encoder.svg"
-      category: "controls"
+      category: "Rotary Controls"
       tags:
         - "knob"
         - "press"

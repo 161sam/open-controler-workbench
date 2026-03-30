@@ -27,9 +27,10 @@ pcb: {}
 ocf:
   control_type: axle_mount
 ui:
-  label: Axle Mount
-  category: frame
+  label: Axle Mount Pair
+  category: Frame Setup
   icon: generic.svg
   tags:
     - axle
     - mount
+    - frame
