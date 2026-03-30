@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ocw_workbench.gui.interaction.hit_test import hit_test_components
+from ocw_workbench.gui.interaction.priority import handles_visible
 from ocw_workbench.gui.interaction.lifecycle import ViewEventCallbackRegistry
 from ocw_workbench.gui.interaction.view_event_helpers import (
     extract_position,
@@ -109,7 +110,11 @@ class ViewPickController:
             return None
         component = self.controller_service.get_component(self.doc, component_id)
         label = component.get("label") or component_id
-        self._publish_status(f"Selected '{label}'. Direct actions now target it.")
+        context = self.controller_service.get_ui_context(self.doc)
+        if handles_visible(selection_count=len(context.get("selected_ids", [])), ui_settings=context.get("ui", {})):
+            self._publish_status(f"Selected '{label}'. Inline handles are ready in the 3D view.")
+        else:
+            self._publish_status(f"Selected '{label}'. Direct actions now target it.")
         self._notify_selected(component_id)
         return component_id
 

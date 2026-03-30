@@ -1,4 +1,5 @@
 from ocw_workbench.gui.interaction.selection import SelectionController
+from ocw_workbench.gui.interaction.tool_manager import reset_tool_manager
 from ocw_workbench.gui.overlay.renderer import OverlayRenderer
 from ocw_workbench.gui.interaction.hit_test import hit_test_item
 from ocw_workbench.services.controller_service import ControllerService
@@ -190,6 +191,53 @@ def test_overlay_service_marks_hovered_component_before_drag():
 
     assert hovered_item["style"]["kind"] == "component_hover"
     assert hovered_item["label"].endswith(">")
+
+
+def test_overlay_summary_reports_selection_layer_and_inline_handles():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    controller_service.create_controller(doc, {"id": "demo", "width": 120.0, "depth": 80.0, "height": 30.0, "top_thickness": 3.0})
+    controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=25.0, y=25.0)
+    controller_service.select_component(doc, "btn1")
+
+    overlay = OverlayService(controller_service=controller_service).build_overlay(doc)
+
+    assert overlay["summary"]["interaction_layer"] == "selection"
+    assert overlay["summary"]["handles_visible"] is True
+
+
+def test_overlay_hides_inline_handles_during_active_tool_priority():
+    tools = reset_tool_manager()
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 120.0, "depth": 80.0, "height": 30.0, "top_thickness": 3.0})
+    controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=25.0, y=25.0)
+    controller_service.select_component(doc, "btn1")
+
+    assert tools.activate_tool("place:omron_b3f_1000", activator=lambda: True) is True
+    overlay = OverlayService(controller_service=controller_service).build_overlay(doc)
+
+    assert overlay["summary"]["interaction_layer"] == "tool_active"
+    assert overlay["summary"]["handles_visible"] is False
+    assert not any(item["id"].startswith("inline_handle:") for item in overlay["items"])
+
+    tools.clear_active_tool()
+
+
+def test_overlay_hides_inline_handles_when_drag_interaction_is_active():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 120.0, "depth": 80.0, "height": 30.0, "top_thickness": 3.0})
+    controller_service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=25.0, y=25.0)
+    controller_service.select_component(doc, "btn1")
+    interaction_service.begin_interaction(doc, "drag")
+
+    overlay = OverlayService(controller_service=controller_service).build_overlay(doc)
+
+    assert overlay["summary"]["handles_visible"] is False
+    assert not any(item["id"].startswith("inline_handle:") for item in overlay["items"])
 
 
 def test_overlay_service_and_hit_test_respect_rect_rotation():

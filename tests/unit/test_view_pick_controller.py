@@ -89,7 +89,7 @@ def test_view_pick_controller_selects_component_on_click():
     context = controller_service.get_ui_context(doc)
     assert context["selection"] == "btn1"
     assert selected == ["btn1"]
-    assert any("Direct actions now target it." in s for s in statuses)
+    assert any("Inline handles are ready" in s for s in statuses)
 
 
 def test_view_pick_controller_miss_does_not_change_selection():

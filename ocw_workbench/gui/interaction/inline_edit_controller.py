@@ -10,6 +10,7 @@ from ocw_workbench.gui.interaction.inline_edit_state import (
     load_inline_edit_state,
     store_inline_edit_state,
 )
+from ocw_workbench.gui.interaction.priority import handles_visible, inline_cursor_role
 from ocw_workbench.gui.interaction.lifecycle import ViewEventCallbackRegistry
 from ocw_workbench.gui.interaction.snapping_engine import SnapContext, compute_snap
 from ocw_workbench.gui.interaction.view_event_helpers import (
@@ -72,7 +73,7 @@ class InlineEditController:
             self.view = None
             return False
         self._sync_state()
-        set_interaction_cursor(view, "edit_ready" if self._selected_component_id() is not None else "pick")
+        set_interaction_cursor(view, self._cursor_role())
         self.overlay_renderer.refresh(doc)
         return True
 
@@ -103,7 +104,7 @@ class InlineEditController:
         self._sync_state()
         self.overlay_renderer.refresh(self.doc)
         if self.view is not None:
-            set_interaction_cursor(self.view, "edit_ready")
+            set_interaction_cursor(self.view, self._cursor_role())
         if publish_status:
             self._publish_status("Inline edit cancelled." if reason == "cancel" else "Inline edit stopped.")
 
@@ -117,7 +118,7 @@ class InlineEditController:
         self._sync_state()
         self.overlay_renderer.refresh(self.doc)
         if self.view is not None:
-            set_interaction_cursor(self.view, "edit_ready")
+            set_interaction_cursor(self.view, self._cursor_role())
         if publish_status:
             self._publish_status(f"Inline edit committed for '{component_id}' ({handle_type}).")
 
@@ -166,6 +167,8 @@ class InlineEditController:
     def _begin_session(self, screen_x: float, screen_y: float) -> bool:
         if self.doc is None:
             return False
+        if not self._handles_visible():
+            return False
         handle = self._handle_at(screen_x, screen_y)
         if handle is None:
             return False
@@ -195,7 +198,7 @@ class InlineEditController:
         )
         self.overlay_renderer.refresh(self.doc)
         if self.view is not None:
-            set_interaction_cursor(self.view, "edit_active")
+            set_interaction_cursor(self.view, self._cursor_role())
         tool_id = f"inline_edit:{handle_id}"
         get_tool_manager().activate_tool(
             tool_id,
@@ -208,6 +211,20 @@ class InlineEditController:
 
     def _update_hover(self, screen_x: float, screen_y: float) -> None:
         if self.doc is None:
+            return
+        if not self._handles_visible():
+            state = load_inline_edit_state(self.doc) or {}
+            if state.get("hovered_handle_id") is not None:
+                store_inline_edit_state(
+                    self.doc,
+                    component_id=self._selected_component_id(),
+                    hovered_handle_id=None,
+                    active_handle_id=state.get("active_handle_id"),
+                    active_handle_type=state.get("active_handle_type"),
+                )
+                self.overlay_renderer.refresh(self.doc)
+            if self.view is not None:
+                set_interaction_cursor(self.view, self._cursor_role())
             return
         handle = self._handle_at(screen_x, screen_y)
         selected_id = self._selected_component_id()
@@ -224,7 +241,7 @@ class InlineEditController:
         )
         self.overlay_renderer.refresh(self.doc)
         if self.view is not None:
-            set_interaction_cursor(self.view, "edit_ready" if hovered_handle_id is not None else "pick")
+            set_interaction_cursor(self.view, self._cursor_role())
 
     def _update_active_session(self, screen_x: float, screen_y: float, *, shift_pressed: bool) -> None:
         if self.doc is None or self.session is None:
@@ -438,11 +455,33 @@ class InlineEditController:
         if not self._view_callbacks.attach(view, self.handle_view_event):
             self.cancel(publish_status=False)
             return False
-        set_interaction_cursor(
-            view,
-            "edit_active" if self.session is not None else ("edit_ready" if self._selected_component_id() is not None else "pick"),
-        )
+        set_interaction_cursor(view, self._cursor_role())
         return True
+
+    def _selection_count(self) -> int:
+        if self.doc is None:
+            return 0
+        context = self.controller_service.get_ui_context(self.doc)
+        return len(context.get("selected_ids", []))
+
+    def _handles_visible(self) -> bool:
+        if self.doc is None:
+            return False
+        context = self.controller_service.get_ui_context(self.doc)
+        return handles_visible(
+            selection_count=self._selection_count(),
+            ui_settings=context.get("ui", {}),
+        )
+
+    def _cursor_role(self) -> str:
+        if self.doc is None:
+            return "default"
+        context = self.controller_service.get_ui_context(self.doc)
+        return inline_cursor_role(
+            selection_count=self._selection_count(),
+            ui_settings=context.get("ui", {}),
+            inline_state=load_inline_edit_state(self.doc),
+        )
 
     def _publish_status(self, message: str) -> None:
         log_to_console(message)

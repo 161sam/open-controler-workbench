@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from ocw_workbench.generator.controller_builder import ControllerBuilder
+from ocw_workbench.gui.interaction.priority import dominant_interaction_layer, handles_visible
 from ocw_workbench.gui.interaction.inline_edit_state import load_inline_edit_state
 from ocw_workbench.gui.interaction.view_place_preview import load_preview_state
 from ocw_workbench.gui.overlay.colors import overlay_style
@@ -53,6 +54,8 @@ class OverlayService:
         move_component_id = settings.get("move_component_id")
         hovered_component_id = settings.get("hovered_component_id")
         findings_by_component = self._group_findings(validation)
+        inline_state = load_inline_edit_state(doc) or {}
+        selection_count = len(selected_component_ids)
         items: list[dict[str, Any]] = []
         items.append(
             rect_item(
@@ -188,8 +191,10 @@ class OverlayService:
             )
             items.extend(constraint_overlay["items"])
 
-        items.extend(self._preview_items(doc))
-        items.extend(self._inline_edit_items(doc, resolved_components))
+        preview_items = self._preview_items(doc)
+        items.extend(preview_items)
+        inline_items = self._inline_edit_items(doc, resolved_components, inline_state=inline_state, selection_count=selection_count, ui_settings=settings)
+        items.extend(inline_items)
 
         return {
             "enabled": True,
@@ -203,6 +208,17 @@ class OverlayService:
                 "selected_count": len(selected_component_ids),
                 "zone_count": len(controller_data.get("layout_zones", [])),
                 "finding_count": validation["summary"]["total_count"],
+                "interaction_layer": dominant_interaction_layer(
+                    selection_count=selection_count,
+                    ui_settings=settings,
+                    inline_state=inline_state,
+                ),
+                "handles_visible": bool(inline_items),
+                "preview_active": bool(preview_items),
+                "snap_active": any(
+                    str(item.get("id") or "").startswith("preview_snap_")
+                    for item in preview_items
+                ),
             },
         }
 
@@ -277,19 +293,24 @@ class OverlayService:
         items.extend(self._preview_snap_items(preview, template_id))
         return items
 
-    def _inline_edit_items(self, doc: Any, resolved_components: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _inline_edit_items(
+        self,
+        doc: Any,
+        resolved_components: list[dict[str, Any]],
+        *,
+        inline_state: dict[str, Any],
+        selection_count: int,
+        ui_settings: dict[str, Any],
+    ) -> list[dict[str, Any]]:
         context = self.controller_service.get_ui_context(doc)
-        settings = deepcopy(context.get("ui", {}))
-        if settings.get("active_interaction") not in {None, "inline_edit"}:
+        if not handles_visible(selection_count=selection_count, ui_settings=ui_settings):
             return []
         selected_component_id = context.get("selection")
-        selected_ids = context.get("selected_ids", [])
-        if not isinstance(selected_component_id, str) or len(selected_ids) != 1:
+        if not isinstance(selected_component_id, str):
             return []
         component = next((item for item in resolved_components if item["id"] == selected_component_id), None)
         if component is None:
             return []
-        inline_state = load_inline_edit_state(doc) or {}
         hovered_handle_id = inline_state.get("hovered_handle_id")
         active_handle_id = inline_state.get("active_handle_id")
         items: list[dict[str, Any]] = []
@@ -488,8 +509,10 @@ class OverlayService:
             style_kind = "inline_handle_parameter"
         if hovered_handle_id == item_id:
             style_kind = "inline_handle_hover"
+            diameter += 0.4
         if active_handle_id == item_id:
             style_kind = "inline_handle_active"
+            diameter += 0.8
         return circle_item(
             item_id=item_id,
             x=x,
