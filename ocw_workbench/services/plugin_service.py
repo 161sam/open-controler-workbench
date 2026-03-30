@@ -71,13 +71,19 @@ def get_plugin_service() -> PluginService:
 
 def reset_plugin_service(
     internal_root: str | Path | None = None,
+    plugin_root: str | Path | None = None,
     external_root: str | Path | None = None,
     state_base_dir: str | Path | None = None,
 ) -> PluginService:
     global _PLUGIN_SERVICE
     global _PLUGIN_SERVICE_REVISION
     _PLUGIN_SERVICE = PluginService(
-        loader=_build_loader(internal_root=internal_root, external_root=external_root, state_base_dir=state_base_dir)
+        loader=_build_loader(
+            internal_root=internal_root,
+            plugin_root=plugin_root,
+            external_root=external_root,
+            state_base_dir=state_base_dir,
+        )
     )
     _PLUGIN_SERVICE_REVISION += 1
     return _PLUGIN_SERVICE
@@ -85,6 +91,7 @@ def reset_plugin_service(
 
 def _build_loader(
     internal_root: str | Path | None = None,
+    plugin_root: str | Path | None = None,
     external_root: str | Path | None = None,
     state_base_dir: str | Path | None = None,
 ) -> PluginLoader:
@@ -95,6 +102,7 @@ def _build_loader(
 
     return PluginLoader(
         internal_root=internal_root,
+        plugin_root=plugin_root,
         external_root=external_root,
         enabled_resolver=enabled_resolver,
     )

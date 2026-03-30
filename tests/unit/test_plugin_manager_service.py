@@ -14,7 +14,7 @@ def _service(tmp_path: Path, internal_root: Path | None = None) -> PluginManager
     return PluginManagerService(
         persistence=PluginStatePersistence(base_dir=str(tmp_path)),
         internal_root=internal_root,
-        external_root=tmp_path / "external",
+        plugin_root=tmp_path / "plugins",
     )
 
 
@@ -32,6 +32,7 @@ def test_plugin_manager_lists_internal_plugins() -> None:
     ids = {item["id"] for item in plugins}
 
     assert "default_exporters" in ids
+    assert "ocw_kicad" in ids
     assert "basic_components_pack" in ids
     assert "basic_templates_pack" in ids
 
@@ -106,7 +107,7 @@ def test_invalid_and_incompatible_plugins_are_visible(tmp_path: Path) -> None:
         },
     )
 
-    reset_plugin_service(internal_root=internal_root, external_root=tmp_path / "external")
+    reset_plugin_service(internal_root=internal_root, plugin_root=tmp_path / "plugins")
     service = _service(tmp_path, internal_root=internal_root)
     plugins = {item["id"]: item for item in service.list_plugins()}
 

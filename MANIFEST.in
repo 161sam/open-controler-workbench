@@ -5,4 +5,5 @@ include README.md
 include pyproject.toml
 recursive-include resources *.svg
 recursive-include ocw_workbench *.yaml
+recursive-include plugins *.yaml *.py
 recursive-include examples *.yaml

@@ -30,7 +30,7 @@ Runtime loading now resolves those assets from:
 
 ## Moved Out Of Internal
 
-The following domain-oriented packs were moved from `ocw_workbench/plugins/internal/` to `ocw_workbench/plugins/external/`:
+The following domain-oriented packs were moved from `ocw_workbench/plugins/internal/` into the shared top-level `plugins/` root:
 
 - `basic_components_pack`
 - `basic_templates_pack`
@@ -82,6 +82,6 @@ Implications:
 Compatibility still exists through:
 
 - plugin alias resolution for namespaced pack data such as `basic_components_pack.*`
-- external plugin-pack loading through the existing plugin loader
+- top-level plugin-pack loading through the existing plugin loader
 
 No duplicate core/domain data source remains for the removed controller libraries.

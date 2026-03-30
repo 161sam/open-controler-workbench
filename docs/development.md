@@ -22,6 +22,7 @@ ln -s "$(pwd)" ~/.local/share/FreeCAD/Mod/OpenControllerWorkbench
 open-controler-workbench/
 ├── Init.py
 ├── InitGui.py
+├── ocw_kicad/
 ├── ocw_workbench/
 │   ├── commands/
 │   ├── domain/
@@ -36,7 +37,7 @@ open-controler-workbench/
 │   ├── services/
 │   ├── templates/
 │   └── variants/
-├── ocw_kicad/
+├── plugins/
 ├── resources/
 └── docs/
 ```
@@ -45,7 +46,8 @@ Wichtig:
 - FreeCAD lädt den Modulroot
 - `InitGui.py` registriert die Workbench
 - Ressourcen im Top-Level-Ordner `resources/` müssen relativ zum Modulroot auffindbar bleiben
-- Laufzeit-YAML-Daten liegen im Package unter `ocw_workbench/`
+- Laufzeit-Plugins liegen unter `plugins/`
+- `ocw_kicad/` bleibt als Kompatibilitäts-Bridge für bestehende Python-Imports
 
 ## Prinzipien
 
@@ -66,10 +68,9 @@ Wichtig:
 Für Packaging müssen mitkommen:
 - `Init.py`
 - `InitGui.py`
+- `plugins/*`
+- `ocw_kicad/*`
 - `resources/icons/*`
-- YAML-Dateien in `ocw_workbench/library/`
-- YAML-Dateien in `ocw_workbench/templates/`
-- YAML-Dateien in `ocw_workbench/variants/`
 - interne Plugin-Manifest- und Daten-Dateien in `ocw_workbench/plugins/internal/`
 
 ## Roadmap Dev

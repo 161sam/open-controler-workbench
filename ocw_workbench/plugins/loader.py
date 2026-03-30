@@ -20,14 +20,17 @@ class PluginLoader:
     def __init__(
         self,
         internal_root: str | Path | None = None,
+        plugin_root: str | Path | None = None,
         external_root: str | Path | None = None,
         domain_root: str | Path | None = None,
         enabled_resolver: Callable[[PluginDescriptor], bool] | None = None,
     ) -> None:
         base = Path(__file__).resolve().parent
         self.internal_root = Path(internal_root or (base / "internal"))
-        self.external_root = Path(external_root or (base / "external"))
-        self.domain_root = Path(domain_root or (base.parent.parent / "plugins"))
+        resolved_plugin_root = plugin_root or domain_root or external_root or (base.parent.parent / "plugins")
+        self.plugin_root = Path(resolved_plugin_root)
+        self.domain_root = self.plugin_root
+        self.external_root = self.plugin_root
         self.enabled_resolver = enabled_resolver
         self.registry = ExtensionRegistry()
         self.warnings: list[str] = []
@@ -37,15 +40,15 @@ class PluginLoader:
         if self._loaded:
             return self.registry
 
-        for plugin in self.scan_plugins():
+        top_level_plugins, pending = self._discover_top_level_plugins()
+
+        for plugin in top_level_plugins:
             if self.registry.has_plugin(plugin.plugin_id):
                 self.warnings.append(f"Skipping duplicate plugin id '{plugin.plugin_id}'")
                 continue
             self.registry.register_plugin(plugin)
 
-        pending: list[PluginDescriptor] = []
         pending.extend(self._discover_from_root(self.internal_root))
-        pending.extend(self._discover_from_root(self.external_root))
 
         while pending:
             progress = False
@@ -88,18 +91,14 @@ class PluginLoader:
         return self.registry
 
     def scan_plugins(self) -> list[Plugin]:
-        if not self.domain_root.exists():
-            return []
-
-        plugins: list[Plugin] = []
-        for plugin_dir in sorted(item for item in self.domain_root.iterdir() if item.is_dir()):
-            manifest_path = plugin_dir / "plugin.yaml"
-            if not manifest_path.exists():
-                continue
-            try:
-                plugins.append(self._load_scanned_plugin(manifest_path))
-            except Exception as exc:
-                self.warnings.append(f"Failed to scan plugin manifest '{manifest_path}': {exc}")
+        plugins, descriptors = self._discover_top_level_plugins()
+        plugins.extend(
+            self._plugin_from_descriptor(
+                descriptor,
+                self._manifest_path(descriptor.root_path or self.plugin_root),
+            )
+            for descriptor in descriptors
+        )
         return plugins
 
     def _is_enabled(self, descriptor: PluginDescriptor) -> bool:
@@ -126,6 +125,27 @@ class PluginLoader:
                 continue
             descriptors.append(descriptor)
         return descriptors
+
+    def _discover_top_level_plugins(self) -> tuple[list[Plugin], list[PluginDescriptor]]:
+        if not self.plugin_root.exists():
+            return [], []
+
+        plugins: list[Plugin] = []
+        descriptors: list[PluginDescriptor] = []
+        for plugin_dir in sorted(item for item in self.plugin_root.iterdir() if item.is_dir()):
+            manifest_path = self._manifest_path(plugin_dir)
+            if not manifest_path.exists():
+                continue
+            try:
+                payload = load_yaml(manifest_path)
+                if isinstance(payload.get("plugin"), dict):
+                    descriptor = load_plugin_manifest(manifest_path)
+                    descriptors.append(descriptor)
+                    continue
+                plugins.append(self._load_scanned_plugin(manifest_path))
+            except Exception as exc:
+                self.warnings.append(f"Failed to scan plugin manifest '{manifest_path}': {exc}")
+        return plugins, descriptors
 
     def _dependencies_missing(self, descriptor: PluginDescriptor, pending_ids: set[str]) -> bool:
         missing = []
@@ -214,6 +234,22 @@ class PluginLoader:
             root_path=root_path,
             manifest_path=manifest_path,
             raw_manifest=payload if isinstance(payload, dict) else {"plugin": plugin_data},
+        )
+
+    def _plugin_from_descriptor(self, descriptor: PluginDescriptor, manifest_path: Path) -> Plugin:
+        return Plugin(
+            plugin_id=descriptor.plugin_id,
+            plugin_type=descriptor.plugin_type,
+            name=descriptor.name,
+            version=descriptor.version,
+            dependencies=tuple(descriptor.dependencies),
+            domain_type=descriptor.domain_type,
+            provides_templates=descriptor.provides_templates,
+            provides_components=descriptor.provides_components,
+            provides_commands=descriptor.provides_commands,
+            root_path=descriptor.root_path,
+            manifest_path=manifest_path,
+            raw_manifest={"plugin": descriptor.to_dict()},
         )
 
     def _require_str(self, value: object, field: str, manifest_path: Path) -> str:

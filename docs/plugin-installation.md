@@ -12,6 +12,7 @@ OpenControllerWorkbench/
 ├── InitGui.py
 ├── ocw_workbench/
 ├── ocw_kicad/
+├── plugins/
 └── resources/
 ```
 
@@ -70,7 +71,7 @@ If installation is correct:
 - FreeCAD finds `InitGui.py`
 - the workbench appears in the workbench list
 - icons load
-- templates, variants, and library YAML data are available
+- top-level plugins, templates, variants, and library data are available
 
 ## Troubleshooting
 
@@ -88,9 +89,9 @@ If installation is correct:
 ### YAML template or library data is missing
 
 - Confirm these paths exist in the linked module root:
-  - `ocw_workbench/templates/`
-  - `ocw_workbench/variants/`
-  - `ocw_workbench/library/`
+  - `plugins/`
+  - `plugins/plugin_midicontroller/`
+  - `plugins/plugin_bike_trailer/`
   - `ocw_workbench/plugins/internal/`
 - Confirm FreeCAD loaded the expected module directory.
 

@@ -79,7 +79,7 @@ def test_invalid_data_plugin_file_is_skipped_without_breaking_pack(tmp_path: Pat
         },
     )
 
-    reset_plugin_service(internal_root=internal_root, external_root=tmp_path / "external", state_base_dir=tmp_path)
+    reset_plugin_service(internal_root=internal_root, plugin_root=Path("plugins"), state_base_dir=tmp_path)
     ids = {component["id"] for component in ComponentLibraryManager().list_components()}
 
     assert "safe_pack.valid_knob" in ids

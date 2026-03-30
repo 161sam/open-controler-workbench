@@ -61,6 +61,7 @@ def test_plugin_loader_loads_internal_plugins_and_registers_sources_and_exporter
     plugin_ids = {descriptor.plugin_id for descriptor in registry.plugin_descriptors()}
     assert {
         "default_exporters",
+        "ocw_kicad",
         "basic_components_pack",
         "basic_templates_pack",
         "basic_variants_pack",
@@ -72,6 +73,7 @@ def test_plugin_loader_loads_internal_plugins_and_registers_sources_and_exporter
     assert any("basic_variants_pack" in str(path) for path in registry.variant_sources())
     assert "bom_yaml" in registry.exporters()
     assert "kicad_layout" in registry.exporters()
+    assert "kicad_stepup_board_import" in registry.layout_strategies()
 
 
 def test_plugin_loader_skips_invalid_plugins(tmp_path: Path) -> None:
@@ -93,7 +95,7 @@ def test_plugin_loader_skips_invalid_plugins(tmp_path: Path) -> None:
         },
     )
 
-    loader = PluginLoader(internal_root=tmp_path, external_root=tmp_path / "empty")
+    loader = PluginLoader(internal_root=tmp_path, plugin_root=tmp_path / "empty")
     registry = loader.load_all()
 
     assert registry.plugin_descriptors() == []
@@ -135,7 +137,7 @@ def test_plugin_loader_supports_plugin_yaml_files(tmp_path: Path) -> None:
     )
     (plugin_dir / "components").mkdir()
 
-    registry = PluginLoader(internal_root=tmp_path, external_root=tmp_path / "empty").load_all()
+    registry = PluginLoader(internal_root=tmp_path, plugin_root=tmp_path / "empty").load_all()
 
     assert {descriptor.plugin_id for descriptor in registry.plugin_descriptors()} == {"yaml_plugin"}
 
@@ -160,7 +162,7 @@ def test_plugin_dependency_is_required(tmp_path: Path) -> None:
     )
     (plugin_dir / "templates").mkdir()
 
-    loader = PluginLoader(internal_root=tmp_path, external_root=tmp_path / "empty")
+    loader = PluginLoader(internal_root=tmp_path, plugin_root=tmp_path / "empty")
     registry = loader.load_all()
 
     assert registry.plugin_descriptors() == []

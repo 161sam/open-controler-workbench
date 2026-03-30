@@ -1,0 +1,22 @@
+plugin:
+  id: "ocw_kicad"
+  name: "OCW KiCad Integration"
+  version: "0.1.0"
+  api_version: "1.0"
+  type: "layout_strategy"
+  author: "OCW"
+  description: "KiCad-oriented layout import integration for controller workflows"
+
+entrypoints:
+  components: null
+  templates: null
+  variants: null
+  exporters: null
+  layouts: null
+  constraints: null
+  module: "hooks.py"
+
+capabilities:
+  - layouts
+
+dependencies: []

@@ -17,10 +17,12 @@ class PluginPackService:
     def __init__(
         self,
         plugin_manager_service: PluginManagerService | None = None,
+        plugin_root: str | Path | None = None,
         external_root: str | Path | None = None,
     ) -> None:
         self.plugin_manager_service = plugin_manager_service or PluginManagerService()
-        self.external_root = Path(external_root) if external_root is not None else PluginLoader().external_root
+        resolved_plugin_root = plugin_root or external_root or PluginLoader().plugin_root
+        self.plugin_root = Path(resolved_plugin_root)
 
     def export_plugin_pack(self, plugin_id: str, output_path: str | Path) -> dict[str, Any]:
         plugin = self.plugin_manager_service.get_plugin(plugin_id)
@@ -52,12 +54,12 @@ class PluginPackService:
             self._validate_plugin_directory(plugin_root)
             descriptor = load_plugin_manifest(self._manifest_path(plugin_root))
             if descriptor.is_internal:
-                raise ValueError(f"Plugin '{descriptor.plugin_id}' must be installed as an external plugin pack")
+                raise ValueError(f"Plugin '{descriptor.plugin_id}' must be installed in the top-level plugin root")
             existing = self._existing_plugin(descriptor.plugin_id)
             if existing is not None and existing.get("is_internal"):
                 raise ValueError(f"Plugin id '{descriptor.plugin_id}' is reserved by an internal plugin")
-            installed_path = self.external_root / descriptor.plugin_id
-            self.external_root.mkdir(parents=True, exist_ok=True)
+            installed_path = self.plugin_root / descriptor.plugin_id
+            self.plugin_root.mkdir(parents=True, exist_ok=True)
             if installed_path.exists():
                 shutil.rmtree(installed_path)
             shutil.copytree(plugin_root, installed_path)

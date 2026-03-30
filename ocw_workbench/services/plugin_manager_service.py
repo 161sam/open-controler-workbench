@@ -15,11 +15,14 @@ class PluginManagerService:
         self,
         persistence: PluginStatePersistence | None = None,
         internal_root: str | Path | None = None,
+        plugin_root: str | Path | None = None,
         external_root: str | Path | None = None,
     ) -> None:
         self.persistence = persistence or PluginStatePersistence()
         self.internal_root = Path(internal_root) if internal_root is not None else None
-        self.external_root = Path(external_root) if external_root is not None else None
+        self.plugin_root = Path(plugin_root) if plugin_root is not None else None
+        if self.plugin_root is None and external_root is not None:
+            self.plugin_root = Path(external_root)
 
     def list_plugins(self, filter_by: str = "all") -> list[dict[str, Any]]:
         self._ensure_active_service()
@@ -49,7 +52,7 @@ class PluginManagerService:
     def reload_plugins(self) -> list[dict[str, Any]]:
         reset_plugin_service(
             internal_root=self.internal_root,
-            external_root=self.external_root,
+            plugin_root=self.plugin_root,
             state_base_dir=self.persistence.base_dir,
         )
         return self.list_plugins()
@@ -132,18 +135,18 @@ class PluginManagerService:
         return item
 
     def _ensure_active_service(self) -> None:
-        if self.internal_root is None and self.external_root is None:
+        if self.internal_root is None and self.plugin_root is None:
             return
         reset_plugin_service(
             internal_root=self.internal_root,
-            external_root=self.external_root,
+            plugin_root=self.plugin_root,
             state_base_dir=self.persistence.base_dir,
         )
 
     def _plugin_dirs(self) -> list[Path]:
-        loader = PluginLoader(internal_root=self.internal_root, external_root=self.external_root)
+        loader = PluginLoader(internal_root=self.internal_root, plugin_root=self.plugin_root)
         directories: list[Path] = []
-        for root in (loader.internal_root, loader.external_root):
+        for root in (loader.internal_root, loader.plugin_root):
             if not root.exists():
                 continue
             directories.extend(sorted(item for item in root.iterdir() if item.is_dir()))

@@ -30,17 +30,18 @@ py-modules = ["Init", "InitGui", "ocw_kicad_plugin"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ocw_workbench*", "ocw_kicad*"]
+include = ["ocw_workbench*", "ocw_kicad*", "plugins*"]
 
 [tool.setuptools.package-data]
 ocw_workbench = [
-    "library/components/*.yaml",
     "plugins/internal/**/*.yaml",
-    "templates/library/*.yaml",
-    "variants/library/*.yaml",
 ]
 
 ocw_kicad = []
+plugins = [
+    "**/*.yaml",
+    "**/*.py",
+]
 
 [tool.setuptools.data-files]
 "resources/icons" = ["resources/icons/*.svg"]

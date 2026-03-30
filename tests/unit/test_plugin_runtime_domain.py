@@ -25,6 +25,7 @@ def test_scan_plugins_loads_domain_plugin_from_repo_root() -> None:
 
     assert "midicontroller" in plugin_ids
     assert "bike_trailer" in plugin_ids
+    assert "ocw_kicad" in plugin_ids
     plugin = next(plugin for plugin in plugins if plugin.plugin_id == "midicontroller")
     assert plugin.plugin_type == "domain"
     assert plugin.domain_type == "midicontroller"
@@ -39,7 +40,9 @@ def test_loader_load_all_keeps_existing_plugins_and_registers_domain_plugin() ->
 
     assert registry.has_plugin("midicontroller")
     assert registry.has_plugin("bike_trailer")
+    assert registry.has_plugin("ocw_kicad")
     assert registry.has_plugin("basic_templates_pack")
+    assert "kicad_stepup_board_import" in registry.layout_strategies()
     assert {plugin.plugin_id for plugin in registry.get_domain_plugins()} == {"midicontroller", "bike_trailer"}
     assert registry.get_active_plugin() is not None
     assert registry.get_active_plugin().plugin_id == "midicontroller"

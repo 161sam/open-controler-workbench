@@ -10,14 +10,14 @@ from ocw_workbench.services.plugin_service import reset_plugin_service
 from ocw_workbench.userdata.plugin_state_store import PluginStatePersistence
 
 
-def _services(tmp_path: Path) -> tuple[PluginManagerService, PluginPackService]:
+def _services(tmp_path: Path, plugin_root: Path) -> tuple[PluginManagerService, PluginPackService]:
     persistence = PluginStatePersistence(base_dir=str(tmp_path / "userdata"))
     manager = PluginManagerService(
         persistence=persistence,
         internal_root=Path("ocw_workbench/plugins/internal"),
-        external_root=tmp_path / "external",
+        plugin_root=plugin_root,
     )
-    pack = PluginPackService(plugin_manager_service=manager, external_root=tmp_path / "external")
+    pack = PluginPackService(plugin_manager_service=manager, plugin_root=plugin_root)
     return manager, pack
 
 
@@ -30,10 +30,10 @@ def _reset_plugin_service_after_test():
 def test_export_data_plugin_pack_creates_zip(tmp_path: Path) -> None:
     reset_plugin_service(
         internal_root=Path("ocw_workbench/plugins/internal"),
-        external_root=tmp_path / "external",
+        plugin_root=Path("plugins"),
         state_base_dir=tmp_path / "userdata",
     )
-    _manager, service = _services(tmp_path)
+    _manager, service = _services(tmp_path, Path("plugins"))
 
     result = service.export_plugin_pack("basic_components_pack", tmp_path / "packs")
 
@@ -45,16 +45,16 @@ def test_export_data_plugin_pack_creates_zip(tmp_path: Path) -> None:
 def test_export_rejects_code_plugin_pack(tmp_path: Path) -> None:
     reset_plugin_service(
         internal_root=Path("ocw_workbench/plugins/internal"),
-        external_root=tmp_path / "external",
+        plugin_root=Path("plugins"),
         state_base_dir=tmp_path / "userdata",
     )
-    _manager, service = _services(tmp_path)
+    _manager, service = _services(tmp_path, Path("plugins"))
 
     with pytest.raises(ValueError, match="not a data plugin"):
         service.export_plugin_pack("default_exporters", tmp_path / "packs")
 
 
-def test_import_plugin_pack_installs_into_external_root(tmp_path: Path) -> None:
+def test_import_plugin_pack_installs_into_plugin_root(tmp_path: Path) -> None:
     import zipfile
 
     archive = tmp_path / "community_pack.zip"
@@ -94,17 +94,17 @@ def test_import_plugin_pack_installs_into_external_root(tmp_path: Path) -> None:
 
     reset_plugin_service(
         internal_root=Path("ocw_workbench/plugins/internal"),
-        external_root=tmp_path / "external",
+        plugin_root=tmp_path / "plugins",
         state_base_dir=tmp_path / "userdata",
     )
-    manager, service = _services(tmp_path)
+    manager, service = _services(tmp_path, tmp_path / "plugins")
 
     imported = service.import_plugin_pack(archive)
     plugins = {item["id"]: item for item in manager.list_plugins()}
 
     assert imported["plugin_id"] == "community_pack"
     assert plugins["community_pack"]["status"] == "enabled"
-    assert (tmp_path / "external" / "community_pack" / "plugin.yaml").exists()
+    assert (tmp_path / "plugins" / "community_pack" / "plugin.yaml").exists()
 
 
 def test_import_rejects_archive_with_python_file(tmp_path: Path) -> None:
@@ -117,10 +117,10 @@ def test_import_rejects_archive_with_python_file(tmp_path: Path) -> None:
 
     reset_plugin_service(
         internal_root=Path("ocw_workbench/plugins/internal"),
-        external_root=tmp_path / "external",
+        plugin_root=tmp_path / "plugins",
         state_base_dir=tmp_path / "userdata",
     )
-    _manager, service = _services(tmp_path)
+    _manager, service = _services(tmp_path, tmp_path / "plugins")
 
     with pytest.raises(ValueError, match="blocked file type"):
         service.import_plugin_pack(archive)
