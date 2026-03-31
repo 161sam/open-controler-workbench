@@ -4,6 +4,7 @@ from ocw_workbench.gui.panels._common import current_text, widget_value
 from ocw_workbench.gui.panels.create_panel import CreatePanel
 from ocw_workbench.gui.panels.info_panel import InfoPanel
 from ocw_workbench.gui.panels.layout_panel import LayoutPanel
+from ocw_workbench.gui.interaction.view_place_preview import load_preview_state
 from ocw_workbench.services.controller_service import ControllerService
 from ocw_workbench.workbench import ProductWorkbenchPanel
 
@@ -25,6 +26,29 @@ class FakeDocument:
 
     def abortTransaction(self) -> None:
         self.transactions.append(("abort", None))
+
+
+class FakeView:
+    def __init__(self) -> None:
+        self.callbacks = []
+        self.cursor = None
+
+    def addEventCallback(self, event_type, callback):
+        handle = (event_type, callback, len(self.callbacks))
+        self.callbacks.append(handle)
+        return handle
+
+    def removeEventCallback(self, event_type, handle):
+        self.callbacks = [item for item in self.callbacks if item != handle]
+
+    def getPoint(self, x, y):
+        return (float(x), float(y), 0.0)
+
+    def setCursor(self, cursor):
+        self.cursor = cursor
+
+    def unsetCursor(self):
+        self.cursor = None
 
 
 def _select_combo_by_suffix(combo, suffix: str) -> None:
@@ -334,6 +358,85 @@ def test_info_panel_hides_workflow_card_for_documents_without_template_context()
     assert info_panel.form["workflow_card_title"].text == "No template workflow available yet."
     assert info_panel.form["primary_action_button"].visible is False
     assert info_panel.form["workflow_card_section"].visible is False
+
+
+def test_workbench_info_panel_primary_action_starts_guided_placement_mode() -> None:
+    doc = FakeDocument()
+    service = ControllerService()
+    service.create_from_template(doc, "pad_grid_4x4")
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+    workbench.suggested_addition_controller.interaction_service.preview_validation_service.validate_components = lambda _doc, *, components: {
+        "valid": True,
+        "severity": None,
+        "status": "Valid placement",
+        "status_code": "valid",
+        "commit_allowed": True,
+        "findings": [],
+        "summary": {"error_count": 0, "warning_count": 0, "total_count": 0},
+    }
+    view = FakeView()
+    workbench.suggested_addition_controller._active_view = lambda current_doc: view if current_doc is doc else None
+
+    before = len(service.get_state(doc)["components"])
+    workbench.info_panel.handle_apply_suggested_addition("display_header")
+    preview = load_preview_state(doc)
+
+    assert len(service.get_state(doc)["components"]) == before
+    assert preview is not None
+    assert preview["mode"] == "suggested_addition"
+    assert workbench.info_panel.form["workflow_card_cancel_button"].visible is True
+    assert workbench.info_panel.form["primary_action_button"].enabled is False
+
+
+def test_workbench_guided_placement_cancel_clears_mode() -> None:
+    doc = FakeDocument()
+    service = ControllerService()
+    service.create_from_template(doc, "pad_grid_4x4")
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+    workbench.suggested_addition_controller.interaction_service.preview_validation_service.validate_components = lambda _doc, *, components: {
+        "valid": True,
+        "severity": None,
+        "status": "Valid placement",
+        "status_code": "valid",
+        "commit_allowed": True,
+        "findings": [],
+        "summary": {"error_count": 0, "warning_count": 0, "total_count": 0},
+    }
+    view = FakeView()
+    workbench.suggested_addition_controller._active_view = lambda current_doc: view if current_doc is doc else None
+
+    workbench.info_panel.handle_apply_suggested_addition("display_header")
+    workbench.info_panel.handle_cancel_suggested_addition()
+
+    assert load_preview_state(doc) is None
+    assert workbench.info_panel.form["workflow_card_cancel_button"].visible is False
+
+
+def test_workbench_guided_placement_commit_refreshes_workflow_card() -> None:
+    doc = FakeDocument()
+    service = ControllerService()
+    service.create_from_template(doc, "pad_grid_4x4")
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+    workbench.suggested_addition_controller.interaction_service.preview_validation_service.validate_components = lambda _doc, *, components: {
+        "valid": True,
+        "severity": None,
+        "status": "Valid placement",
+        "status_code": "valid",
+        "commit_allowed": True,
+        "findings": [],
+        "summary": {"error_count": 0, "warning_count": 0, "total_count": 0},
+    }
+    view = FakeView()
+    workbench.suggested_addition_controller._active_view = lambda current_doc: view if current_doc is doc else None
+
+    workbench.info_panel.handle_apply_suggested_addition("utility_strip_right")
+    assert load_preview_state(doc) is not None
+    assert load_preview_state(doc)["validation"]["commit_allowed"] is True
+    workbench.suggested_addition_controller.commit()
+
+    assert load_preview_state(doc) is None
+    assert workbench.info_panel.form["primary_action_button"].text == "Add Display Header"
+    assert workbench.info_panel.form["workflow_card_cancel_button"].visible is False
 
 
 def test_product_workbench_panel_orchestrates_iteration_flow():

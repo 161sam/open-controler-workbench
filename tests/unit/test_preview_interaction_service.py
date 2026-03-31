@@ -74,3 +74,38 @@ def test_move_component_preview_uses_visual_only_sync_and_metadata():
     assert calls == [{"mode": SyncMode.VISUAL_ONLY, "recompute": False}]
     assert doc.recompute_count == before_recomputes
     assert doc.transactions == before_transactions
+
+
+def test_suggested_addition_preview_tracks_group_components_without_mutating_state():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_controller(doc, {"id": "demo", "width": 120.0, "depth": 80.0})
+    calls = []
+
+    def record_update_document(*_args, **kwargs):
+        calls.append(kwargs)
+
+    controller_service.update_document = record_update_document  # type: ignore[method-assign]
+    before_state = controller_service.get_state(doc)
+
+    payload = interaction_service.add_suggested_addition_preview(
+        doc,
+        addition_id="display_header",
+        label="Add Display Header",
+        components=[
+            {"id": "display", "type": "display", "library_ref": "adafruit_oled_096_i2c_ssd1306", "x": 40.0, "y": 24.0, "rotation": 0.0},
+            {"id": "encoder", "type": "encoder", "library_ref": "generic_ec11_encoder_with_push", "x": 65.0, "y": 24.0, "rotation": 0.0},
+        ],
+        target_zone_id="display_header",
+    )
+
+    assert payload["mode"] == "suggested_addition"
+    assert payload["addition_id"] == "display_header"
+    assert payload["label"] == "Add Display Header"
+    assert payload["target_zone_id"] == "display_header"
+    assert len(payload["components"]) == 2
+    assert "commit_allowed" in payload["validation"]
+    assert load_preview_state(doc) == payload
+    assert controller_service.get_state(doc) == before_state
+    assert calls == [{"mode": SyncMode.VISUAL_ONLY, "recompute": False}]

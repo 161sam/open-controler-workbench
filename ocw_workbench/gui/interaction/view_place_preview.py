@@ -19,6 +19,10 @@ def serialize_preview_state(
     validation: dict[str, Any] | None = None,
     snap: dict[str, Any] | None = None,
     axis_lock: dict[str, Any] | None = None,
+    components: list[dict[str, Any]] | None = None,
+    addition_id: str | None = None,
+    label: str | None = None,
+    target_zone_id: str | None = None,
 ) -> dict[str, Any]:
     payload = {
         "version": PREVIEW_SCHEMA_VERSION,
@@ -31,6 +35,10 @@ def serialize_preview_state(
         "validation": None,
         "snap": None,
         "axis_lock": None,
+        "components": None,
+        "addition_id": None,
+        "label": None,
+        "target_zone_id": None,
     }
     if template_id is not None:
         payload["template_id"] = str(template_id)
@@ -42,6 +50,14 @@ def serialize_preview_state(
         payload["snap"] = dict(snap)
     if isinstance(axis_lock, dict):
         payload["axis_lock"] = dict(axis_lock)
+    if isinstance(components, list):
+        payload["components"] = [dict(item) for item in components if isinstance(item, dict)]
+    if addition_id is not None:
+        payload["addition_id"] = str(addition_id)
+    if label is not None:
+        payload["label"] = str(label)
+    if target_zone_id is not None:
+        payload["target_zone_id"] = str(target_zone_id)
     return payload
 
 
@@ -51,7 +67,8 @@ def load_preview_state(doc: Any) -> dict[str, Any] | None:
         return None
     template_id = payload.get("template_id")
     component_id = payload.get("component_id")
-    if not isinstance(template_id, str) and not isinstance(component_id, str):
+    components = payload.get("components")
+    if not isinstance(template_id, str) and not isinstance(component_id, str) and not isinstance(components, list):
         return None
     try:
         preview = serialize_preview_state(
@@ -64,6 +81,10 @@ def load_preview_state(doc: Any) -> dict[str, Any] | None:
             validation=payload.get("validation") if isinstance(payload.get("validation"), dict) else None,
             snap=payload.get("snap") if isinstance(payload.get("snap"), dict) else None,
             axis_lock=payload.get("axis_lock") if isinstance(payload.get("axis_lock"), dict) else None,
+            components=components if isinstance(components, list) else None,
+            addition_id=payload.get("addition_id") if isinstance(payload.get("addition_id"), str) else None,
+            label=payload.get("label") if isinstance(payload.get("label"), str) else None,
+            target_zone_id=payload.get("target_zone_id") if isinstance(payload.get("target_zone_id"), str) else None,
         )
         preview["version"] = int(payload.get("version", PREVIEW_SCHEMA_VERSION) or PREVIEW_SCHEMA_VERSION)
         preview["snap_enabled"] = (
@@ -89,6 +110,10 @@ def store_preview_state(
     validation: dict[str, Any] | None = None,
     snap: dict[str, Any] | None = None,
     axis_lock: dict[str, Any] | None = None,
+    components: list[dict[str, Any]] | None = None,
+    addition_id: str | None = None,
+    label: str | None = None,
+    target_zone_id: str | None = None,
 ) -> dict[str, Any]:
     payload = serialize_preview_state(
         x=x,
@@ -100,6 +125,10 @@ def store_preview_state(
         validation=validation,
         snap=snap,
         axis_lock=axis_lock,
+        components=components,
+        addition_id=addition_id,
+        label=label,
+        target_zone_id=target_zone_id,
     )
     payload["snap_enabled"] = None if snap_enabled is None else bool(snap_enabled)
     payload["grid_mm"] = None if grid_mm is None else float(grid_mm)

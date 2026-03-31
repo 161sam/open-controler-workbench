@@ -150,6 +150,40 @@ class InteractionService:
         self.controller_service.refresh_document_visuals(doc, recompute=False)
         return payload
 
+    def add_suggested_addition_preview(
+        self,
+        doc: Any,
+        *,
+        addition_id: str,
+        label: str,
+        components: list[dict[str, Any]],
+        target_zone_id: str | None = None,
+        grid_mm: float | None = None,
+        snap_enabled: bool | None = None,
+    ) -> dict[str, Any]:
+        settings = self.get_settings(doc)
+        resolved_grid = float(grid_mm if grid_mm is not None else settings["grid_mm"])
+        resolved_snap = settings["snap_enabled"] if snap_enabled is None else bool(snap_enabled)
+        translated = [deepcopy(item) for item in components if isinstance(item, dict)]
+        validation = self.preview_validation_service.validate_components(doc, components=translated)
+        anchor_x, anchor_y = _preview_anchor(translated)
+        payload = store_preview_state(
+            doc,
+            x=anchor_x,
+            y=anchor_y,
+            rotation=0.0,
+            mode="suggested_addition",
+            snap_enabled=resolved_snap,
+            grid_mm=resolved_grid,
+            validation=validation,
+            components=translated,
+            addition_id=addition_id,
+            label=label,
+            target_zone_id=target_zone_id,
+        )
+        self.controller_service.refresh_document_visuals(doc, recompute=False)
+        return payload
+
     def move_component_preview(
         self,
         doc: Any,
@@ -257,6 +291,16 @@ class InteractionService:
             "validation": report,
             "ui": settings,
         }
+
+
+def _preview_anchor(components: list[dict[str, Any]]) -> tuple[float, float]:
+    if not components:
+        return (0.0, 0.0)
+    xs = [float(component.get("x", 0.0) or 0.0) for component in components if isinstance(component, dict)]
+    ys = [float(component.get("y", 0.0) or 0.0) for component in components if isinstance(component, dict)]
+    if not xs or not ys:
+        return (0.0, 0.0)
+    return ((min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5)
 
     def snap_selected_component(self, doc: Any, grid_mm: float | None = None) -> dict[str, Any]:
         context = self.controller_service.get_ui_context(doc)

@@ -60,10 +60,35 @@ class PreviewValidationService:
             raise KeyError(f"Unknown component id: {component_id}")
         return self._validate(doc, components=components, preview_component_id=component_id)
 
-    def _validate(self, doc: Any, *, components: list[dict[str, Any]], preview_component_id: str) -> dict[str, Any]:
+    def validate_components(
+        self,
+        doc: Any,
+        *,
+        components: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        preview_ids = {
+            str(component.get("id") or "")
+            for component in components
+            if isinstance(component, dict) and str(component.get("id") or "")
+        }
+        merged_components = deepcopy(self.controller_service.get_state(doc)["components"])
+        merged_components.extend(deepcopy(components))
+        return self._validate(doc, components=merged_components, preview_component_ids=preview_ids)
+
+    def _validate(
+        self,
+        doc: Any,
+        *,
+        components: list[dict[str, Any]],
+        preview_component_id: str | None = None,
+        preview_component_ids: set[str] | None = None,
+    ) -> dict[str, Any]:
         controller = deepcopy(self.controller_service.get_state(doc)["controller"])
         validation = self.constraint_service.validate(controller, components)
-        findings = self._preview_findings(validation, preview_component_id)
+        ids = set(preview_component_ids or set())
+        if isinstance(preview_component_id, str) and preview_component_id:
+            ids.add(preview_component_id)
+        findings = self._preview_findings(validation, ids)
         error_count = sum(1 for finding in findings if finding.get("severity") == "error")
         warning_count = sum(1 for finding in findings if finding.get("severity") == "warning")
         primary = self._primary_status(findings)
@@ -81,15 +106,17 @@ class PreviewValidationService:
             },
         }
 
-    def _preview_findings(self, validation: dict[str, Any], preview_component_id: str) -> list[dict[str, Any]]:
+    def _preview_findings(self, validation: dict[str, Any], preview_component_ids: set[str]) -> list[dict[str, Any]]:
         findings: list[dict[str, Any]] = []
+        if not preview_component_ids:
+            return findings
         for severity in ("errors", "warnings"):
             for finding in validation.get(severity, []):
                 if not isinstance(finding, dict):
                     continue
                 source = finding.get("source_component")
                 affected = finding.get("affected_component")
-                if source == preview_component_id or affected == preview_component_id:
+                if source in preview_component_ids or affected in preview_component_ids:
                     findings.append(deepcopy(finding))
         return findings
 

@@ -145,6 +145,7 @@ def resolve_suggested_additions(
         suggestion["preview_components"] = preview_components
         if preview_components:
             suggestion["target_zone_id"] = preview_components[0].get("zone_id")
+            suggestion["preview_target"] = resolve_preview_position(preview_components)
         suggestion["workflow_match"] = {
             "completed": False,
             "requires_met": rule_state["requires_met"],
@@ -160,6 +161,30 @@ def resolve_suggested_additions(
         )
     )
     return resolved
+
+
+def resolve_suggested_addition_preview_target(
+    state: dict[str, Any],
+    addition_id: str,
+    *,
+    template_payload: dict[str, Any] | None = None,
+    template_service: Any | None = None,
+    library_service: Any | None = None,
+) -> dict[str, Any]:
+    components = build_suggested_addition(
+        state,
+        addition_id,
+        template_payload=template_payload,
+        template_service=template_service,
+        library_service=library_service,
+        assign_unique_ids=False,
+    )
+    return {
+        "addition_id": addition_id,
+        "components": components,
+        "target_zone_id": components[0].get("zone_id") if components else None,
+        "anchor": resolve_preview_position(components),
+    }
 
 
 def suggest_component_placement(
@@ -470,6 +495,17 @@ def _reason_for_preference(preference: str) -> str:
         "aligned_with_group": "Placed in line with the current primary group for a predictable extension.",
     }
     return reasons.get(preference, "Placed using the template smart defaults.")
+
+
+def resolve_preview_position(components: list[dict[str, Any]]) -> dict[str, float]:
+    xs = [float(component.get("x", 0.0) or 0.0) for component in components if isinstance(component, dict)]
+    ys = [float(component.get("y", 0.0) or 0.0) for component in components if isinstance(component, dict)]
+    if not xs or not ys:
+        return {"x": 0.0, "y": 0.0}
+    return {
+        "x": (min(xs) + max(xs)) * 0.5,
+        "y": (min(ys) + max(ys)) * 0.5,
+    }
 
 
 def _evaluate_workflow_signals(components: list[dict[str, Any]]) -> dict[str, bool]:

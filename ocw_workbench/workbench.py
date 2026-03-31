@@ -19,6 +19,7 @@ from ocw_workbench.gui.interaction.view_drag_controller import ViewDragControlle
 from ocw_workbench.gui.interaction.inline_edit_controller import InlineEditController
 from ocw_workbench.gui.interaction.view_pick_controller import ViewPickController
 from ocw_workbench.gui.interaction.view_place_controller import ViewPlaceController
+from ocw_workbench.gui.interaction.suggested_addition_place_controller import SuggestedAdditionPlaceController
 from ocw_workbench.gui.interaction.tool_manager import get_tool_manager
 from ocw_workbench.gui.docking import create_or_reuse_dock, focus_dock, remove_dock
 from ocw_workbench.gui.feedback import apply_status_message, format_toggle_message, format_validation_message
@@ -405,6 +406,14 @@ class ProductWorkbenchPanel:
             on_finished=self._handle_interaction_finished,
             on_committed=self._handle_placement_committed,
         )
+        self.suggested_addition_controller = SuggestedAdditionPlaceController(
+            controller_service=self.controller_service,
+            interaction_service=self.interaction_service,
+            overlay_renderer=self.overlay_renderer,
+            on_status=self.set_status,
+            on_finished=self._handle_interaction_finished,
+            on_committed=self._handle_suggested_addition_committed,
+        )
         self.drag_controller = ViewDragController(
             controller_service=self.controller_service,
             interaction_service=self.interaction_service,
@@ -463,6 +472,8 @@ class ProductWorkbenchPanel:
             controller_service=self.controller_service,
             on_updated=self._handle_controller_updated,
             on_status=self.set_status,
+            on_suggested_addition_requested=self.start_suggested_addition_place_mode,
+            on_suggested_addition_cancelled=self.cancel_active_interaction,
         )
         self.plugin_manager_panel = self._build_plugin_manager_panel()
         self._mount_panels()
@@ -738,6 +749,16 @@ class ProductWorkbenchPanel:
             self.interaction_manager.activate("place", self.doc, self.place_controller.cancel)
         return started
 
+    def start_suggested_addition_place_mode(self, addition_id: str) -> bool:
+        self.pick_controller.cancel(publish_status=False)
+        self.inline_edit_controller.cancel(publish_status=False)
+        self.interaction_manager.cancel_active(reason="switch", publish_status=False)
+        _cancel_standalone_direct_interactions(self.doc, reason="switch", publish_status=False)
+        started = self.suggested_addition_controller.start(self.doc, addition_id)
+        if started:
+            self.interaction_manager.activate("suggested_addition", self.doc, self.suggested_addition_controller.cancel)
+        return started
+
     def start_drag_mode(self) -> bool:
         self.pick_controller.cancel(publish_status=False)
         self.inline_edit_controller.cancel(publish_status=False)
@@ -747,6 +768,10 @@ class ProductWorkbenchPanel:
         if started:
             self.interaction_manager.activate("drag", self.doc, self.drag_controller.cancel)
         return started
+
+    def cancel_active_interaction(self) -> None:
+        self.interaction_manager.cancel_active(reason="cancel", publish_status=False)
+        _cancel_standalone_direct_interactions(self.doc, reason="cancel", publish_status=False)
 
     def handle_document_context_changed(self, doc: Any | None) -> None:
         self.interaction_manager.handle_document_changed(doc)
@@ -1010,6 +1035,13 @@ class ProductWorkbenchPanel:
             self.refresh_context_panels(refresh_components=True)
         except Exception as exc:
             log_exception("Failed to refresh UI after placement commit", exc)
+
+    def _handle_suggested_addition_committed(self, state: dict[str, Any]) -> None:
+        try:
+            self.refresh_context_panels(refresh_components=True)
+            self.refresh_overlay()
+        except Exception as exc:
+            log_exception("Failed to refresh UI after suggested addition commit", exc)
 
     def _handle_interaction_finished(self, controller: Any) -> None:
         self.interaction_manager.clear(controller.cancel)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ocw_workbench.gui.feedback import apply_status_message, friendly_ui_error
+from ocw_workbench.gui.interaction.view_place_preview import load_preview_state
 from ocw_workbench.gui.panels._common import (
     FallbackButton,
     FallbackCombo,
@@ -38,11 +39,15 @@ class InfoPanel:
         controller_service: ControllerService | None = None,
         on_updated: Any | None = None,
         on_status: Any | None = None,
+        on_suggested_addition_requested: Any | None = None,
+        on_suggested_addition_cancelled: Any | None = None,
     ) -> None:
         self.doc = doc
         self.controller_service = controller_service or ControllerService()
         self.on_updated = on_updated
         self.on_status = on_status
+        self.on_suggested_addition_requested = on_suggested_addition_requested
+        self.on_suggested_addition_cancelled = on_suggested_addition_cancelled
         self.form = _build_form()
         self.widget = self.form["widget"]
         self._layout_intelligence: dict[str, Any] = {}
@@ -182,9 +187,24 @@ class InfoPanel:
 
     def handle_apply_suggested_addition(self, addition_id: str) -> None:
         try:
+            if callable(self.on_suggested_addition_requested):
+                started = bool(self.on_suggested_addition_requested(addition_id))
+                if started:
+                    self.refresh()
+                    self._publish_status("Click in the 3D view to place the suggested addition. Press ESC to cancel.", level="info")
+                    return
             self.apply_suggested_addition(addition_id)
         except Exception as exc:
             self._publish_status(friendly_ui_error("Could not apply suggested addition", exc), level="error")
+
+    def handle_cancel_suggested_addition(self) -> None:
+        try:
+            if callable(self.on_suggested_addition_cancelled):
+                self.on_suggested_addition_cancelled()
+                self.refresh()
+                self._publish_status("Guided placement cancelled.", level="info")
+        except Exception as exc:
+            self._publish_status(friendly_ui_error("Could not cancel guided placement", exc), level="error")
 
     def _sync_surface_fields(self) -> None:
         shape_name = current_text(self.form["surface_shape"]) or "rectangle"
@@ -221,6 +241,9 @@ class InfoPanel:
         additions = layout_intelligence.get("suggested_additions", []) if isinstance(layout_intelligence, dict) else []
         primary_action = workflow_card.get("primary_action") if isinstance(workflow_card, dict) else None
         steps = workflow_card.get("steps", []) if isinstance(workflow_card, dict) else []
+        preview = load_preview_state(self.doc)
+        placement_active = isinstance(preview, dict) and str(preview.get("mode") or "") == "suggested_addition"
+        active_addition_id = str(preview.get("addition_id") or "") if placement_active else ""
         title = str(workflow_card.get("template_title") or "No template workflow available yet.")
         short_description = str(workflow_card.get("short_description") or layout_intelligence.get("next_step") or "")
         ideal_for = workflow_card.get("ideal_for", []) if isinstance(workflow_card, dict) else []
@@ -231,6 +254,9 @@ class InfoPanel:
             or short_description
             or "No suggested workflow step available yet."
         )
+        if placement_active:
+            active_label = str(preview.get("label") or active_addition_id.replace("_", " ").title() or "suggested addition")
+            action_hint = f"Click in the 3D view to place {active_label}. Press ESC to cancel."
         ideal_for_text = ", ".join(str(item) for item in ideal_for if isinstance(item, str) and item.strip())
         set_label_text(self.form["workflow_card_title"], title)
         set_label_text(self.form["workflow_card_hint"], short_description or "No suggested workflow step available yet.")
@@ -243,19 +269,27 @@ class InfoPanel:
         self.form["workflow_progress_items"] = []
         self.form["next_step_buttons"] = []
         primary_button = self.form["primary_action_button"]
+        cancel_button = self.form["workflow_card_cancel_button"]
         visible = bool(primary_action or steps or additions)
         _qtcore, _qtgui, qtwidgets = load_qt()
         if qtwidgets is None:
             if isinstance(primary_action, dict):
-                primary_button.text = str(primary_action.get("label") or "Primary Action")
+                primary_button.text = "Click In 3D View" if placement_active else str(primary_action.get("label") or "Primary Action")
                 set_tooltip(primary_button, str(primary_action.get("tooltip") or primary_action.get("description") or "Apply this workflow step."))
-                primary_button.clicked = FallbackButton().clicked
-                primary_button.clicked.connect(
-                    lambda _checked=None, addition_id=str(primary_action.get("id") or ""): self.handle_apply_suggested_addition(addition_id)
-                )
+                primary_button.enabled = not placement_active
+                if not placement_active:
+                    primary_button.clicked = FallbackButton().clicked
+                    primary_button.clicked.connect(
+                        lambda _checked=None, addition_id=str(primary_action.get("id") or ""): self.handle_apply_suggested_addition(addition_id)
+                    )
                 primary_button.visible = True
             else:
                 primary_button.visible = False
+            cancel_button.visible = placement_active
+            cancel_button.enabled = placement_active
+            if placement_active:
+                cancel_button.clicked = FallbackButton().clicked
+                cancel_button.clicked.connect(lambda _checked=None: self.handle_cancel_suggested_addition())
             for step in steps:
                 if not isinstance(step, dict):
                     continue
@@ -266,7 +300,7 @@ class InfoPanel:
 
         self._clear_action_layout(self.form.get("workflow_progress_layout"))
         if isinstance(primary_action, dict):
-            primary_label = str(primary_action.get("label") or "Primary Action")
+            primary_label = "Click In 3D View" if placement_active else str(primary_action.get("label") or "Primary Action")
             primary_tooltip = str(primary_action.get("tooltip") or primary_action.get("description") or primary_label)
             primary_button.setText(primary_label)
             set_tooltip(primary_button, primary_tooltip)
@@ -275,17 +309,33 @@ class InfoPanel:
                     primary_button.clicked.disconnect()
                 except Exception:
                     pass
-                primary_button.clicked.connect(
-                    lambda _checked=False, addition_id=str(primary_action.get("id") or ""): self.handle_apply_suggested_addition(addition_id)
-                )
+                if not placement_active:
+                    primary_button.clicked.connect(
+                        lambda _checked=False, addition_id=str(primary_action.get("id") or ""): self.handle_apply_suggested_addition(addition_id)
+                    )
+            if hasattr(primary_button, "setEnabled"):
+                primary_button.setEnabled(not placement_active)
             primary_button.setVisible(True)
         else:
             primary_button.setVisible(False)
+        if hasattr(cancel_button, "setVisible"):
+            cancel_button.setVisible(placement_active)
+        if hasattr(cancel_button, "setEnabled"):
+            cancel_button.setEnabled(placement_active)
+        if hasattr(cancel_button, "clicked"):
+            try:
+                cancel_button.clicked.disconnect()
+            except Exception:
+                pass
+            cancel_button.clicked.connect(lambda _checked=False: self.handle_cancel_suggested_addition())
         for step in steps:
             if not isinstance(step, dict):
                 continue
-            label = create_hint_label(qtwidgets, _workflow_step_text(step))
-            if str(step.get("status") or "") == "current" and hasattr(label, "setObjectName"):
+            step_copy = dict(step)
+            if placement_active and active_addition_id and str(step_copy.get("id") or "") == active_addition_id:
+                step_copy["status"] = "current"
+            label = create_hint_label(qtwidgets, _workflow_step_text(step_copy))
+            if str(step_copy.get("status") or "") == "current" and hasattr(label, "setObjectName"):
                 label.setObjectName("OCWSectionHeaderTitle")
             self.form["workflow_progress_layout"].addWidget(label)
             self.form["workflow_progress_items"].append(label)
@@ -331,6 +381,7 @@ def _build_form() -> dict[str, Any]:
             "workflow_card_progress_summary": FallbackLabel("Typical setup steps appear here."),
             "workflow_card_action_hint": FallbackLabel("No suggested workflow step available yet."),
             "primary_action_button": FallbackButton("Primary Action"),
+            "workflow_card_cancel_button": FallbackButton("Cancel"),
             "workflow_progress_items": [],
             "next_step_buttons": [],
             "status": FallbackLabel(),
@@ -405,6 +456,8 @@ def _build_form() -> dict[str, Any]:
     workflow_card_progress_summary = create_hint_label(qtwidgets, "Typical setup steps appear here.")
     workflow_card_action_hint = create_hint_label(qtwidgets, "No suggested workflow step available yet.")
     primary_action_button = set_button_role(qtwidgets.QPushButton("Primary Action"), "primary")
+    workflow_card_cancel_button = set_button_role(qtwidgets.QPushButton("Cancel"), "ghost")
+    workflow_card_cancel_button.setVisible(False)
     header_layout = qtwidgets.QVBoxLayout()
     header_layout.setContentsMargins(0, 0, 0, 0)
     header_layout.setSpacing(4)
@@ -428,6 +481,7 @@ def _build_form() -> dict[str, Any]:
     action_layout.setContentsMargins(0, 0, 0, 0)
     action_layout.setSpacing(6)
     action_layout.addWidget(primary_action_button)
+    action_layout.addWidget(workflow_card_cancel_button)
     workflow_card_layout.addWidget(wrap_layout_in_widget(qtwidgets, action_layout))
 
     hint_layout = qtwidgets.QVBoxLayout()
@@ -473,6 +527,7 @@ def _build_form() -> dict[str, Any]:
         "workflow_card_progress_summary": workflow_card_progress_summary,
         "workflow_card_action_hint": workflow_card_action_hint,
         "primary_action_button": primary_action_button,
+        "workflow_card_cancel_button": workflow_card_cancel_button,
         "workflow_progress_layout": workflow_progress_layout,
         "workflow_progress_items": [],
         "next_step_buttons": [],

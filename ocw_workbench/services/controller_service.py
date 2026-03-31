@@ -185,6 +185,25 @@ class ControllerService:
             transaction_name=f"OCW Add Suggested {addition_id}",
         )
 
+    def build_suggested_addition(self, doc: Any, addition_id: str) -> list[dict[str, Any]]:
+        state = self.state_service.get_state(doc)
+        module = self._plugin_layout_intelligence_module(state)
+        if module is None:
+            raise ValueError("No plugin-specific layout intelligence is available for this document")
+        builder = getattr(module, "build_suggested_addition", None)
+        if builder is None:
+            raise ValueError("Plugin layout intelligence module does not expose build_suggested_addition")
+        components = builder(
+            state,
+            addition_id,
+            template_service=self.template_service,
+            library_service=self.library_service,
+            assign_unique_ids=True,
+        )
+        if not components:
+            raise ValueError(f"Unknown or empty suggested addition: {addition_id}")
+        return components
+
     def add_component(
         self,
         doc: Any,

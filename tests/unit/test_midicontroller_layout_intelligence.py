@@ -12,7 +12,9 @@ from plugins.plugin_midicontroller.layout_intelligence import (
     build_workflow_card,
     build_suggested_addition,
     evaluate_workflow_state,
+    resolve_preview_position,
     resolve_suggested_additions,
+    resolve_suggested_addition_preview_target,
     suggest_component_placement,
 )
 
@@ -91,7 +93,29 @@ def test_build_layout_intelligence_returns_preview_additions_for_pad_grid() -> N
     assert suggestions["utility_strip_right"]["command_id"] == "OCW_AddUtilityStrip"
     assert suggestions["utility_strip_right"]["tooltip"].startswith("Add a right-side utility strip")
     assert len(suggestions["utility_strip_right"]["preview_components"]) == 3
+    assert suggestions["utility_strip_right"]["preview_target"]["x"] > 0.0
     assert suggestions["display_header"]["preview_components"][0]["y"] < suggestions["utility_strip_right"]["preview_components"][0]["y"]
+
+
+def test_resolve_suggested_addition_preview_target_returns_anchor_and_zone() -> None:
+    project = TemplateGenerator().generate_from_template("fader_strip")
+    state = {
+        "controller": project["controller"],
+        "components": project["components"],
+        "meta": {"template_id": "fader_strip", "plugin_id": "midicontroller"},
+    }
+    service = ControllerService()
+
+    target = resolve_suggested_addition_preview_target(
+        state,
+        "channel_display",
+        template_payload=TemplateRegistry().get_template("fader_strip"),
+        library_service=service.library_service,
+    )
+
+    assert target["target_zone_id"] == "top_label_area"
+    assert target["anchor"] == resolve_preview_position(target["components"])
+    assert target["anchor"]["y"] <= 10.0
 
 
 def test_workflow_state_tracks_completed_pad_grid_steps_and_promotes_next_action() -> None:

@@ -226,6 +226,9 @@ class OverlayService:
         preview = load_preview_state(doc)
         if preview is None:
             return []
+        preview_components = preview.get("components")
+        if isinstance(preview_components, list):
+            return self._preview_group_items(doc, preview, preview_components)
         mode = str(preview.get("mode") or "place")
         validation = preview.get("validation") if isinstance(preview.get("validation"), dict) else {}
         severity = validation.get("severity") if isinstance(validation.get("severity"), str) else None
@@ -291,6 +294,74 @@ class OverlayService:
             )
         )
         items.extend(self._preview_snap_items(preview, template_id))
+        return items
+
+    def _preview_group_items(self, doc: Any, preview: dict[str, Any], preview_components: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        validation = preview.get("validation") if isinstance(preview.get("validation"), dict) else {}
+        severity = validation.get("severity") if isinstance(validation.get("severity"), str) else None
+        label = str(preview.get("label") or preview.get("addition_id") or "Suggested addition")
+        resolved_components = self.controller_builder.resolve_components([dict(item) for item in preview_components if isinstance(item, dict)])
+        keepouts = self.controller_builder.build_keepouts(preview_components)
+        cutouts = self.controller_builder.build_cutout_primitives(preview_components)
+        items: list[dict[str, Any]] = []
+        for component in resolved_components:
+            shape = component["resolved_mechanical"].keepout_top
+            component_id = str(component.get("id") or "__preview__")
+            items.append(
+                self._shape_item(
+                    prefix="preview_component",
+                    item_id=component_id,
+                    x=float(component["x"]),
+                    y=float(component["y"]),
+                    rotation=float(component.get("rotation", 0.0) or 0.0),
+                    shape=shape.to_dict(),
+                    style=overlay_style(self._preview_style_kind("component_preview", severity)),
+                    label=component_label(component),
+                    source_component_id=component_id,
+                    severity=severity,
+                )
+            )
+        for feature in keepouts:
+            if feature.get("feature") != "keepout_top":
+                continue
+            component_id = str(feature.get("component_id") or "__preview__")
+            items.append(
+                self._shape_item(
+                    prefix="preview_keepout",
+                    item_id=component_id,
+                    x=float(feature["x"]),
+                    y=float(feature["y"]),
+                    rotation=float(feature.get("rotation", 0.0) or 0.0),
+                    shape=feature,
+                    style=overlay_style(self._preview_style_kind("keepout_preview", severity)),
+                    source_component_id=component_id,
+                    severity=severity,
+                )
+            )
+        for feature in cutouts:
+            component_id = str(feature.get("component_id") or "__preview__")
+            items.append(
+                self._shape_item(
+                    prefix="preview_cutout",
+                    item_id=component_id,
+                    x=float(feature["x"]),
+                    y=float(feature["y"]),
+                    rotation=float(feature.get("rotation", 0.0) or 0.0),
+                    shape=feature,
+                    style=overlay_style(self._preview_style_kind("cutout_preview", severity)),
+                    source_component_id=component_id,
+                    severity=severity,
+                )
+            )
+        items.append(
+            text_item(
+                item_id=f"preview_label:{preview.get('addition_id') or label}",
+                x=float(preview.get("x", 0.0) or 0.0),
+                y=float(preview.get("y", 0.0) or 0.0),
+                text=self._preview_label_text(label, preview, validation),
+                style=overlay_style(self._preview_style_kind("preview_label", severity)),
+            )
+        )
         return items
 
     def _inline_edit_items(
