@@ -746,49 +746,62 @@ class ProductWorkbenchPanel:
         self.inline_edit_controller.cancel(publish_status=False)
         return True
 
-    def start_place_mode(self, template_id: str) -> bool:
+    def _suspend_idle_view_interactions(self) -> None:
         self.pick_controller.cancel(publish_status=False)
         self.inline_edit_controller.cancel(publish_status=False)
+
+    def _resume_idle_view_interactions(self) -> None:
+        self.pick_controller.start(self.doc)
+        self.inline_edit_controller.start(self.doc)
+
+    def start_place_mode(self, template_id: str) -> bool:
+        self._suspend_idle_view_interactions()
         self.interaction_manager.cancel_active(reason="switch", publish_status=False)
         _cancel_standalone_direct_interactions(self.doc, reason="switch", publish_status=False)
         started = self.place_controller.start(self.doc, template_id)
         if started:
             self.interaction_manager.activate("place", self.doc, self.place_controller.cancel)
+        else:
+            self._resume_idle_view_interactions()
         return started
 
     def start_suggested_addition_place_mode(self, addition_id: str) -> bool:
-        self.pick_controller.cancel(publish_status=False)
-        self.inline_edit_controller.cancel(publish_status=False)
+        self._suspend_idle_view_interactions()
         self.interaction_manager.cancel_active(reason="switch", publish_status=False)
         _cancel_standalone_direct_interactions(self.doc, reason="switch", publish_status=False)
         started = self.suggested_addition_controller.start(self.doc, addition_id)
         if started:
             self.interaction_manager.activate("suggested_addition", self.doc, self.suggested_addition_controller.cancel)
+        else:
+            self._resume_idle_view_interactions()
         return started
 
     def start_drag_mode(self) -> bool:
-        self.pick_controller.cancel(publish_status=False)
-        self.inline_edit_controller.cancel(publish_status=False)
+        self._suspend_idle_view_interactions()
         self.interaction_manager.cancel_active(reason="switch", publish_status=False)
         _cancel_standalone_direct_interactions(self.doc, reason="switch", publish_status=False)
         started = self.drag_controller.start(self.doc)
         if started:
             self.interaction_manager.activate("drag", self.doc, self.drag_controller.cancel)
+        else:
+            self._resume_idle_view_interactions()
         return started
 
     def cancel_active_interaction(self) -> None:
-        self.interaction_manager.cancel_active(reason="cancel", publish_status=False)
+        self.interaction_manager.cancel_active(reason="cancel", publish_status=True)
         _cancel_standalone_direct_interactions(self.doc, reason="cancel", publish_status=False)
 
     def handle_document_context_changed(self, doc: Any | None) -> None:
         self.interaction_manager.handle_document_changed(doc)
         if doc is not self.doc:
             _cancel_standalone_direct_interactions(self.doc, reason="document_changed", publish_status=False)
+            self.pick_controller.cancel(reason="document_changed", publish_status=False)
             self.inline_edit_controller.cancel(reason="document_changed", publish_status=False)
 
     def handle_document_closed(self) -> None:
         self.interaction_manager.handle_document_closed(self.doc)
         _cancel_standalone_direct_interactions(self.doc, reason="document_closed", publish_status=False)
+        self.pick_controller.cancel(reason="document_closed", publish_status=False)
         self.inline_edit_controller.cancel(reason="document_closed", publish_status=False)
 
     def _build_shell(self) -> dict[str, Any]:
@@ -1062,8 +1075,7 @@ class ProductWorkbenchPanel:
             self.refresh_context_panels(refresh_components=True)
         except Exception as exc:
             log_exception("Failed to refresh UI after interaction finished", exc)
-        self.pick_controller.start(self.doc)
-        self.inline_edit_controller.start(self.doc)
+        self._resume_idle_view_interactions()
 
     def _handle_pick_finished(self, controller: Any) -> None:
         pass

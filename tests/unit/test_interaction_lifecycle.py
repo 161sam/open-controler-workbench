@@ -233,6 +233,55 @@ def test_workbench_second_tool_start_cleans_previous_session():
     assert workbench.interaction_manager.active_name == "drag"
 
 
+def test_workbench_failed_tool_start_restores_idle_pick_and_inline() -> None:
+    doc = FakeDocument("A")
+    service = ControllerService()
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+    pick_view = FakeView()
+    inline_view = FakeView()
+    workbench.pick_controller._active_view = lambda current_doc: pick_view if current_doc is doc else None
+    workbench.inline_edit_controller._active_view = lambda current_doc: inline_view if current_doc is doc else None
+    workbench.place_controller._active_view = lambda _current_doc: None
+
+    service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=20.0, y=20.0)
+    service.select_component(doc, "btn1")
+
+    assert workbench.pick_controller.start(doc) is True
+    assert workbench.inline_edit_controller.start(doc) is True
+
+    assert workbench.start_place_mode("omron_b3f_1000") is False
+
+    assert len(pick_view.callbacks) == 3
+    assert len(inline_view.callbacks) == 3
+    assert workbench.interaction_manager.active_name is None
+
+
+def test_workbench_document_change_cancels_idle_pick_and_inline() -> None:
+    doc = FakeDocument("A")
+    other_doc = FakeDocument("B")
+    service = ControllerService()
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+    pick_view = FakeView()
+    inline_view = FakeView()
+    workbench.pick_controller._active_view = lambda current_doc: pick_view if current_doc is doc else None
+    workbench.inline_edit_controller._active_view = lambda current_doc: inline_view if current_doc is doc else None
+
+    service.create_controller(doc, {"id": "demo", "width": 100.0, "depth": 80.0, "height": 30.0})
+    service.add_component(doc, "omron_b3f_1000", component_id="btn1", x=20.0, y=20.0)
+    service.select_component(doc, "btn1")
+
+    assert workbench.pick_controller.start(doc) is True
+    assert workbench.inline_edit_controller.start(doc) is True
+
+    workbench.handle_document_context_changed(other_doc)
+
+    assert len(pick_view.callbacks) == 0
+    assert len(inline_view.callbacks) == 0
+    assert workbench.pick_controller.doc is None
+    assert workbench.inline_edit_controller.doc is None
+
+
 def test_workbench_document_change_cleans_active_interaction():
     doc = FakeDocument("A")
     other_doc = FakeDocument("B")
@@ -267,6 +316,23 @@ def test_workbench_reject_cancels_active_interaction():
     assert len(view.callbacks) == 0
     assert workbench.interaction_manager.active_name is None
     assert settings["active_interaction"] is None
+
+
+def test_workbench_cancel_active_interaction_matches_escape_status() -> None:
+    doc = FakeDocument("A")
+    service = ControllerService()
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+    view = FakeView()
+    workbench.place_controller._active_view = lambda current_doc: view if current_doc is doc else None
+
+    assert workbench.start_place_mode("omron_b3f_1000") is True
+
+    workbench.cancel_active_interaction()
+
+    settings = workbench.interaction_service.get_settings(doc)
+    assert settings["active_interaction"] is None
+    assert load_preview_state(doc) is None
+    assert workbench.form["status"].text == "Placement cancelled"
 
 
 def test_workbench_start_modes_update_compact_interaction_context():
