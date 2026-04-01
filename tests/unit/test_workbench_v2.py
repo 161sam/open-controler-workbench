@@ -278,7 +278,8 @@ def test_info_panel_shows_multi_selection_count_and_ids():
 
     assert panel.form["selection"].text == "enc1 (+1)"
     assert panel.form["selection_count"].text == "2"
-    assert "Selected ids: enc1, btn1" in info_text
+    assert panel.form["context_title"].text == "Selected: enc1 (+1)"
+    assert "Selected: enc1, btn1" in info_text
 
 
 def test_layout_panel_reads_active_project_layout_defaults():
@@ -322,14 +323,13 @@ def test_info_panel_shows_midicontroller_next_steps_and_can_apply_them():
     info_panel = InfoPanel(doc, controller_service=service)
     info_text = info_panel.refresh()
 
-    assert "Primary action: Add Utility Strip" in info_text
-    assert "Next steps: Add Navigation Encoder Pair, Add Display Header" in info_text
-    assert info_panel.form["workflow_card_title"].text == "Finger Drum Pad Grid"
+    assert "Active template: Finger Drum Pad Grid" in info_text
+    assert "Next: Add Utility Strip" in info_text
+    assert info_panel.form["workflow_card_title"].text == "Next: Add Utility Strip"
     assert info_panel.form["primary_action_button"].text == "Add Utility Strip"
     assert [item.text for item in info_panel.form["workflow_progress_items"]] == [
         "○ Utility Strip (Current)",
         "○ Navigation Pair",
-        "○ Display Header",
     ]
 
     info_panel.apply_suggested_addition("utility_strip_right")
@@ -339,11 +339,10 @@ def test_info_panel_shows_midicontroller_next_steps_and_can_apply_them():
     assert [component["id"] for component in utility_buttons] == ["shift", "scene", "mode"]
     assert info_panel.form["primary_action_button"].text == "Add Display Header"
     assert [item.text for item in info_panel.form["workflow_progress_items"]] == [
-        "● Utility Strip",
         "○ Display Header (Current)",
         "○ Navigation Pair",
     ]
-    assert "1 of 3 typical setup steps completed." in info_panel.form["workflow_card_progress_summary"].text
+    assert info_panel.form["workflow_card_progress_summary"].text == "1/3 done"
     assert info_panel.form["workflow_card_action_hint"].text.startswith("Adds a compact OLED centered above the pad grid")
 
 
@@ -355,7 +354,7 @@ def test_info_panel_hides_workflow_card_for_documents_without_template_context()
     info_panel = InfoPanel(doc, controller_service=service)
     info_panel.refresh()
 
-    assert info_panel.form["workflow_card_title"].text == "No template workflow available yet."
+    assert info_panel.form["workflow_card_title"].text == "Workflow"
     assert info_panel.form["primary_action_button"].visible is False
     assert info_panel.form["workflow_card_section"].visible is False
 
@@ -386,6 +385,7 @@ def test_workbench_info_panel_primary_action_starts_guided_placement_mode() -> N
     assert preview["mode"] == "suggested_addition"
     assert workbench.info_panel.form["workflow_card_cancel_button"].visible is True
     assert workbench.info_panel.form["primary_action_button"].enabled is False
+    assert workbench.info_panel.form["geometry_section"].visible is False
 
 
 def test_workbench_guided_placement_cancel_clears_mode() -> None:
@@ -410,6 +410,7 @@ def test_workbench_guided_placement_cancel_clears_mode() -> None:
 
     assert load_preview_state(doc) is None
     assert workbench.info_panel.form["workflow_card_cancel_button"].visible is False
+    assert not workbench.info_panel.form["context_title"].text.startswith("Targeting:")
 
 
 def test_workbench_guided_placement_commit_refreshes_workflow_card() -> None:
@@ -458,7 +459,47 @@ def test_product_workbench_panel_orchestrates_iteration_flow():
     assert context["validation"] is not None
     assert context["component_count"] == 5
     assert "Errors:" in constraints_text
-    assert "Components: 5" in info_text
+    assert "Active template: Macro Encoder Bank" in info_text
+
+
+def test_info_panel_compacts_selection_context_and_hides_geometry() -> None:
+    doc = FakeDocument()
+    service = ControllerService()
+    service.create_from_template(doc, "encoder_module")
+    service.select_component(doc, "enc1")
+
+    panel = InfoPanel(doc, controller_service=service)
+    panel.refresh()
+
+    assert panel.form["context_title"].text == "Selected: enc1"
+    assert panel.form["context_subtitle"].text == "Encoder in main_controls"
+    assert panel.form["geometry_section"].visible is False
+    assert panel.form["quick_actions_section"].visible is True
+
+
+def test_info_panel_placement_mode_shows_compact_context_and_cancel_focus() -> None:
+    doc = FakeDocument()
+    service = ControllerService()
+    service.create_from_template(doc, "pad_grid_4x4")
+    workbench = ProductWorkbenchPanel(doc, controller_service=service)
+    workbench.suggested_addition_controller.interaction_service.preview_validation_service.validate_components = lambda _doc, *, components: {
+        "valid": True,
+        "severity": None,
+        "status": "Valid placement",
+        "status_code": "valid",
+        "commit_allowed": True,
+        "findings": [],
+        "summary": {"error_count": 0, "warning_count": 0, "total_count": 0},
+    }
+    view = FakeView()
+    workbench.suggested_addition_controller._active_view = lambda current_doc: view if current_doc is doc else None
+
+    workbench.info_panel.handle_apply_suggested_addition("display_header")
+
+    assert workbench.info_panel.form["context_title"].text == "Targeting: Add Display Header"
+    assert workbench.info_panel.form["workflow_card_title"].text == "Placement"
+    assert workbench.info_panel.form["primary_action_button"].text == "Placing in 3D"
+    assert workbench.info_panel.form["geometry_section"].visible is False
 
 
 def test_workbench_overlay_toggles_do_not_add_recomputes_for_visual_updates():

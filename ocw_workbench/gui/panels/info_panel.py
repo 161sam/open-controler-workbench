@@ -69,6 +69,8 @@ class InfoPanel:
         controller = state["controller"]
         surface = controller.get("surface") or {}
         shape_name = str(surface.get("shape") or "rectangle")
+        preview = load_preview_state(self.doc)
+        snapshot = self._context_snapshot(state, context, workflow_card, preview)
         set_label_text(self.form["template"], context["template_id"] or "-")
         set_label_text(self.form["variant"], context["variant_id"] or "-")
         selected_ids = context.get("selected_ids", [])
@@ -77,6 +79,9 @@ class InfoPanel:
         set_label_text(self.form["selection"], selection_label)
         set_label_text(self.form["selection_count"], str(context.get("selection_count", len(selected_ids))))
         set_label_text(self.form["component_count"], str(context["component_count"]))
+        set_label_text(self.form["context_title"], snapshot["title"])
+        set_label_text(self.form["context_subtitle"], snapshot["subtitle"])
+        set_label_text(self.form["context_meta"], snapshot["meta"])
         set_value(self.form["width"], float(controller.get("width", 0.0)))
         set_value(self.form["depth"], float(controller.get("depth", 0.0)))
         set_value(self.form["height"], float(controller.get("height", 0.0)))
@@ -89,48 +94,17 @@ class InfoPanel:
         if hasattr(self.form["surface_shape"], "setCurrentIndex"):
             self.form["surface_shape"].setCurrentIndex(0 if shape_name == "rectangle" else 1)
         set_value(self.form["corner_radius"], float(surface.get("corner_radius", 0.0) or 0.0))
-        validation = context.get("validation")
-        validation_text = "Validation not run."
-        if isinstance(validation, dict):
-            summary = validation.get("summary", {})
-            validation_text = (
-                f"Validation: {summary.get('error_count', 0)} errors, "
-                f"{summary.get('warning_count', 0)} warnings."
-            )
-        layout = context.get("layout") or {}
-        layout_text = "No layout recorded."
-        if layout:
-            layout_text = (
-                f"Layout: {layout.get('strategy', '-')} "
-                f"from {layout.get('source', 'manual')}."
-            )
-        primary_action = workflow_card.get("primary_action", {}) if isinstance(workflow_card, dict) else {}
-        secondary_actions = workflow_card.get("secondary_actions", []) if isinstance(workflow_card, dict) else []
-        summary_text = "\n".join(
-            [
-                f"Template: {context['template_id'] or '-'}",
-                f"Variant: {context['variant_id'] or '-'}",
-                f"Primary selected: {context['selection'] or '-'}",
-                f"Selected count: {context.get('selection_count', len(selected_ids))}",
-                f"Selected ids: {', '.join(selected_ids) if selected_ids else '-'}",
-                f"Components: {context['component_count']}",
-                layout_text,
-                validation_text,
-                f"Workflow: {workflow_card.get('template_title') or context['template_id'] or '-'}",
-                f"Next step hint: {layout_intelligence.get('next_step') or '-'}",
-                f"Primary action: {primary_action.get('label') or '-'}",
-                f"Next steps: {', '.join(str(item.get('label') or '-') for item in secondary_actions) if secondary_actions else '-'}",
-                f"Suggested additions: {', '.join(str(item.get('label') or '-') for item in suggested_additions) if suggested_additions else '-'}",
-            ]
-        )
+        summary_text = "\n".join(snapshot["summary_lines"])
         set_text(self.form["info"], summary_text)
         self.render_workflow_card(workflow_card)
-        preview = load_preview_state(self.doc)
+        self._set_visible(self.form["geometry_section"], snapshot["show_geometry"])
+        self._set_visible(self.form["info"], bool(summary_text.strip()))
         apply_status_message(
             self.form["status"],
             self._workflow_status_text(preview),
             level="info",
         )
+        self._set_visible(self.form["status"], bool(snapshot["show_status"]))
         self._sync_surface_fields()
         return summary_text
 
@@ -220,13 +194,108 @@ class InfoPanel:
 
     def _workflow_status_text(self, preview: Any) -> str:
         if not isinstance(preview, dict) or str(preview.get("mode") or "") != "suggested_addition":
-            return "Review controller geometry here."
+            return "Ready"
         placement_feedback = preview.get("placement_feedback") if isinstance(preview.get("placement_feedback"), dict) else {}
         if placement_feedback.get("active_zone_id"):
             return "Click to place"
         if placement_feedback.get("invalid_target") and placement_feedback.get("hover_zone_id"):
             return "No valid target here"
         return "Move cursor over target area"
+
+    def _context_snapshot(
+        self,
+        state: dict[str, Any],
+        context: dict[str, Any],
+        workflow_card: dict[str, Any],
+        preview: Any,
+    ) -> dict[str, Any]:
+        template_name = str(
+            self._layout_intelligence.get("template_name")
+            or workflow_card.get("template_title")
+            or context.get("template_id")
+            or "No template"
+        )
+        component_count = int(context.get("component_count", 0))
+        selection_count = int(context.get("selection_count", 0))
+        selected_ids = [str(item) for item in context.get("selected_ids", []) if isinstance(item, str) and item]
+        placement_active = isinstance(preview, dict) and str(preview.get("mode") or "") == "suggested_addition"
+        primary_action = workflow_card.get("primary_action") if isinstance(workflow_card, dict) else None
+        next_label = str(primary_action.get("label") or "") if isinstance(primary_action, dict) else ""
+        lines = [f"Active template: {template_name}"]
+        lines.append(f"Components: {component_count}")
+        title = f"Template: {template_name}"
+        subtitle = f"{component_count} components on surface"
+        if placement_active:
+            placement_label = str(preview.get("label") or preview.get("addition_id") or "Placement")
+            title = f"Targeting: {placement_label}"
+            subtitle = self._placement_context_subtitle(state, preview)
+            lines.append(f"Targeting: {placement_label}")
+        elif selection_count > 0:
+            title = f"Selected: {selected_ids[0]}{' (+' + str(selection_count - 1) + ')' if selection_count > 1 else ''}"
+            subtitle = self._selected_context_subtitle(state, selected_ids)
+            lines.append(f"Selected: {', '.join(selected_ids)}")
+        if next_label and not placement_active:
+            lines.append(f"Next: {next_label}")
+        meta_parts = [f"{component_count} parts"]
+        if selection_count > 0:
+            meta_parts.append(f"{selection_count} selected")
+        elif next_label:
+            meta_parts.append(f"Next: {next_label}")
+        if context.get("variant_id"):
+            meta_parts.append(str(context["variant_id"]))
+        show_geometry = not placement_active and selection_count == 0
+        show_status = placement_active
+        return {
+            "title": title,
+            "subtitle": subtitle,
+            "meta": " | ".join(meta_parts),
+            "summary_lines": lines,
+            "show_geometry": show_geometry,
+            "show_status": show_status,
+        }
+
+    def _selected_context_subtitle(self, state: dict[str, Any], selected_ids: list[str]) -> str:
+        if not selected_ids:
+            return "No active selection"
+        component_map = {
+            str(component.get("id") or ""): component
+            for component in state.get("components", [])
+            if isinstance(component, dict)
+        }
+        primary = component_map.get(selected_ids[0], {})
+        component_type = str(primary.get("type") or "component").replace("_", " ")
+        zone_id = str(primary.get("zone_id") or "").strip()
+        if len(selected_ids) > 1:
+            return f"{component_type.title()} and {len(selected_ids) - 1} more"
+        if zone_id:
+            return f"{component_type.title()} in {zone_id}"
+        return component_type.title()
+
+    def _placement_context_subtitle(self, state: dict[str, Any], preview: dict[str, Any]) -> str:
+        placement_feedback = preview.get("placement_feedback") if isinstance(preview.get("placement_feedback"), dict) else {}
+        context_ids = [
+            str(item)
+            for item in placement_feedback.get("context_component_ids", [])
+            if isinstance(item, str) and item
+        ]
+        if not context_ids:
+            return "Select target"
+        component_map = {
+            str(component.get("id") or ""): component
+            for component in state.get("components", [])
+            if isinstance(component, dict)
+        }
+        first = component_map.get(context_ids[0], {})
+        role = str(first.get("group_role") or first.get("type") or "component").replace("_", " ")
+        if len(context_ids) == 1:
+            return f"Above {role}"
+        return f"Above {len(context_ids)} {role}"
+
+    def _set_visible(self, widget: Any, visible: bool) -> None:
+        if hasattr(widget, "setVisible"):
+            widget.setVisible(bool(visible))
+            return
+        widget.visible = bool(visible)
 
     def _connect_events(self) -> None:
         if hasattr(self.form["surface_shape"], "currentIndexChanged"):
@@ -255,9 +324,7 @@ class InfoPanel:
         preview = load_preview_state(self.doc)
         placement_active = isinstance(preview, dict) and str(preview.get("mode") or "") == "suggested_addition"
         active_addition_id = str(preview.get("addition_id") or "") if placement_active else ""
-        title = str(workflow_card.get("template_title") or "No template workflow available yet.")
         short_description = str(workflow_card.get("short_description") or layout_intelligence.get("next_step") or "")
-        ideal_for = workflow_card.get("ideal_for", []) if isinstance(workflow_card, dict) else []
         progress_text = str(workflow_card.get("progress_text") or "")
         action_hint = str(
             workflow_card.get("next_step_hint")
@@ -267,24 +334,33 @@ class InfoPanel:
         )
         if placement_active:
             action_hint = self._workflow_status_text(preview)
-        ideal_for_text = ", ".join(str(item) for item in ideal_for if isinstance(item, str) and item.strip())
-        set_label_text(self.form["workflow_card_title"], title)
-        set_label_text(self.form["workflow_card_hint"], short_description or "No suggested workflow step available yet.")
-        set_label_text(
-            self.form["workflow_card_ideal_for"],
-            f"Ideal for: {ideal_for_text}" if ideal_for_text else "Ideal for: -",
+        title = (
+            f"Next: {primary_action.get('label')}"
+            if isinstance(primary_action, dict) and str(primary_action.get("label") or "").strip()
+            else "Workflow"
         )
-        set_label_text(self.form["workflow_card_progress_summary"], progress_text or "Typical setup steps appear here.")
+        if placement_active:
+            title = "Placement"
+        short_hint = self._compact_workflow_hint(short_description, action_hint)
+        set_label_text(self.form["workflow_card_title"], title)
+        set_label_text(self.form["workflow_card_hint"], short_hint or "No next step")
+        total_steps = int(workflow_card.get("total_steps", len(steps)) or len(steps))
+        completed_steps = int(workflow_card.get("completed_steps", 0) or 0)
+        progress_label = f"{completed_steps}/{total_steps} done" if total_steps > 0 else "No steps"
+        if progress_text and total_steps <= 0:
+            progress_label = progress_text
+        set_label_text(self.form["workflow_card_progress_summary"], progress_label)
         set_label_text(self.form["workflow_card_action_hint"], action_hint)
         self.form["workflow_progress_items"] = []
         self.form["next_step_buttons"] = []
         primary_button = self.form["primary_action_button"]
         cancel_button = self.form["workflow_card_cancel_button"]
+        apply_button = self.form["apply_button"]
         visible = bool(primary_action or steps or additions)
         _qtcore, _qtgui, qtwidgets = load_qt()
         if qtwidgets is None:
             if isinstance(primary_action, dict):
-                primary_button.text = "Click In 3D View" if placement_active else str(primary_action.get("label") or "Primary Action")
+                primary_button.text = "Placing in 3D" if placement_active else str(primary_action.get("label") or "Primary Action")
                 set_tooltip(primary_button, str(primary_action.get("tooltip") or primary_action.get("description") or "Apply this workflow step."))
                 primary_button.enabled = not placement_active
                 if not placement_active:
@@ -297,20 +373,22 @@ class InfoPanel:
                 primary_button.visible = False
             cancel_button.visible = placement_active
             cancel_button.enabled = placement_active
+            apply_button.visible = not placement_active
             if placement_active:
                 cancel_button.clicked = FallbackButton().clicked
                 cancel_button.clicked.connect(lambda _checked=None: self.handle_cancel_suggested_addition())
-            for step in steps:
+            for step in self._visible_workflow_steps(steps, placement_active=placement_active):
                 if not isinstance(step, dict):
                     continue
                 label = FallbackLabel(_workflow_step_text(step))
                 self.form["workflow_progress_items"].append(label)
             self.form["workflow_card_section"].visible = visible
+            self.form["quick_actions_section"].visible = bool(primary_button.visible or cancel_button.visible or apply_button.visible)
             return
 
         self._clear_action_layout(self.form.get("workflow_progress_layout"))
         if isinstance(primary_action, dict):
-            primary_label = "Click In 3D View" if placement_active else str(primary_action.get("label") or "Primary Action")
+            primary_label = "Placing in 3D" if placement_active else str(primary_action.get("label") or "Primary Action")
             primary_tooltip = str(primary_action.get("tooltip") or primary_action.get("description") or primary_label)
             primary_button.setText(primary_label)
             set_tooltip(primary_button, primary_tooltip)
@@ -328,6 +406,7 @@ class InfoPanel:
             primary_button.setVisible(True)
         else:
             primary_button.setVisible(False)
+        apply_button.setVisible(not placement_active)
         if hasattr(cancel_button, "setVisible"):
             cancel_button.setVisible(placement_active)
         if hasattr(cancel_button, "setEnabled"):
@@ -338,7 +417,7 @@ class InfoPanel:
             except Exception:
                 pass
             cancel_button.clicked.connect(lambda _checked=False: self.handle_cancel_suggested_addition())
-        for step in steps:
+        for step in self._visible_workflow_steps(steps, placement_active=placement_active):
             if not isinstance(step, dict):
                 continue
             step_copy = dict(step)
@@ -351,6 +430,44 @@ class InfoPanel:
             self.form["workflow_progress_items"].append(label)
         if hasattr(self.form["workflow_card_section"], "setVisible"):
             self.form["workflow_card_section"].setVisible(visible)
+        self._set_visible(
+            self.form["quick_actions_section"],
+            bool(primary_button.isVisible() if hasattr(primary_button, "isVisible") else primary_button.visible)
+            or bool(cancel_button.isVisible() if hasattr(cancel_button, "isVisible") else cancel_button.visible)
+            or bool(apply_button.isVisible() if hasattr(apply_button, "isVisible") else apply_button.visible),
+        )
+
+    def _visible_workflow_steps(self, steps: list[Any], *, placement_active: bool) -> list[dict[str, Any]]:
+        normalized = [dict(step) for step in steps if isinstance(step, dict)]
+        if placement_active:
+            current = [step for step in normalized if str(step.get("status") or "") == "current"]
+            return current[:1]
+        if len(normalized) <= 2:
+            return normalized
+        current = next((step for step in normalized if str(step.get("status") or "") == "current"), normalized[0])
+        visible = [current]
+        next_open = next(
+            (
+                step
+                for step in normalized
+                if step is not current and str(step.get("status") or "") == "open"
+            ),
+            None,
+        )
+        if next_open is not None:
+            visible.append(next_open)
+        elif len(normalized) > 1:
+            visible.append(normalized[1] if normalized[1] is not current else normalized[-1])
+        return visible[:2]
+
+    def _compact_workflow_hint(self, short_description: str, action_hint: str) -> str:
+        for candidate in (action_hint, short_description):
+            text = str(candidate or "").strip()
+            if not text:
+                continue
+            sentence = text.split(".")[0].strip()
+            return sentence or text
+        return ""
 
     def _clear_action_layout(self, layout: Any) -> None:
         if layout is None or not hasattr(layout, "count") or not hasattr(layout, "takeAt"):
@@ -372,6 +489,12 @@ def _build_form() -> dict[str, Any]:
             "selection": FallbackLabel("-"),
             "selection_count": FallbackLabel("0"),
             "component_count": FallbackLabel("0"),
+            "context_section": FallbackLabel(),
+            "context_title": FallbackLabel("No template"),
+            "context_subtitle": FallbackLabel("No active context"),
+            "context_meta": FallbackLabel("0 parts"),
+            "geometry_section": FallbackLabel(),
+            "quick_actions_section": FallbackLabel(),
             "width": FallbackValue(160.0),
             "depth": FallbackValue(100.0),
             "height": FallbackValue(30.0),
@@ -385,11 +508,10 @@ def _build_form() -> dict[str, Any]:
             "apply_button": FallbackButton("Apply Geometry"),
             "info": FallbackText(),
             "workflow_card_section": FallbackLabel(),
-            "workflow_card_title": FallbackLabel("No template workflow available yet."),
-            "workflow_card_hint": FallbackLabel("No suggested workflow step available yet."),
-            "workflow_card_ideal_for": FallbackLabel("Ideal for: -"),
-            "workflow_card_progress_summary": FallbackLabel("Typical setup steps appear here."),
-            "workflow_card_action_hint": FallbackLabel("No suggested workflow step available yet."),
+            "workflow_card_title": FallbackLabel("Workflow"),
+            "workflow_card_hint": FallbackLabel("No next step"),
+            "workflow_card_progress_summary": FallbackLabel("No steps"),
+            "workflow_card_action_hint": FallbackLabel("Ready"),
             "primary_action_button": FallbackButton("Primary Action"),
             "workflow_card_cancel_button": FallbackButton("Cancel"),
             "workflow_progress_items": [],
@@ -398,19 +520,25 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, layout = build_panel_container(qtwidgets)
-    meta_box, meta_layout = create_form_section_widget(qtwidgets, "Project")
+    context_section, meta_layout = create_form_section_widget(qtwidgets, "Context")
     template = qtwidgets.QLabel("-")
     variant = qtwidgets.QLabel("-")
     selection = qtwidgets.QLabel("-")
     selection_count = qtwidgets.QLabel("0")
     component_count = qtwidgets.QLabel("0")
+    context_title = qtwidgets.QLabel("No template")
+    context_subtitle = create_hint_label(qtwidgets, "No active context")
+    context_meta = create_hint_label(qtwidgets, "0 parts")
     meta_layout.addRow("Template", template)
     meta_layout.addRow("Variant", variant)
-    meta_layout.addRow("Primary selected", selection)
-    meta_layout.addRow("Selected count", selection_count)
+    meta_layout.addRow("Selected", selection)
+    meta_layout.addRow("Selection", selection_count)
     meta_layout.addRow("Components", component_count)
+    meta_layout.addRow("Focus", context_title)
+    meta_layout.addRow("", context_subtitle)
+    meta_layout.addRow("", context_meta)
 
-    settings_box, settings_layout = create_form_section_widget(qtwidgets, "Geometry")
+    geometry_section, settings_layout = create_form_section_widget(qtwidgets, "Geometry")
     width = qtwidgets.QDoubleSpinBox()
     depth = qtwidgets.QDoubleSpinBox()
     height = qtwidgets.QDoubleSpinBox()
@@ -448,23 +576,18 @@ def _build_form() -> dict[str, Any]:
     settings_layout.addRow("Inner clearance (mm)", inner_clearance)
     settings_layout.addRow("Surface", surface_shape)
     settings_layout.addRow("Corner radius (mm)", corner_radius)
-    settings_layout.addRow("", apply_button)
 
-    info = create_text_panel(qtwidgets, max_height=110)
-    workflow_card_section, workflow_card_layout = create_section_widget(qtwidgets, "Workflow Card")
-    workflow_card_title = qtwidgets.QLabel("No template workflow available yet.")
+    info = create_text_panel(qtwidgets, max_height=72)
+    workflow_card_section, workflow_card_layout = create_section_widget(qtwidgets, "Workflow")
+    workflow_card_title = qtwidgets.QLabel("Workflow")
     if hasattr(workflow_card_title, "font"):
         title_font = workflow_card_title.font()
         if hasattr(title_font, "setBold"):
             title_font.setBold(True)
             workflow_card_title.setFont(title_font)
-    workflow_card_hint = create_hint_label(
-        qtwidgets,
-        "Suggested actions appear here when the active template has a clear next move.",
-    )
-    workflow_card_ideal_for = create_hint_label(qtwidgets, "Ideal for: -")
-    workflow_card_progress_summary = create_hint_label(qtwidgets, "Typical setup steps appear here.")
-    workflow_card_action_hint = create_hint_label(qtwidgets, "No suggested workflow step available yet.")
+    workflow_card_hint = create_hint_label(qtwidgets, "No next step")
+    workflow_card_progress_summary = create_hint_label(qtwidgets, "No steps")
+    workflow_card_action_hint = create_hint_label(qtwidgets, "Ready")
     primary_action_button = set_button_role(qtwidgets.QPushButton("Primary Action"), "primary")
     workflow_card_cancel_button = set_button_role(qtwidgets.QPushButton("Cancel"), "ghost")
     workflow_card_cancel_button.setVisible(False)
@@ -473,7 +596,6 @@ def _build_form() -> dict[str, Any]:
     header_layout.setSpacing(4)
     header_layout.addWidget(workflow_card_title)
     header_layout.addWidget(workflow_card_hint)
-    header_layout.addWidget(workflow_card_ideal_for)
     workflow_card_layout.addWidget(wrap_layout_in_widget(qtwidgets, header_layout))
 
     progress_layout = qtwidgets.QVBoxLayout()
@@ -487,28 +609,28 @@ def _build_form() -> dict[str, Any]:
     progress_layout.addWidget(progress_host)
     workflow_card_layout.addWidget(wrap_layout_in_widget(qtwidgets, progress_layout))
 
-    action_layout = qtwidgets.QVBoxLayout()
-    action_layout.setContentsMargins(0, 0, 0, 0)
-    action_layout.setSpacing(6)
-    action_layout.addWidget(primary_action_button)
-    action_layout.addWidget(workflow_card_cancel_button)
-    workflow_card_layout.addWidget(wrap_layout_in_widget(qtwidgets, action_layout))
-
     hint_layout = qtwidgets.QVBoxLayout()
     hint_layout.setContentsMargins(0, 0, 0, 0)
     hint_layout.setSpacing(4)
     hint_layout.addWidget(workflow_card_action_hint)
     workflow_card_layout.addWidget(wrap_layout_in_widget(qtwidgets, hint_layout))
 
+    quick_actions_section, quick_actions_layout = create_section_widget(qtwidgets, "Quick Actions")
+    action_layout = qtwidgets.QVBoxLayout()
+    action_layout.setContentsMargins(0, 0, 0, 0)
+    action_layout.setSpacing(6)
+    action_layout.addWidget(primary_action_button)
+    action_layout.addWidget(workflow_card_cancel_button)
+    action_layout.addWidget(apply_button)
+    quick_actions_layout.addWidget(wrap_layout_in_widget(qtwidgets, action_layout))
+
     status = qtwidgets.QLabel()
     status.setWordWrap(True)
-    top_row = qtwidgets.QHBoxLayout()
-    top_row.setSpacing(8)
-    top_row.addWidget(meta_box, 1)
-    top_row.addWidget(settings_box, 2)
-    layout.addLayout(top_row)
-    layout.addWidget(info)
+    layout.addWidget(context_section)
     layout.addWidget(workflow_card_section)
+    layout.addWidget(quick_actions_section)
+    layout.addWidget(geometry_section)
+    layout.addWidget(info)
     layout.addWidget(status)
     widget = wrap_widget_in_scroll_area(content)
     return {
@@ -518,6 +640,12 @@ def _build_form() -> dict[str, Any]:
         "selection": selection,
         "selection_count": selection_count,
         "component_count": component_count,
+        "context_section": context_section,
+        "context_title": context_title,
+        "context_subtitle": context_subtitle,
+        "context_meta": context_meta,
+        "geometry_section": geometry_section,
+        "quick_actions_section": quick_actions_section,
         "width": width,
         "depth": depth,
         "height": height,
@@ -533,7 +661,6 @@ def _build_form() -> dict[str, Any]:
         "workflow_card_section": workflow_card_section,
         "workflow_card_title": workflow_card_title,
         "workflow_card_hint": workflow_card_hint,
-        "workflow_card_ideal_for": workflow_card_ideal_for,
         "workflow_card_progress_summary": workflow_card_progress_summary,
         "workflow_card_action_hint": workflow_card_action_hint,
         "primary_action_button": primary_action_button,
