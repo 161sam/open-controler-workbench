@@ -243,7 +243,6 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
             component_toolbar_command_ids,
             iter_component_type_command_specs,
         )
-        from ocw_workbench.gui.toolbar_builder import append_plugin_toolbars, build_primary_component_toolbar
 
         Gui.addCommand("OCW_CreateController", _LoggedCommand("OCW_CreateController", CreateFromTemplateCommand()))
         Gui.addCommand("OCW_AddComponent", _LoggedCommand("OCW_AddComponent", AddComponentCommand()))
@@ -303,13 +302,16 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
             _LoggedCommand(_FAVORITE_MORE_COMMAND_ID, OpenComponentPaletteCommand()),
         )
 
-        project_toolbar_commands = ["OCW_ImportTemplateFromFCStd"]
-        project_menu_commands = ["OCW_CreateController", "OCW_ImportTemplateFromFCStd"]
-        place_type_commands = build_primary_component_toolbar()
-        active_plugin = get_plugin_service().registry().get_active_plugin()
-        active_plugin_id = active_plugin.plugin_id if active_plugin is not None else None
-        layout_commands = [
-            "OCW_ApplyLayout",
+        start_toolbar_commands = [
+            "OCW_ImportTemplateFromFCStd",
+            "OCW_OpenComponentPalette",
+        ]
+        project_menu_commands = [
+            "OCW_CreateController",
+            "OCW_ImportTemplateFromFCStd",
+        ]
+        add_commands = component_toolbar_command_ids()
+        edit_commands = [
             "OCW_DragMoveComponent",
             "OCW_SnapToGrid",
             "OCW_DuplicateSelected",
@@ -329,6 +331,11 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
             "OCW_AlignBottom",
             "OCW_DistributeHorizontally",
             "OCW_DistributeVertically",
+        ]
+        workflow_commands = [
+            "OCW_ApplyLayout",
+            "OCW_ValidateConstraints",
+            "OCW_ShowConstraintOverlay",
         ]
         validate_commands = [
             "OCW_ValidateConstraints",
@@ -353,21 +360,19 @@ class OpenControllerWorkbench((Gui.Workbench if Gui is not None else object)):
             "OCW_DisablePlugin",
             "OCW_ReloadPlugins",
         ]
-        self.appendToolbar("OCW Project", project_toolbar_commands)
-        self.appendToolbar("OCW Components", place_type_commands)
-        append_plugin_toolbars(self, active_plugin_id=active_plugin_id)
-        self.appendToolbar("OCW Layout", layout_commands)
-        self.appendToolbar("OCW Validate", [validate_commands[0], validate_commands[2]])
+        self.appendToolbar("OCW Start", start_toolbar_commands)
+        self.appendToolbar("OCW Add", add_commands)
+        self.appendToolbar("OCW Edit", edit_commands)
+        self.appendToolbar("OCW Workflow", workflow_commands)
         self.appendToolbar("OCW View", view_commands)
-        self.appendToolbar("OCW Plugins", plugin_commands)
         self.appendMenu(
             "OCW",
-            project_toolbar_commands + place_type_commands + layout_commands + validate_commands[:1] + plugin_commands,
+            start_toolbar_commands + add_commands + workflow_commands,
         )
         self.appendMenu("OCW/Create", project_menu_commands)
-        self.appendMenu("OCW/Components", place_type_commands)
+        self.appendMenu("OCW/Components", add_commands + ["OCW_OpenComponentPalette"])
         self.appendMenu("OCW/Components/Favorites", _FAVORITE_COMMAND_IDS + [_FAVORITE_MORE_COMMAND_ID])
-        self.appendMenu("OCW/Layout", layout_commands)
+        self.appendMenu("OCW/Layout", ["OCW_ApplyLayout"] + edit_commands)
         self.appendMenu("OCW/View", validate_commands[1:])
         self.appendMenu("OCW/Validate", validate_commands[:1] + validate_commands[2:])
         self.appendMenu("OCW/Plugins", plugin_commands)

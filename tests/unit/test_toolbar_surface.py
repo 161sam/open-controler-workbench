@@ -35,12 +35,21 @@ def test_workbench_primary_toolbars_prioritize_direct_actions(monkeypatch) -> No
     menu_map = {name: commands for name, commands in appended_menus}
 
     assert "OCW Favorites" not in toolbar_map
-    assert toolbar_map["OCW Project"] == ["OCW_ImportTemplateFromFCStd"]
-    assert "OCW_CreateController" not in toolbar_map["OCW Project"]
-    assert "OCW_PlaceButton" in toolbar_map["OCW Components"]
-    assert "OCW_PlaceRgbButton" in toolbar_map["OCW Components"]
-    assert toolbar_map["OCW Performance Surface"] == ["OCW_PlacePad", "OCW_PlaceRgbButton"]
-    assert toolbar_map["OCW Rotary Controls"] == ["OCW_PlaceRotaryEncoder", "OCW_PlaceEncoder"]
-    assert toolbar_map["OCW Navigation & Feedback"] == ["OCW_PlaceDisplay"]
+    assert toolbar_map["OCW Start"] == ["OCW_ImportTemplateFromFCStd", "OCW_OpenComponentPalette"]
+    assert "OCW_CreateController" not in toolbar_map["OCW Start"]
+    assert "OCW_PlaceButton" in toolbar_map["OCW Add"]
+    assert "OCW_PlaceRgbButton" in toolbar_map["OCW Add"]
+    assert "OCW Performance Surface" not in toolbar_map
+    assert "OCW Rotary Controls" not in toolbar_map
+    assert "OCW Navigation & Feedback" not in toolbar_map
+    assert toolbar_map["OCW Workflow"] == [
+        "OCW_ApplyLayout",
+        "OCW_ValidateConstraints",
+        "OCW_ShowConstraintOverlay",
+    ]
+    assert "OCW Plugins" not in toolbar_map
+    assert all(commands for commands in toolbar_map.values())
     assert menu_map["OCW/Create"] == ["OCW_CreateController", "OCW_ImportTemplateFromFCStd"]
+    assert menu_map["OCW/Components"][-1] == "OCW_OpenComponentPalette"
+    assert menu_map["OCW/Plugins"] == ["OCW_SelectDomainPlugin", "OCW_OpenPluginManager"]
     assert menu_map["OCW/Components/Favorites"][-1] == workbench_module._FAVORITE_MORE_COMMAND_ID
