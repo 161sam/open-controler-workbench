@@ -125,9 +125,10 @@ class InfoPanel:
         )
         set_text(self.form["info"], summary_text)
         self.render_workflow_card(workflow_card)
+        preview = load_preview_state(self.doc)
         apply_status_message(
             self.form["status"],
-            "Review controller geometry here, then place or refine components.",
+            self._workflow_status_text(preview),
             level="info",
         )
         self._sync_surface_fields()
@@ -191,7 +192,7 @@ class InfoPanel:
                 started = bool(self.on_suggested_addition_requested(addition_id))
                 if started:
                     self.refresh()
-                    self._publish_status("Click in the 3D view to place the suggested addition. Press ESC to cancel.", level="info")
+                    self._publish_status("Move cursor over target area", level="info")
                     return
             self.apply_suggested_addition(addition_id)
         except Exception as exc:
@@ -202,7 +203,7 @@ class InfoPanel:
             if callable(self.on_suggested_addition_cancelled):
                 self.on_suggested_addition_cancelled()
                 self.refresh()
-                self._publish_status("Guided placement cancelled.", level="info")
+                self._publish_status("Placement cancelled", level="info")
         except Exception as exc:
             self._publish_status(friendly_ui_error("Could not cancel guided placement", exc), level="error")
 
@@ -216,6 +217,16 @@ class InfoPanel:
         apply_status_message(self.form["status"], message, level=level)
         if self.on_status is not None:
             self.on_status(message, level)
+
+    def _workflow_status_text(self, preview: Any) -> str:
+        if not isinstance(preview, dict) or str(preview.get("mode") or "") != "suggested_addition":
+            return "Review controller geometry here."
+        placement_feedback = preview.get("placement_feedback") if isinstance(preview.get("placement_feedback"), dict) else {}
+        if placement_feedback.get("active_zone_id"):
+            return "Click to place"
+        if placement_feedback.get("invalid_target") and placement_feedback.get("hover_zone_id"):
+            return "No valid target here"
+        return "Move cursor over target area"
 
     def _connect_events(self) -> None:
         if hasattr(self.form["surface_shape"], "currentIndexChanged"):
@@ -255,8 +266,7 @@ class InfoPanel:
             or "No suggested workflow step available yet."
         )
         if placement_active:
-            active_label = str(preview.get("label") or active_addition_id.replace("_", " ").title() or "suggested addition")
-            action_hint = f"Click in the 3D view to place {active_label}. Press ESC to cancel."
+            action_hint = self._workflow_status_text(preview)
         ideal_for_text = ", ".join(str(item) for item in ideal_for if isinstance(item, str) and item.strip())
         set_label_text(self.form["workflow_card_title"], title)
         set_label_text(self.form["workflow_card_hint"], short_description or "No suggested workflow step available yet.")

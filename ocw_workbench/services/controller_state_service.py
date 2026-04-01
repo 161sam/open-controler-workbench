@@ -69,6 +69,9 @@ DEFAULT_META = {
         "show_warnings": True,
         "show_errors": True,
         "active_component_template_id": None,
+        "placement_hover_zone_id": None,
+        "placement_active_zone_id": None,
+        "placement_invalid_target": False,
     },
 }
 

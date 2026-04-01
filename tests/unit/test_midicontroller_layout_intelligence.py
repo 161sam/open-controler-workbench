@@ -14,6 +14,7 @@ from plugins.plugin_midicontroller.layout_intelligence import (
     evaluate_workflow_state,
     resolve_preview_position,
     resolve_suggested_additions,
+    resolve_suggested_addition_feedback,
     resolve_suggested_addition_preview_target,
     suggest_component_placement,
 )
@@ -116,6 +117,28 @@ def test_resolve_suggested_addition_preview_target_returns_anchor_and_zone() -> 
     assert target["target_zone_id"] == "top_label_area"
     assert target["anchor"] == resolve_preview_position(target["components"])
     assert target["anchor"]["y"] <= 10.0
+
+
+def test_resolve_suggested_addition_feedback_returns_target_bounds_and_context() -> None:
+    project = TemplateGenerator().generate_from_template("encoder_module")
+    state = {
+        "controller": project["controller"],
+        "components": project["components"],
+        "meta": {"template_id": "encoder_module", "plugin_id": "midicontroller"},
+    }
+    service = ControllerService()
+
+    feedback = resolve_suggested_addition_feedback(
+        state,
+        "display_header",
+        template_payload=TemplateRegistry().get_template("encoder_module"),
+        library_service=service.library_service,
+    )
+
+    assert feedback["target_zone_id"] == "display_header"
+    assert feedback["target_bounds"]["width"] > 20.0
+    assert feedback["target_bounds"]["height"] >= 20.0
+    assert set(feedback["context_component_ids"]) == {"enc1", "enc2", "enc3", "enc4"}
 
 
 def test_workflow_state_tracks_completed_pad_grid_steps_and_promotes_next_action() -> None:

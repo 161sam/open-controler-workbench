@@ -72,7 +72,7 @@ def test_suggested_addition_place_controller_cancel_clears_preview_and_state() -
     assert load_preview_state(doc) is None
     assert interaction_service.get_settings(doc)["active_interaction"] is None
     assert controller.session is None
-    assert statuses[-1] == "Guided placement cancelled."
+    assert statuses[-1] == "Placement cancelled"
 
 
 def test_suggested_addition_place_controller_commit_adds_components_and_finishes() -> None:
@@ -109,3 +109,64 @@ def test_suggested_addition_place_controller_commit_adds_components_and_finishes
     assert displays[0]["zone_id"] == "display_header"
     assert controller.session is None
     assert interaction_service.get_settings(doc)["active_interaction"] is None
+
+
+def test_suggested_addition_place_controller_sets_hover_active_and_invalid_target_states() -> None:
+    doc = FakeDocument()
+    service = ControllerService()
+    interaction_service = InteractionService(service)
+    service.create_from_template(doc, "encoder_module")
+    controller = SuggestedAdditionPlaceController(
+        controller_service=service,
+        interaction_service=interaction_service,
+    )
+    controller.interaction_service.preview_validation_service.validate_components = lambda _doc, *, components: {
+        "valid": True,
+        "severity": None,
+        "status": "Valid placement",
+        "status_code": "valid",
+        "commit_allowed": True,
+        "findings": [],
+        "summary": {"error_count": 0, "warning_count": 0, "total_count": 0},
+    }
+    view = FakeView()
+    controller._active_view = lambda current_doc: view if current_doc is doc else None
+
+    assert controller.start(doc, "display_header") is True
+    bounds = controller.session.target_bounds
+    assert isinstance(bounds, dict)
+
+    initial_preview = controller.update_preview_from_screen(float(bounds["x"]), float(bounds["y"]))
+    assert initial_preview is not None
+    assert initial_preview["placement_feedback"]["active_zone_id"] == "display_header"
+    assert initial_preview["placement_feedback"]["invalid_target"] is False
+
+    moved_preview = controller.update_preview_from_screen(60.0, 40.0)
+
+    assert moved_preview is not None
+    assert moved_preview["placement_feedback"]["hover_zone_id"] is None
+    assert moved_preview["placement_feedback"]["active_zone_id"] is None
+    assert moved_preview["placement_feedback"]["invalid_target"] is True
+
+
+def test_suggested_addition_place_controller_does_not_commit_outside_target_zone() -> None:
+    doc = FakeDocument()
+    service = ControllerService()
+    interaction_service = InteractionService(service)
+    service.create_from_template(doc, "encoder_module")
+    controller = SuggestedAdditionPlaceController(
+        controller_service=service,
+        interaction_service=interaction_service,
+    )
+    view = FakeView()
+    controller._active_view = lambda current_doc: view if current_doc is doc else None
+
+    assert controller.start(doc, "display_header") is True
+    before = list(service.get_state(doc)["components"])
+
+    controller.handle_view_event({"Type": "SoMouseButtonEvent", "State": "DOWN", "Button": "BUTTON1", "Position": (60, 40)})
+
+    assert service.get_state(doc)["components"] == before
+    preview = load_preview_state(doc)
+    assert preview is not None
+    assert preview["placement_feedback"]["invalid_target"] is True

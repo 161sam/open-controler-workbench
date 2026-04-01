@@ -193,6 +193,87 @@ def test_overlay_service_marks_hovered_component_before_drag():
     assert hovered_item["label"].endswith(">")
 
 
+def test_overlay_service_marks_placement_target_context_and_group_frame() -> None:
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_from_template(doc, "encoder_module")
+    feedback = controller_service.resolve_suggested_addition_feedback(doc, "display_header")
+    components = controller_service.build_suggested_addition(doc, "display_header")
+    interaction_service.add_suggested_addition_preview(
+        doc,
+        addition_id="display_header",
+        label="Add Display Header",
+        components=components,
+        target_zone_id="display_header",
+        validation={
+            "valid": True,
+            "severity": None,
+            "status": "Valid placement",
+            "status_code": "valid",
+            "commit_allowed": True,
+            "findings": [],
+            "summary": {"error_count": 0, "warning_count": 0, "total_count": 0},
+        },
+        placement_feedback={
+            **feedback,
+            "hover_zone_id": "display_header",
+            "active_zone_id": "display_header",
+            "invalid_target": False,
+        },
+    )
+
+    overlay = OverlayService(controller_service=controller_service).build_overlay(doc)
+    placement_zone = next(item for item in overlay["items"] if item["id"] == "placement_zone:display_header")
+    context_group = next(item for item in overlay["items"] if item["id"] == "placement_context_group")
+    preview_group = next(item for item in overlay["items"] if item["id"].startswith("preview_group_frame:"))
+    context_component = next(item for item in overlay["items"] if item["id"] == "component:enc2")
+
+    assert placement_zone["style"]["kind"] == "placement_zone_active"
+    assert context_group["style"]["kind"] == "placement_context_group"
+    assert preview_group["style"]["kind"] == "preview_group_frame"
+    assert context_component["style"]["kind"].startswith("component_context")
+    assert overlay["summary"]["placement_active"] is True
+    assert overlay["summary"]["placement_invalid"] is False
+
+
+def test_overlay_service_marks_invalid_placement_target() -> None:
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_from_template(doc, "encoder_module")
+    feedback = controller_service.resolve_suggested_addition_feedback(doc, "display_header")
+    components = controller_service.build_suggested_addition(doc, "display_header")
+    interaction_service.add_suggested_addition_preview(
+        doc,
+        addition_id="display_header",
+        label="Add Display Header",
+        components=components,
+        target_zone_id="display_header",
+        validation={
+            "valid": False,
+            "severity": "error",
+            "status": "Out of bounds",
+            "status_code": "out_of_bounds",
+            "commit_allowed": False,
+            "findings": [],
+            "summary": {"error_count": 1, "warning_count": 0, "total_count": 1},
+        },
+        placement_feedback={
+            **feedback,
+            "hover_zone_id": "display_header",
+            "active_zone_id": None,
+            "invalid_target": True,
+        },
+    )
+
+    overlay = OverlayService(controller_service=controller_service).build_overlay(doc)
+    placement_zone = next(item for item in overlay["items"] if item["id"] == "placement_zone:display_header")
+
+    assert placement_zone["style"]["kind"] == "placement_zone_invalid"
+    assert overlay["summary"]["placement_invalid"] is True
+
+
 def test_overlay_summary_reports_selection_layer_and_inline_handles():
     doc = FakeDocument()
     controller_service = ControllerService()

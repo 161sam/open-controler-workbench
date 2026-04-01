@@ -31,6 +31,12 @@ class SuggestedAdditionPlacementState:
     anchor_x: float
     anchor_y: float
     target_zone_id: str | None = None
+    target_bounds: dict[str, float] | None = None
+    context_component_ids: list[str] | None = None
+    hover_zone_id: str | None = None
+    active_zone_id: str | None = None
+    invalid_target: bool = False
+    last_status_key: str | None = None
 
     @property
     def is_active(self) -> bool:
@@ -68,6 +74,7 @@ class SuggestedAdditionPlaceController:
         if not components:
             self._publish_status("Could not start guided placement because the suggested addition has no preview.")
             return False
+        feedback = self.controller_service.resolve_suggested_addition_feedback(doc, addition_id)
         anchor_x, anchor_y = _components_anchor(components)
         self.cancel(reason="switch", publish_status=False)
         self.doc = doc
@@ -81,6 +88,14 @@ class SuggestedAdditionPlaceController:
             anchor_x=anchor_x,
             anchor_y=anchor_y,
             target_zone_id=str(addition.get("target_zone_id") or "") or None,
+            target_bounds=feedback.get("target_bounds") if isinstance(feedback.get("target_bounds"), dict) else None,
+            context_component_ids=[
+                str(item)
+                for item in feedback.get("context_component_ids", [])
+                if isinstance(item, str) and item.strip()
+            ]
+            if isinstance(feedback.get("context_component_ids"), list)
+            else [],
         )
         self.interaction_service.begin_interaction(doc, "suggested_addition")
         if not self._view_callbacks.attach(view, self.handle_view_event):
@@ -88,15 +103,26 @@ class SuggestedAdditionPlaceController:
             self._publish_status("Interaction error")
             return False
         set_interaction_cursor(view, "place")
+        validation = self.interaction_service.preview_validation_service.validate_components(
+            doc,
+            components=self.session.base_components,
+        )
+        placement_feedback = self._placement_feedback_for_point(
+            anchor_x,
+            anchor_y,
+            validation=validation,
+        )
         self.interaction_service.add_suggested_addition_preview(
             doc,
             addition_id=self.session.addition_id,
             label=self.session.label,
             components=self.session.base_components,
             target_zone_id=self.session.target_zone_id,
+            validation=validation,
+            placement_feedback=placement_feedback,
         )
         self.overlay_renderer.refresh(doc)
-        self._publish_status(f"Click in the 3D view to place '{self.session.label}'. Press ESC to cancel.")
+        self._update_status_from_feedback(placement_feedback)
         return self._view_callbacks.is_registered
 
     def cancel(self, reason: str = "cancel", publish_status: bool = True) -> None:
@@ -175,6 +201,11 @@ class SuggestedAdditionPlaceController:
             anchor_y=self.session.anchor_y,
         )
         self.session.preview_components = translated
+        validation = self.interaction_service.preview_validation_service.validate_components(
+            self.doc,
+            components=translated,
+        )
+        placement_feedback = self._placement_feedback_for_point(x, y, validation=validation)
         payload = self.interaction_service.add_suggested_addition_preview(
             self.doc,
             addition_id=self.session.addition_id,
@@ -183,8 +214,11 @@ class SuggestedAdditionPlaceController:
             target_zone_id=self.session.target_zone_id,
             grid_mm=float(settings.get("grid_mm", 1.0)),
             snap_enabled=bool(settings.get("snap_enabled", True)),
+            validation=validation,
+            placement_feedback=placement_feedback,
         )
         self.overlay_renderer.refresh(self.doc)
+        self._update_status_from_feedback(placement_feedback)
         return payload
 
     def handle_view_event(self, info: Any) -> None:
@@ -204,7 +238,12 @@ class SuggestedAdditionPlaceController:
                 return
             if position is not None and is_left_click_down(event_type, payload):
                 preview = self.update_preview_from_screen(float(position[0]), float(position[1]))
-                if preview is not None and bool(preview.get("validation", {}).get("commit_allowed", True)):
+                feedback = preview.get("placement_feedback", {}) if isinstance(preview, dict) else {}
+                if (
+                    preview is not None
+                    and bool(preview.get("validation", {}).get("commit_allowed", True))
+                    and bool(feedback.get("active_zone_id"))
+                ):
                     self.commit()
         except Exception as exc:
             self._handle_interaction_error(exc)
@@ -250,6 +289,51 @@ class SuggestedAdditionPlaceController:
         if self.on_status is not None:
             self.on_status(message)
 
+    def _placement_feedback_for_point(
+        self,
+        x: float,
+        y: float,
+        *,
+        validation: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self.session is None:
+            return {}
+        in_target = _point_in_target_bounds(x, y, self.session.target_bounds)
+        hover_zone_id = self.session.target_zone_id if in_target else None
+        active_zone_id = hover_zone_id if bool(validation.get("commit_allowed", True)) else None
+        invalid_target = (not in_target) or (not bool(validation.get("commit_allowed", True)))
+        self.session.hover_zone_id = hover_zone_id
+        self.session.active_zone_id = active_zone_id
+        self.session.invalid_target = invalid_target
+        return {
+            "target_zone_id": self.session.target_zone_id,
+            "hover_zone_id": hover_zone_id,
+            "active_zone_id": active_zone_id,
+            "invalid_target": invalid_target,
+            "target_bounds": dict(self.session.target_bounds or {}),
+            "context_component_ids": list(self.session.context_component_ids or []),
+        }
+
+    def _update_status_from_feedback(self, placement_feedback: dict[str, Any]) -> None:
+        if self.session is None:
+            return
+        hover_zone_id = str(placement_feedback.get("hover_zone_id") or "") or None
+        active_zone_id = str(placement_feedback.get("active_zone_id") or "") or None
+        invalid_target = bool(placement_feedback.get("invalid_target"))
+        if active_zone_id:
+            key = "ready"
+            message = "Click to place"
+        elif invalid_target and hover_zone_id:
+            key = "invalid"
+            message = "No valid target here"
+        else:
+            key = "move"
+            message = "Move cursor over target area"
+        if self.session.last_status_key == key:
+            return
+        self.session.last_status_key = key
+        self._publish_status(message)
+
     def _handle_interaction_error(self, exc: Exception) -> None:
         log_exception("Suggested addition placement failed", exc)
         self.cancel(reason="error")
@@ -270,12 +354,12 @@ class SuggestedAdditionPlaceController:
 
     def _status_for_reason(self, reason: str) -> str:
         return {
-            "cancel": "Guided placement cancelled.",
-            "switch": "Guided placement cancelled.",
-            "view_unavailable": "Guided placement cancelled because the 3D view is unavailable.",
+            "cancel": "Placement cancelled",
+            "switch": "Placement cancelled",
+            "view_unavailable": "Placement cancelled",
             "error": "Interaction error",
-            "committed": "Guided placement completed.",
-        }.get(reason, "Guided placement cancelled.")
+            "committed": "Placement complete",
+        }.get(reason, "Placement cancelled")
 
 
 def _components_anchor(components: list[dict[str, Any]]) -> tuple[float, float]:
@@ -307,3 +391,13 @@ def _translate_components(
         item["y"] = float(component.get("y", 0.0) or 0.0) + delta_y
         translated.append(item)
     return translated
+
+
+def _point_in_target_bounds(x: float, y: float, bounds: dict[str, float] | None) -> bool:
+    if not isinstance(bounds, dict):
+        return True
+    min_x = float(bounds.get("min_x", bounds.get("x", 0.0) - (bounds.get("width", 0.0) / 2.0)) or 0.0)
+    max_x = float(bounds.get("max_x", bounds.get("x", 0.0) + (bounds.get("width", 0.0) / 2.0)) or 0.0)
+    min_y = float(bounds.get("min_y", bounds.get("y", 0.0) - (bounds.get("height", 0.0) / 2.0)) or 0.0)
+    max_y = float(bounds.get("max_y", bounds.get("y", 0.0) + (bounds.get("height", 0.0) / 2.0)) or 0.0)
+    return min_x <= float(x) <= max_x and min_y <= float(y) <= max_y

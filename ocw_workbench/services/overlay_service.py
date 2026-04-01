@@ -45,6 +45,18 @@ class OverlayService:
         resolved_components = self.controller_builder.resolve_components(components)
         keepouts = self.controller_builder.build_keepouts(components)
         cutouts = self.controller_builder.build_cutout_primitives(components)
+        preview = load_preview_state(doc) or {}
+        placement_feedback = (
+            preview.get("placement_feedback")
+            if isinstance(preview.get("placement_feedback"), dict)
+            else {}
+        )
+        placement_active = str(preview.get("mode") or "") == "suggested_addition"
+        placement_context_ids = {
+            str(item)
+            for item in placement_feedback.get("context_component_ids", [])
+            if isinstance(item, str) and item.strip()
+        }
         validation = context.get("validation")
         if not isinstance(validation, dict):
             validation = self.constraint_service.validate(controller_data, components)
@@ -64,7 +76,7 @@ class OverlayService:
                 y=surface.height / 2.0,
                 width=surface.width,
                 height=surface.height,
-                style=overlay_style("surface"),
+                style=overlay_style("surface_active" if placement_active else "surface"),
                 label="Surface",
             )
         )
@@ -109,6 +121,7 @@ class OverlayService:
                 selected_role = "primary"
             elif component["id"] in selected_component_ids:
                 selected_role = "secondary"
+            context_relevant = component["id"] in placement_context_ids
             item_kind = "component"
             if selected_role == "primary":
                 item_kind = "component_selected"
@@ -116,11 +129,15 @@ class OverlayService:
                 item_kind = "component_selected_secondary"
             elif hovered:
                 item_kind = "component_hover"
+            elif context_relevant:
+                item_kind = "component_context"
             if severity == "error":
                 if hovered:
                     item_kind = "component_hover_error"
                 elif selected_role in {"primary", "secondary"}:
                     item_kind = "component_selected" if selected_role == "primary" else "component_selected_secondary"
+                elif context_relevant:
+                    item_kind = "component_context_error"
                 else:
                     item_kind = "component_error"
             elif severity == "warning":
@@ -130,6 +147,8 @@ class OverlayService:
                     item_kind = "component_selected_secondary"
                 elif hovered:
                     item_kind = "component_hover_warning"
+                elif context_relevant:
+                    item_kind = "component_context_warning"
                 else:
                     item_kind = "component_warning"
             shape = component["resolved_mechanical"].keepout_top
@@ -191,6 +210,9 @@ class OverlayService:
             )
             items.extend(constraint_overlay["items"])
 
+        if placement_active:
+            items.extend(self._placement_target_items(context, placement_feedback))
+            items.extend(self._placement_context_items(resolved_components, preview, placement_context_ids))
         preview_items = self._preview_items(doc)
         items.extend(preview_items)
         inline_items = self._inline_edit_items(doc, resolved_components, inline_state=inline_state, selection_count=selection_count, ui_settings=settings)
@@ -215,6 +237,8 @@ class OverlayService:
                 ),
                 "handles_visible": bool(inline_items),
                 "preview_active": bool(preview_items),
+                "placement_active": placement_active,
+                "placement_invalid": bool(placement_feedback.get("invalid_target")) if placement_active else False,
                 "snap_active": any(
                     str(item.get("id") or "").startswith("preview_snap_")
                     for item in preview_items
@@ -304,6 +328,18 @@ class OverlayService:
         keepouts = self.controller_builder.build_keepouts(preview_components)
         cutouts = self.controller_builder.build_cutout_primitives(preview_components)
         items: list[dict[str, Any]] = []
+        frame = self._component_group_bounds(resolved_components)
+        if frame is not None:
+            items.append(
+                rect_item(
+                    item_id=f"preview_group_frame:{preview.get('addition_id') or label}",
+                    x=float(frame["x"]),
+                    y=float(frame["y"]),
+                    width=float(frame["width"]),
+                    height=float(frame["height"]),
+                    style=overlay_style("preview_group_frame"),
+                )
+            )
         for component in resolved_components:
             shape = component["resolved_mechanical"].keepout_top
             component_id = str(component.get("id") or "__preview__")
@@ -363,6 +399,67 @@ class OverlayService:
             )
         )
         return items
+
+    def _placement_target_items(self, context: dict[str, Any], placement_feedback: dict[str, Any]) -> list[dict[str, Any]]:
+        bounds = placement_feedback.get("target_bounds") if isinstance(placement_feedback.get("target_bounds"), dict) else None
+        if bounds is None:
+            return []
+        zone_id = str(placement_feedback.get("target_zone_id") or "target")
+        style_kind = "placement_zone_idle"
+        if bool(placement_feedback.get("active_zone_id")):
+            style_kind = "placement_zone_active"
+        elif bool(placement_feedback.get("invalid_target")) and bool(placement_feedback.get("hover_zone_id")):
+            style_kind = "placement_zone_invalid"
+        elif bool(placement_feedback.get("hover_zone_id")):
+            style_kind = "placement_zone_hover"
+        label = self._placement_zone_label(context, zone_id)
+        return [
+            rect_item(
+                item_id=f"placement_zone:{zone_id}",
+                x=float(bounds.get("x", 0.0) or 0.0),
+                y=float(bounds.get("y", 0.0) or 0.0),
+                width=float(bounds.get("width", 0.0) or 0.0),
+                height=float(bounds.get("height", 0.0) or 0.0),
+                style=overlay_style(style_kind),
+                label=label,
+            )
+        ]
+
+    def _placement_context_items(
+        self,
+        resolved_components: list[dict[str, Any]],
+        preview: dict[str, Any],
+        placement_context_ids: set[str],
+    ) -> list[dict[str, Any]]:
+        if not placement_context_ids:
+            return []
+        matched = [component for component in resolved_components if component["id"] in placement_context_ids]
+        if not matched:
+            return []
+        bounds = self._component_group_bounds(matched)
+        if bounds is None:
+            return []
+        preview_x = float(preview.get("x", bounds["x"]) or bounds["x"])
+        preview_y = float(preview.get("y", bounds["y"]) or bounds["y"])
+        return [
+            line_item(
+                item_id="placement_context_link",
+                start_x=preview_x,
+                start_y=preview_y,
+                end_x=float(bounds["x"]),
+                end_y=float(bounds["y"]),
+                style=overlay_style("placement_context_link"),
+            ),
+            rect_item(
+                item_id="placement_context_group",
+                x=float(bounds["x"]),
+                y=float(bounds["y"]),
+                width=float(bounds["width"]),
+                height=float(bounds["height"]),
+                style=overlay_style("placement_context_group"),
+                source_ids=[component["id"] for component in matched],
+            ),
+        ]
 
     def _inline_edit_items(
         self,
@@ -532,6 +629,11 @@ class OverlayService:
         x = float(preview.get("x", 0.0) or 0.0)
         y = float(preview.get("y", 0.0) or 0.0)
         mode = str(preview.get("mode") or "place")
+        placement_feedback = (
+            preview.get("placement_feedback")
+            if isinstance(preview.get("placement_feedback"), dict)
+            else {}
+        )
         base = f"{label} @ {x:.1f}, {y:.1f} mm"
         if bool(preview.get("snap_enabled")) and float(preview.get("grid_mm") or 0.0) > 0.0:
             base = f"{base} | Snap {float(preview['grid_mm']):.1f} mm"
@@ -549,9 +651,56 @@ class OverlayService:
         status = validation.get("status")
         if isinstance(status, str) and status and status != "Valid placement":
             return f"{base} | {status}"
+        if mode == "suggested_addition":
+            if bool(placement_feedback.get("active_zone_id")):
+                return f"{base} | Click to place"
+            if bool(placement_feedback.get("invalid_target")) and bool(placement_feedback.get("hover_zone_id")):
+                return f"{base} | No valid target here"
+            return f"{base} | Move cursor over target area"
         if mode == "move":
             return f"{base} | Release to commit"
         return f"{base} | Click to place"
+
+    def _placement_zone_label(self, context: dict[str, Any], zone_id: str) -> str:
+        layout_intelligence = context.get("layout_intelligence", {}) if isinstance(context, dict) else {}
+        for zone in layout_intelligence.get("layout_zones", []) if isinstance(layout_intelligence, dict) else []:
+            if not isinstance(zone, dict):
+                continue
+            if str(zone.get("id") or "") != zone_id:
+                continue
+            return str(zone.get("label") or zone_label(zone))
+        return zone_id
+
+    def _component_group_bounds(self, resolved_components: list[dict[str, Any]]) -> dict[str, float] | None:
+        if not resolved_components:
+            return None
+        min_x = None
+        max_x = None
+        min_y = None
+        max_y = None
+        for component in resolved_components:
+            width, height = self._resolved_component_size(component)
+            left = float(component["x"]) - (width / 2.0)
+            right = float(component["x"]) + (width / 2.0)
+            top = float(component["y"]) - (height / 2.0)
+            bottom = float(component["y"]) + (height / 2.0)
+            min_x = left if min_x is None else min(min_x, left)
+            max_x = right if max_x is None else max(max_x, right)
+            min_y = top if min_y is None else min(min_y, top)
+            max_y = bottom if max_y is None else max(max_y, bottom)
+        if min_x is None or max_x is None or min_y is None or max_y is None:
+            return None
+        padding = 4.0
+        min_x -= padding
+        max_x += padding
+        min_y -= padding
+        max_y += padding
+        return {
+            "x": (min_x + max_x) / 2.0,
+            "y": (min_y + max_y) / 2.0,
+            "width": max_x - min_x,
+            "height": max_y - min_y,
+        }
 
     def _resolved_component_size(self, component: dict[str, Any]) -> tuple[float, float]:
         shape = component["resolved_mechanical"].keepout_top.to_dict()

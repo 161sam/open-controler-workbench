@@ -22,6 +22,9 @@ DEFAULT_UI_SETTINGS = {
     "show_warnings": True,
     "show_errors": True,
     "active_component_template_id": None,
+    "placement_hover_zone_id": None,
+    "placement_active_zone_id": None,
+    "placement_invalid_target": False,
 }
 
 
@@ -81,6 +84,9 @@ class InteractionService:
             "active_interaction": str(kind),
             "move_component_id": None,
             "hovered_component_id": None,
+            "placement_hover_zone_id": None,
+            "placement_active_zone_id": None,
+            "placement_invalid_target": False,
         }
         if template_id is not None:
             self.controller_service.library_service.get(template_id)
@@ -94,6 +100,9 @@ class InteractionService:
                 "active_interaction": None,
                 "move_component_id": None,
                 "hovered_component_id": None,
+                "placement_hover_zone_id": None,
+                "placement_active_zone_id": None,
+                "placement_invalid_target": False,
             },
         )
 
@@ -160,12 +169,18 @@ class InteractionService:
         target_zone_id: str | None = None,
         grid_mm: float | None = None,
         snap_enabled: bool | None = None,
+        validation: dict[str, Any] | None = None,
+        placement_feedback: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         settings = self.get_settings(doc)
         resolved_grid = float(grid_mm if grid_mm is not None else settings["grid_mm"])
         resolved_snap = settings["snap_enabled"] if snap_enabled is None else bool(snap_enabled)
         translated = [deepcopy(item) for item in components if isinstance(item, dict)]
-        validation = self.preview_validation_service.validate_components(doc, components=translated)
+        resolved_validation = (
+            deepcopy(validation)
+            if isinstance(validation, dict)
+            else self.preview_validation_service.validate_components(doc, components=translated)
+        )
         anchor_x, anchor_y = _preview_anchor(translated)
         payload = store_preview_state(
             doc,
@@ -175,11 +190,32 @@ class InteractionService:
             mode="suggested_addition",
             snap_enabled=resolved_snap,
             grid_mm=resolved_grid,
-            validation=validation,
+            validation=resolved_validation,
             components=translated,
             addition_id=addition_id,
             label=label,
             target_zone_id=target_zone_id,
+            placement_feedback=deepcopy(placement_feedback) if isinstance(placement_feedback, dict) else None,
+        )
+        self.update_settings(
+            doc,
+            {
+                "placement_hover_zone_id": (
+                    str(placement_feedback.get("hover_zone_id") or "")
+                    if isinstance(placement_feedback, dict)
+                    else None
+                )
+                or None,
+                "placement_active_zone_id": (
+                    str(placement_feedback.get("active_zone_id") or "")
+                    if isinstance(placement_feedback, dict)
+                    else None
+                )
+                or None,
+                "placement_invalid_target": bool(placement_feedback.get("invalid_target"))
+                if isinstance(placement_feedback, dict)
+                else False,
+            },
         )
         self.controller_service.refresh_document_visuals(doc, recompute=False)
         return payload

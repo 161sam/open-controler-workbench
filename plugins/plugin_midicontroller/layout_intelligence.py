@@ -187,6 +187,80 @@ def resolve_suggested_addition_preview_target(
     }
 
 
+def resolve_suggested_addition_feedback(
+    state: dict[str, Any],
+    addition_id: str,
+    *,
+    template_payload: dict[str, Any] | None = None,
+    template_service: Any | None = None,
+    library_service: Any | None = None,
+) -> dict[str, Any]:
+    if library_service is None:
+        raise ValueError("library_service is required for layout intelligence")
+    template = _resolve_template_payload(state, template_payload=template_payload, template_service=template_service)
+    if template is None:
+        return {
+            "addition_id": addition_id,
+            "target_zone_id": None,
+            "target_bounds": None,
+            "context_component_ids": [],
+        }
+    metadata = template.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return {
+            "addition_id": addition_id,
+            "target_zone_id": None,
+            "target_bounds": None,
+            "context_component_ids": [],
+        }
+    suggestion = _find_suggested_addition(metadata, addition_id)
+    if suggestion is None:
+        return {
+            "addition_id": addition_id,
+            "target_zone_id": None,
+            "target_bounds": None,
+            "context_component_ids": [],
+        }
+    controller = deepcopy(state.get("controller", {}))
+    components = deepcopy(state.get("components", []))
+    preview_components = build_suggested_addition(
+        state,
+        addition_id,
+        template_payload=template,
+        library_service=library_service,
+        assign_unique_ids=False,
+    )
+    placement_preference = str(suggestion.get("placement_preference") or "right_of_main")
+    anchor = _anchor_for_components(
+        components,
+        controller,
+        library_service,
+        metadata,
+        preferred_role=str(suggestion.get("target_group_role") or ""),
+    )
+    context_components = _context_components_for_addition(
+        components,
+        metadata=metadata,
+        suggestion=suggestion,
+        library_service=library_service,
+    )
+    target_zone_id = str(suggestion.get("zone_id") or _target_zone_id(metadata, placement_preference) or "") or None
+    zone = _metadata_zone(metadata, target_zone_id)
+    return {
+        "addition_id": addition_id,
+        "target_zone_id": target_zone_id,
+        "target_zone_label": str(zone.get("label") or target_zone_id or "Target area") if isinstance(zone, dict) else (target_zone_id or "Target area"),
+        "target_bounds": _target_bounds_for_addition(
+            preview_components,
+            anchor=anchor,
+            controller=controller,
+            placement_preference=placement_preference,
+            library_service=library_service,
+        ),
+        "context_component_ids": [str(component.get("id") or "") for component in context_components if str(component.get("id") or "")],
+    }
+
+
 def suggest_component_placement(
     state: dict[str, Any],
     library_ref: str,
@@ -370,6 +444,16 @@ def _normalize_suggested_addition(addition: dict[str, Any]) -> dict[str, Any]:
         raw = suggestion.get(key, [])
         suggestion[key] = [str(item) for item in raw if isinstance(item, str) and item.strip()] if isinstance(raw, list) else []
     return suggestion
+
+
+def _find_suggested_addition(metadata: dict[str, Any], addition_id: str) -> dict[str, Any] | None:
+    for item in metadata.get("suggested_additions", []):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("id") or "") != addition_id:
+            continue
+        return _normalize_suggested_addition(item)
+    return None
 
 
 def build_workflow_card(
@@ -681,6 +765,69 @@ def _anchor_from_controller_zone(controller: dict[str, Any], zone_id: str) -> di
     return None
 
 
+def _metadata_zone(metadata: dict[str, Any], zone_id: str | None) -> dict[str, Any] | None:
+    if not zone_id:
+        return None
+    zones = metadata.get("layout_zones", []) if isinstance(metadata, dict) else []
+    if not isinstance(zones, list):
+        return None
+    for zone in zones:
+        if not isinstance(zone, dict):
+            continue
+        if str(zone.get("id") or "") == zone_id:
+            return deepcopy(zone)
+    return None
+
+
+def _context_components_for_addition(
+    components: list[dict[str, Any]],
+    *,
+    metadata: dict[str, Any],
+    suggestion: dict[str, Any],
+    library_service: Any,
+) -> list[dict[str, Any]]:
+    zone = _metadata_zone(metadata, str(suggestion.get("zone_id") or "") or None)
+    preferred_roles = [
+        str(suggestion.get("target_group_role") or "").strip(),
+        str(zone.get("source_group_role") or "").strip() if isinstance(zone, dict) else "",
+        str(metadata.get("smart_defaults", {}).get("primary_group_role") or "").strip()
+        if isinstance(metadata.get("smart_defaults"), dict)
+        else "",
+    ]
+    for role in preferred_roles:
+        if not role:
+            continue
+        matched = [component for component in components if str(component.get("group_role") or "") == role]
+        if matched:
+            return matched
+    primary_zone_id = (
+        str(metadata.get("smart_defaults", {}).get("primary_zone_id") or "").strip()
+        if isinstance(metadata.get("smart_defaults"), dict)
+        else ""
+    )
+    if primary_zone_id:
+        matched = [component for component in components if str(component.get("zone_id") or "") == primary_zone_id]
+        if matched:
+            return matched
+    if components:
+        anchor = _anchor_for_components(
+            components,
+            {"width": 0.0, "depth": 0.0},
+            library_service,
+            metadata,
+            preferred_role="",
+        )
+        sorted_components = sorted(
+            components,
+            key=lambda component: (
+                (float(component.get("x", 0.0) or 0.0) - anchor["center_x"]) ** 2
+                + (float(component.get("y", 0.0) or 0.0) - anchor["center_y"]) ** 2
+            ),
+        )
+        return sorted_components[: min(len(sorted_components), 4)]
+    return []
+
+
 def _component_bbox(components: list[dict[str, Any]], library_service: Any) -> dict[str, float]:
     min_x = None
     max_x = None
@@ -711,6 +858,42 @@ def _component_bbox(components: list[dict[str, Any]], library_service: Any) -> d
         "center_y": (resolved_min_y + resolved_max_y) / 2.0,
         "width": resolved_max_x - resolved_min_x,
         "height": resolved_max_y - resolved_min_y,
+    }
+
+
+def _target_bounds_for_addition(
+    preview_components: list[dict[str, Any]],
+    *,
+    anchor: dict[str, float],
+    controller: dict[str, Any],
+    placement_preference: str,
+    library_service: Any,
+) -> dict[str, float]:
+    bbox = _component_bbox(preview_components, library_service) if preview_components else dict(anchor)
+    width = float(controller.get("width", controller.get("surface", {}).get("width", 160.0)) or 160.0)
+    depth = float(controller.get("depth", controller.get("surface", {}).get("height", 100.0)) or 100.0)
+    if placement_preference in {"top_row", "centered_above_group", "bottom_transport_row"}:
+        target_width = max(float(bbox.get("width", 0.0) or 0.0) + 18.0, float(anchor.get("width", 0.0) or 0.0) + 24.0, 32.0)
+        target_height = max(float(bbox.get("height", 0.0) or 0.0) + 12.0, 20.0)
+    elif placement_preference == "aligned_with_group":
+        target_width = max(float(bbox.get("width", 0.0) or 0.0) + 18.0, float(anchor.get("width", 0.0) or 0.0) + 12.0, 32.0)
+        target_height = max(float(anchor.get("height", 0.0) or 0.0) + 18.0, float(bbox.get("height", 0.0) or 0.0) + 18.0, 28.0)
+    else:
+        target_width = max(float(bbox.get("width", 0.0) or 0.0) + 12.0, 26.0)
+        target_height = max(float(bbox.get("height", 0.0) or 0.0) + 18.0, float(anchor.get("height", 0.0) or 0.0) + 20.0, 28.0)
+    half_width = target_width / 2.0
+    half_height = target_height / 2.0
+    center_x = _clamp(float(bbox.get("center_x", anchor.get("center_x", width / 2.0)) or 0.0), half_width, max(half_width, width - half_width))
+    center_y = _clamp(float(bbox.get("center_y", anchor.get("center_y", depth / 2.0)) or 0.0), half_height, max(half_height, depth - half_height))
+    return {
+        "x": center_x,
+        "y": center_y,
+        "width": target_width,
+        "height": target_height,
+        "min_x": center_x - half_width,
+        "max_x": center_x + half_width,
+        "min_y": center_y - half_height,
+        "max_y": center_y + half_height,
     }
 
 

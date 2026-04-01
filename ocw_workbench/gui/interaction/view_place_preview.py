@@ -23,6 +23,7 @@ def serialize_preview_state(
     addition_id: str | None = None,
     label: str | None = None,
     target_zone_id: str | None = None,
+    placement_feedback: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = {
         "version": PREVIEW_SCHEMA_VERSION,
@@ -39,6 +40,7 @@ def serialize_preview_state(
         "addition_id": None,
         "label": None,
         "target_zone_id": None,
+        "placement_feedback": None,
     }
     if template_id is not None:
         payload["template_id"] = str(template_id)
@@ -58,6 +60,8 @@ def serialize_preview_state(
         payload["label"] = str(label)
     if target_zone_id is not None:
         payload["target_zone_id"] = str(target_zone_id)
+    if isinstance(placement_feedback, dict):
+        payload["placement_feedback"] = dict(placement_feedback)
     return payload
 
 
@@ -85,6 +89,11 @@ def load_preview_state(doc: Any) -> dict[str, Any] | None:
             addition_id=payload.get("addition_id") if isinstance(payload.get("addition_id"), str) else None,
             label=payload.get("label") if isinstance(payload.get("label"), str) else None,
             target_zone_id=payload.get("target_zone_id") if isinstance(payload.get("target_zone_id"), str) else None,
+            placement_feedback=(
+                payload.get("placement_feedback")
+                if isinstance(payload.get("placement_feedback"), dict)
+                else None
+            ),
         )
         preview["version"] = int(payload.get("version", PREVIEW_SCHEMA_VERSION) or PREVIEW_SCHEMA_VERSION)
         preview["snap_enabled"] = (
@@ -114,6 +123,7 @@ def store_preview_state(
     addition_id: str | None = None,
     label: str | None = None,
     target_zone_id: str | None = None,
+    placement_feedback: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = serialize_preview_state(
         x=x,
@@ -129,6 +139,7 @@ def store_preview_state(
         addition_id=addition_id,
         label=label,
         target_zone_id=target_zone_id,
+        placement_feedback=placement_feedback,
     )
     payload["snap_enabled"] = None if snap_enabled is None else bool(snap_enabled)
     payload["grid_mm"] = None if grid_mm is None else float(grid_mm)

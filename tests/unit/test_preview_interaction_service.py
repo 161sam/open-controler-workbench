@@ -109,3 +109,45 @@ def test_suggested_addition_preview_tracks_group_components_without_mutating_sta
     assert load_preview_state(doc) == payload
     assert controller_service.get_state(doc) == before_state
     assert calls == [{"mode": SyncMode.VISUAL_ONLY, "recompute": False}]
+
+
+def test_suggested_addition_preview_persists_placement_feedback_and_ui_state():
+    doc = FakeDocument()
+    controller_service = ControllerService()
+    interaction_service = InteractionService(controller_service)
+    controller_service.create_from_template(doc, "encoder_module")
+
+    payload = interaction_service.add_suggested_addition_preview(
+        doc,
+        addition_id="display_header",
+        label="Add Display Header",
+        components=[
+            {"id": "display", "type": "display", "library_ref": "adafruit_oled_096_i2c_ssd1306", "x": 60.0, "y": 10.0, "rotation": 0.0},
+        ],
+        target_zone_id="display_header",
+        validation={
+            "valid": True,
+            "severity": None,
+            "status": "Valid placement",
+            "status_code": "valid",
+            "commit_allowed": True,
+            "findings": [],
+            "summary": {"error_count": 0, "warning_count": 0, "total_count": 0},
+        },
+        placement_feedback={
+            "target_zone_id": "display_header",
+            "hover_zone_id": "display_header",
+            "active_zone_id": "display_header",
+            "invalid_target": False,
+            "target_bounds": {"x": 60.0, "y": 10.0, "width": 40.0, "height": 20.0},
+            "context_component_ids": ["enc1", "enc2"],
+        },
+    )
+
+    settings = interaction_service.get_settings(doc)
+
+    assert payload["placement_feedback"]["active_zone_id"] == "display_header"
+    assert load_preview_state(doc)["placement_feedback"]["context_component_ids"] == ["enc1", "enc2"]
+    assert settings["placement_hover_zone_id"] == "display_header"
+    assert settings["placement_active_zone_id"] == "display_header"
+    assert settings["placement_invalid_target"] is False
