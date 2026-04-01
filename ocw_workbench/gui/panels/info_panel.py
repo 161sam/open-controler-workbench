@@ -51,6 +51,7 @@ class InfoPanel:
         self.form = _build_form()
         self.widget = self.form["widget"]
         self._layout_intelligence: dict[str, Any] = {}
+        self._apply_visual_treatment()
         self._configure_tooltips()
         self._connect_events()
         self.refresh()
@@ -297,6 +298,13 @@ class InfoPanel:
             return
         widget.visible = bool(visible)
 
+    def _apply_visual_treatment(self) -> None:
+        widget = self.widget
+        if hasattr(widget, "setObjectName"):
+            widget.setObjectName("OCWInfoPanelRoot")
+        if hasattr(widget, "setStyleSheet"):
+            widget.setStyleSheet(_info_panel_stylesheet())
+
     def _connect_events(self) -> None:
         if hasattr(self.form["surface_shape"], "currentIndexChanged"):
             self.form["surface_shape"].currentIndexChanged.connect(self.handle_surface_changed)
@@ -371,6 +379,7 @@ class InfoPanel:
                 primary_button.visible = True
             else:
                 primary_button.visible = False
+            cancel_button.text = "Cancel placement"
             cancel_button.visible = placement_active
             cancel_button.enabled = placement_active
             apply_button.visible = not placement_active
@@ -407,6 +416,8 @@ class InfoPanel:
         else:
             primary_button.setVisible(False)
         apply_button.setVisible(not placement_active)
+        if hasattr(cancel_button, "setText"):
+            cancel_button.setText("Cancel placement")
         if hasattr(cancel_button, "setVisible"):
             cancel_button.setVisible(placement_active)
         if hasattr(cancel_button, "setEnabled"):
@@ -520,7 +531,14 @@ def _build_form() -> dict[str, Any]:
         }
 
     content, layout = build_panel_container(qtwidgets)
-    context_section, meta_layout = create_form_section_widget(qtwidgets, "Context")
+    context_section, meta_layout = create_form_section_widget(
+        qtwidgets,
+        "Context",
+        spacing=6,
+        margins=(0, 6, 0, 4),
+    )
+    if hasattr(context_section, "setObjectName"):
+        context_section.setObjectName("OCWInspectorContextSection")
     template = qtwidgets.QLabel("-")
     variant = qtwidgets.QLabel("-")
     selection = qtwidgets.QLabel("-")
@@ -529,6 +547,22 @@ def _build_form() -> dict[str, Any]:
     context_title = qtwidgets.QLabel("No template")
     context_subtitle = create_hint_label(qtwidgets, "No active context")
     context_meta = create_hint_label(qtwidgets, "0 parts")
+    if hasattr(template, "setObjectName"):
+        template.setObjectName("OCWInspectorKeyValue")
+    if hasattr(variant, "setObjectName"):
+        variant.setObjectName("OCWInspectorKeyValue")
+    if hasattr(selection, "setObjectName"):
+        selection.setObjectName("OCWInspectorKeyValue")
+    if hasattr(selection_count, "setObjectName"):
+        selection_count.setObjectName("OCWInspectorKeyValue")
+    if hasattr(component_count, "setObjectName"):
+        component_count.setObjectName("OCWInspectorKeyValue")
+    if hasattr(context_title, "setObjectName"):
+        context_title.setObjectName("OCWInspectorContextTitle")
+    if hasattr(context_subtitle, "setObjectName"):
+        context_subtitle.setObjectName("OCWInspectorContextSubtitle")
+    if hasattr(context_meta, "setObjectName"):
+        context_meta.setObjectName("OCWInspectorContextMeta")
     meta_layout.addRow("Template", template)
     meta_layout.addRow("Variant", variant)
     meta_layout.addRow("Selected", selection)
@@ -538,7 +572,14 @@ def _build_form() -> dict[str, Any]:
     meta_layout.addRow("", context_subtitle)
     meta_layout.addRow("", context_meta)
 
-    geometry_section, settings_layout = create_form_section_widget(qtwidgets, "Geometry")
+    geometry_section, settings_layout = create_form_section_widget(
+        qtwidgets,
+        "Geometry",
+        spacing=6,
+        margins=(0, 4, 0, 4),
+    )
+    if hasattr(geometry_section, "setObjectName"):
+        geometry_section.setObjectName("OCWInspectorGeometrySection")
     width = qtwidgets.QDoubleSpinBox()
     depth = qtwidgets.QDoubleSpinBox()
     height = qtwidgets.QDoubleSpinBox()
@@ -565,7 +606,9 @@ def _build_form() -> dict[str, Any]:
     surface_shape = qtwidgets.QComboBox()
     configure_combo_box(surface_shape)
     surface_shape.addItems(["rectangle", "rounded_rect"])
-    apply_button = set_button_role(qtwidgets.QPushButton("Apply Geometry"), "primary")
+    apply_button = set_button_role(qtwidgets.QPushButton("Apply Geometry"), "secondary")
+    if hasattr(apply_button, "setObjectName"):
+        apply_button.setObjectName("OCWInspectorApplyButton")
     settings_layout.addRow("Width (mm)", width)
     settings_layout.addRow("Depth (mm)", depth)
     settings_layout.addRow("Height (mm)", height)
@@ -577,48 +620,78 @@ def _build_form() -> dict[str, Any]:
     settings_layout.addRow("Surface", surface_shape)
     settings_layout.addRow("Corner radius (mm)", corner_radius)
 
-    info = create_text_panel(qtwidgets, max_height=72)
-    workflow_card_section, workflow_card_layout = create_section_widget(qtwidgets, "Workflow")
+    info = create_text_panel(qtwidgets, max_height=64)
+    if hasattr(info, "setObjectName"):
+        info.setObjectName("OCWInspectorSummary")
+    workflow_card_section, workflow_card_layout = create_section_widget(
+        qtwidgets,
+        "Workflow",
+        spacing=6,
+        margins=(0, 4, 0, 4),
+    )
+    if hasattr(workflow_card_section, "setObjectName"):
+        workflow_card_section.setObjectName("OCWInspectorWorkflowSection")
     workflow_card_title = qtwidgets.QLabel("Workflow")
     if hasattr(workflow_card_title, "font"):
         title_font = workflow_card_title.font()
         if hasattr(title_font, "setBold"):
             title_font.setBold(True)
             workflow_card_title.setFont(title_font)
+    if hasattr(workflow_card_title, "setObjectName"):
+        workflow_card_title.setObjectName("OCWInspectorWorkflowTitle")
     workflow_card_hint = create_hint_label(qtwidgets, "No next step")
     workflow_card_progress_summary = create_hint_label(qtwidgets, "No steps")
     workflow_card_action_hint = create_hint_label(qtwidgets, "Ready")
+    if hasattr(workflow_card_hint, "setObjectName"):
+        workflow_card_hint.setObjectName("OCWInspectorWorkflowHint")
+    if hasattr(workflow_card_progress_summary, "setObjectName"):
+        workflow_card_progress_summary.setObjectName("OCWInspectorWorkflowProgress")
+    if hasattr(workflow_card_action_hint, "setObjectName"):
+        workflow_card_action_hint.setObjectName("OCWInspectorWorkflowStatus")
     primary_action_button = set_button_role(qtwidgets.QPushButton("Primary Action"), "primary")
-    workflow_card_cancel_button = set_button_role(qtwidgets.QPushButton("Cancel"), "ghost")
+    if hasattr(primary_action_button, "setObjectName"):
+        primary_action_button.setObjectName("OCWInspectorPrimaryAction")
+    workflow_card_cancel_button = set_button_role(qtwidgets.QPushButton("Cancel placement"), "ghost")
+    if hasattr(workflow_card_cancel_button, "setObjectName"):
+        workflow_card_cancel_button.setObjectName("OCWInspectorCancelAction")
     workflow_card_cancel_button.setVisible(False)
     header_layout = qtwidgets.QVBoxLayout()
     header_layout.setContentsMargins(0, 0, 0, 0)
-    header_layout.setSpacing(4)
+    header_layout.setSpacing(3)
     header_layout.addWidget(workflow_card_title)
     header_layout.addWidget(workflow_card_hint)
     workflow_card_layout.addWidget(wrap_layout_in_widget(qtwidgets, header_layout))
 
     progress_layout = qtwidgets.QVBoxLayout()
     progress_layout.setContentsMargins(0, 0, 0, 0)
-    progress_layout.setSpacing(4)
+    progress_layout.setSpacing(3)
     progress_layout.addWidget(workflow_card_progress_summary)
     progress_host = qtwidgets.QWidget()
+    if hasattr(progress_host, "setObjectName"):
+        progress_host.setObjectName("OCWInspectorWorkflowSteps")
     workflow_progress_layout = qtwidgets.QVBoxLayout(progress_host)
     workflow_progress_layout.setContentsMargins(0, 0, 0, 0)
-    workflow_progress_layout.setSpacing(4)
+    workflow_progress_layout.setSpacing(3)
     progress_layout.addWidget(progress_host)
     workflow_card_layout.addWidget(wrap_layout_in_widget(qtwidgets, progress_layout))
 
     hint_layout = qtwidgets.QVBoxLayout()
     hint_layout.setContentsMargins(0, 0, 0, 0)
-    hint_layout.setSpacing(4)
+    hint_layout.setSpacing(3)
     hint_layout.addWidget(workflow_card_action_hint)
     workflow_card_layout.addWidget(wrap_layout_in_widget(qtwidgets, hint_layout))
 
-    quick_actions_section, quick_actions_layout = create_section_widget(qtwidgets, "Quick Actions")
+    quick_actions_section, quick_actions_layout = create_section_widget(
+        qtwidgets,
+        "Quick Actions",
+        spacing=4,
+        margins=(0, 4, 0, 2),
+    )
+    if hasattr(quick_actions_section, "setObjectName"):
+        quick_actions_section.setObjectName("OCWInspectorActionsSection")
     action_layout = qtwidgets.QVBoxLayout()
     action_layout.setContentsMargins(0, 0, 0, 0)
-    action_layout.setSpacing(6)
+    action_layout.setSpacing(5)
     action_layout.addWidget(primary_action_button)
     action_layout.addWidget(workflow_card_cancel_button)
     action_layout.addWidget(apply_button)
@@ -626,6 +699,8 @@ def _build_form() -> dict[str, Any]:
 
     status = qtwidgets.QLabel()
     status.setWordWrap(True)
+    if hasattr(status, "setObjectName"):
+        status.setObjectName("OCWInspectorStatus")
     layout.addWidget(context_section)
     layout.addWidget(workflow_card_section)
     layout.addWidget(quick_actions_section)
@@ -679,3 +754,116 @@ def _workflow_step_text(step: dict[str, Any]) -> str:
     if status == "current":
         return f"{bullet} {label} (Current)"
     return f"{bullet} {label}"
+
+
+def _info_panel_stylesheet() -> str:
+    return """
+QWidget#OCWInfoPanelRoot {
+    background: transparent;
+}
+QFrame#OCWInspectorContextSection,
+QFrame#OCWInspectorWorkflowSection,
+QFrame#OCWInspectorActionsSection,
+QFrame#OCWInspectorGeometrySection {
+    background: transparent;
+    border: none;
+}
+QFrame#OCWInspectorContextSection QFrame#OCWDividerLine {
+    background: #243244;
+}
+QFrame#OCWInspectorContextSection QLabel#OCWSectionHeaderTitle,
+QFrame#OCWInspectorWorkflowSection QLabel#OCWSectionHeaderTitle,
+QFrame#OCWInspectorActionsSection QLabel#OCWSectionHeaderTitle,
+QFrame#OCWInspectorGeometrySection QLabel#OCWSectionHeaderTitle {
+    color: #73869d;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+QLabel#OCWInspectorContextTitle {
+    color: #f3f7fb;
+    font-size: 15px;
+    font-weight: 700;
+    padding-top: 2px;
+}
+QLabel#OCWInspectorContextSubtitle {
+    color: #c5d2df;
+    font-size: 11px;
+    font-weight: 500;
+}
+QLabel#OCWInspectorContextMeta {
+    color: #76889d;
+    font-size: 10px;
+    padding-top: 1px;
+}
+QLabel#OCWInspectorKeyValue {
+    color: #b4c2d0;
+    font-size: 11px;
+}
+QFrame#OCWInspectorWorkflowSection QFrame#OCWDividerLine,
+QFrame#OCWInspectorActionsSection QFrame#OCWDividerLine,
+QFrame#OCWInspectorGeometrySection QFrame#OCWDividerLine {
+    background: #1c2634;
+}
+QLabel#OCWInspectorWorkflowTitle {
+    color: #eef4fb;
+    font-size: 13px;
+    font-weight: 700;
+}
+QLabel#OCWInspectorWorkflowHint {
+    color: #b9c7d5;
+    font-size: 11px;
+}
+QLabel#OCWInspectorWorkflowProgress {
+    color: #7c8ea4;
+    font-size: 10px;
+    font-weight: 600;
+}
+QWidget#OCWInspectorWorkflowSteps QLabel#OCWHelperText {
+    color: #94a5b8;
+    font-size: 10px;
+}
+QWidget#OCWInspectorWorkflowSteps QLabel#OCWSectionHeaderTitle {
+    color: #dbe7f5;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+}
+QLabel#OCWInspectorWorkflowStatus {
+    color: #8ea1b7;
+    font-size: 10px;
+}
+QPlainTextEdit#OCWInspectorSummary {
+    background: transparent;
+    border: none;
+    color: #7c8ea4;
+    padding: 0;
+}
+QPushButton#OCWInspectorPrimaryAction {
+    min-height: 34px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+}
+QPushButton#OCWInspectorApplyButton {
+    min-height: 28px;
+    border-radius: 7px;
+    background: #131c2a;
+    border: 1px solid #263246;
+    color: #b6c4d3;
+}
+QPushButton#OCWInspectorApplyButton:hover {
+    background: #192334;
+    border-color: #324258;
+}
+QPushButton#OCWInspectorCancelAction {
+    min-height: 26px;
+    border-radius: 7px;
+    color: #97a9bc;
+}
+QLabel#OCWInspectorStatus {
+    margin-top: 2px;
+}
+"""
